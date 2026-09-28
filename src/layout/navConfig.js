@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileText, Users, UserCog,
-  ParkingCircle, Sun, ShieldCheck, ShieldAlert, TrendingUp,
+  ParkingCircle, Sun, ShieldCheck, ShieldAlert, TrendingUp, Activity,
 } from 'lucide-react'
 
 // ── Estructura de navegación agrupada ────────────────────────────────────────
@@ -39,5 +39,6 @@ export const ADMIN_SECTION = {
   label: 'Admin',
   items: [
     { id: 'usuarios', label: 'Usuarios', icon: ShieldCheck, emoji: '🔐' },
+    { id: 'sistema',  label: 'Sistema',  icon: Activity,    emoji: '🖥️' },
   ],
 }

@@ -1,0 +1,17 @@
+.sys-section { margin-bottom: 26px; }
+.sys-section h2 { font-size: 14.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.sys-section > p { font-size: 12.5px; color: var(--text-muted); margin-bottom: 12px; max-width: 70ch; }
+.sys-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+.sys-bar-row { display: flex; flex-direction: column; gap: 6px; }
+.sys-bar-row + .sys-bar-row { margin-top: 16px; }
+.sys-bar-top { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text); }
+.sys-bar-top span:last-child { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sys-bar { height: 9px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.sys-bar > div { height: 100%; border-radius: 99px; transition: width .4s ease; }
+.sys-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sys-table th, .sys-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+.sys-table td:nth-child(n+2), .sys-table th:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+.sys-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+.sys-error { border-color: var(--danger); color: var(--danger); font-size: 13px; }
+.sys-error code { display: block; margin-top: 8px; font-size: 12px; color: var(--text); }
+.sys-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }

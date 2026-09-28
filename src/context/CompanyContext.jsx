@@ -80,7 +80,7 @@ export function CompanyProvider({ children }) {
   const hasPermission = useCallback((sectionId) => {
     if (!perfil) return false
     if (isAdmin) return true // Los administradores tienen acceso total
-    if (sectionId === 'usuarios' && !isAdmin) return false
+    if ((sectionId === 'usuarios' || sectionId === 'sistema') && !isAdmin) return false
 
     const permisosUser = perfil.permisos || {}
     const permisosEmpresa = permisosUser[currentCompany]

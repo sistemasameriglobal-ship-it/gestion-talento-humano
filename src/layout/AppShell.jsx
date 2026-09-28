@@ -14,6 +14,7 @@ const Parqueadero = lazy(() => import('../pages/Parqueadero'))
 const Vacaciones = lazy(() => import('../pages/Vacaciones'))
 const Usuarios = lazy(() => import('../pages/Usuarios'))
 const Productividad = lazy(() => import('../pages/Productividad'))
+const Sistema = lazy(() => import('../pages/Sistema'))
 import { NAV_SECTIONS, ADMIN_SECTION } from './navConfig'
 import Sidebar from './Sidebar'
 import ModalCambiarPassword from './ModalCambiarPassword'
@@ -30,6 +31,7 @@ const PAGE_COMPONENTS = {
   vacaciones: Vacaciones,
   productividad: Productividad,
   usuarios: Usuarios,
+  sistema: Sistema,
 }
 
 export default function AppShell() {
@@ -125,7 +127,7 @@ export default function AppShell() {
 
   const currentItem = allItems.find(n => n.id === page)
 
-  const PageComponent = (page === 'usuarios' && !isAdmin)
+  const PageComponent = ((page === 'usuarios' || page === 'sistema') && !isAdmin)
     ? Dashboard
     : (PAGE_COMPONENTS[page] || Dashboard)
 
