@@ -120,7 +120,9 @@ export default function EmpleadoFormModal({
               }
               <div style={{ fontSize: 13, color: duplicadoWarning.tipo === 'exacto' ? 'var(--danger-text)' : 'var(--warning-text)' }}>
                 {duplicadoWarning.tipo === 'exacto'
-                  ? <><strong>Empleado duplicado:</strong> Ya existe "{duplicadoWarning.nombre}" con este nombre exacto.</>
+                  ? (duplicadoWarning.empleado?.activo === false
+                    ? <><strong>Colaborador inactivo encontrado:</strong> Ya existe "{duplicadoWarning.nombre}" como inactivo. Puedes usar la opción <strong>Reintegrar</strong> en la lista para iniciar su nuevo contrato manteniendo su historial protegido.</>
+                    : <><strong>Empleado duplicado:</strong> Ya existe "{duplicadoWarning.nombre}" con este nombre exacto.</>)
                   : <><strong>Nombre similar:</strong> "{duplicadoWarning.nombre}" ya existe. Verifica que no sea un error de tipeo.</>
                 }
               </div>

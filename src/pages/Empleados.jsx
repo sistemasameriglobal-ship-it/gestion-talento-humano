@@ -7,6 +7,7 @@ import * as novedadesApi from '../api/novedades'
 import { hoyISO } from '../utils/fecha'
 import { normalizarConcepto } from '../utils/parseExcel'
 import { exportarExcel } from '../utils/exportarExcel'
+import { logAccion } from '../utils/auditLogger'
 import { Plus, Search, X, Download, Upload, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
 import { PAGE_SIZE, EMPTY } from '../components/empleados/empleadosConstants'
 import EmpleadoKpis from '../components/empleados/EmpleadoKpis'
@@ -15,6 +16,8 @@ import EmpleadoCards from '../components/empleados/EmpleadoCards'
 import EmpleadoTable from '../components/empleados/EmpleadoTable'
 import EmpleadoFormModal from '../components/empleados/EmpleadoFormModal'
 import EmpleadoHistorialModal from '../components/empleados/EmpleadoHistorialModal'
+import ModalRetiroEmpleado from '../components/empleados/ModalRetiroEmpleado'
+import ModalReintegroEmpleado from '../components/empleados/ModalReintegroEmpleado'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
 import Paginacion from '../components/ui/Paginacion'
 
@@ -46,6 +49,7 @@ export default function Empleados() {
   const { currentCompany, companyConfig } = useCompany()
   const [rows, setRows] = useState([])
   const [novedades, setNovedades] = useState([])
+  const [periodos, setPeriodos] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -65,18 +69,35 @@ export default function Empleados() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
 
+  // Estados para modales dedicados de Retiro y Reintegro
+  const [retiroEmp, setRetiroEmp] = useState(null)
+  const [reintegroEmp, setReintegroEmp] = useState(null)
+  const [actionSaving, setActionSaving] = useState(false)
+
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data }, { data: novData }] = await Promise.all([
+    const [{ data }, { data: novData }, { data: periodosData }] = await Promise.all([
       empleadosApi.listarEmpleados(currentCompany),
       novedadesApi.listarNovedadesCompleto(currentCompany),
+      empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
     ])
     setRows(data || [])
     setNovedades(novData || [])
+    setPeriodos(periodosData || [])
     setLoading(false)
   }, [currentCompany])
 
   useEffect(() => { Promise.resolve().then(() => load()) }, [load])
+
+  const periodosPorEmpleado = useMemo(() => {
+    const acc = {}
+    ;(periodos || []).forEach(p => {
+      if (!acc[p.empleado_id]) acc[p.empleado_id] = []
+      acc[p.empleado_id].push(p)
+    })
+    Object.values(acc).forEach(list => list.sort((a, b) => (a.numero_periodo || 0) - (b.numero_periodo || 0)))
+    return acc
+  }, [periodos])
 
   const novedadesPorEmpleado = useMemo(() => {
     const acc = {}
@@ -143,8 +164,8 @@ export default function Empleados() {
     for (const r of rows) {
       if (excludeId && r.id === excludeId) continue
       const rNorm = normalizarNombre(r.nombre_completo)
-      if (rNorm === norm) return { tipo: 'exacto', nombre: r.nombre_completo }
-      if (norm.length > 4 && levenshtein(norm, rNorm) <= 2) return { tipo: 'similar', nombre: r.nombre_completo }
+      if (rNorm === norm) return { tipo: 'exacto', nombre: r.nombre_completo, empleado: r }
+      if (norm.length > 4 && levenshtein(norm, rNorm) <= 2) return { tipo: 'similar', nombre: r.nombre_completo, empleado: r }
     }
     return null
   }
@@ -163,6 +184,12 @@ export default function Empleados() {
     }
     const dup = checkDuplicado(form.nombre_completo, modal === 'edit' ? form.id : null)
     if (dup && dup.tipo === 'exacto' && !forzar) {
+      if (dup.empleado?.activo === false) {
+        return setMsg({
+          type: 'error',
+          text: `Ya existe un colaborador inactivo llamado "${dup.nombre}". En lugar de crear un duplicado, puedes usar la opción "Reintegrar" en su fila o tarjeta para iniciar un nuevo ciclo contractual.`,
+        })
+      }
       return setMsg({ type: 'error', text: `Ya existe un empleado llamado "${dup.nombre}". Cambia el nombre o edita el registro existente.` })
     }
     setSaving(true)
@@ -199,14 +226,82 @@ export default function Empleados() {
     else setMsg({ type: 'error', text: error.message })
   }
 
-  const toggleActivo = async (emp) => {
-    const nuevoActivo = emp.activo === false
-    const payload = nuevoActivo
-      ? { activo: true, fecha_retiro: null } // se reactiva: ya no aplica fecha de retiro
-      : { activo: false, fecha_retiro: emp.fecha_retiro || hoyISO() } // se desactiva: registra cuándo, si no la tenía
-    const { error } = await empleadosApi.actualizarEmpleado(emp.id, payload)
-    if (!error) load()
-    else setMsg({ type: 'error', text: error.message })
+  const handleConfirmRetiro = async ({ fecha_retiro, observaciones }) => {
+    if (!retiroEmp) return
+    setActionSaving(true)
+    try {
+      // 1. Buscar periodo activo si existe y cerrarlo
+      const periodosEmp = periodosPorEmpleado[retiroEmp.id] || []
+      const periodoActivo = periodosEmp.find(p => p.es_periodo_actual)
+      if (periodoActivo) {
+        await empleadosApi.cerrarPeriodo(periodoActivo.id, { fecha_retiro, observaciones })
+      }
+
+      // 2. Actualizar registro principal en empleados (espejo del periodo vigente)
+      const { error } = await empleadosApi.actualizarEmpleado(retiroEmp.id, {
+        activo: false,
+        fecha_retiro,
+      })
+      if (error) throw error
+
+      logAccion('RETIRAR', 'empleados', retiroEmp.id, currentCompany, { fecha_retiro, observaciones })
+      setMsg({ type: 'success', text: `Colaborador ${retiroEmp.nombre_completo} retirado exitosamente.` })
+      setRetiroEmp(null)
+      await load()
+      setTimeout(() => setMsg(null), 3500)
+    } catch (e) {
+      setMsg({ type: 'error', text: 'Error al retirar colaborador: ' + e.message })
+    } finally {
+      setActionSaving(false)
+    }
+  }
+
+  const handleConfirmReintegro = async ({ nueva_fecha_ingreso, cargo, dependencia, observaciones }) => {
+    if (!reintegroEmp) return
+    setActionSaving(true)
+    try {
+      const periodosEmp = periodosPorEmpleado[reintegroEmp.id] || []
+      const siguienteNumero = periodosEmp.length > 0
+        ? Math.max(...periodosEmp.map(p => p.numero_periodo || 1)) + 1
+        : 2
+
+      // 1. Crear nuevo periodo laboral en empleado_periodos
+      const { error: errorPeriodo } = await empleadosApi.crearPeriodo({
+        empleado_id: reintegroEmp.id,
+        empresa: currentCompany,
+        numero_periodo: siguienteNumero,
+        fecha_ingreso: nueva_fecha_ingreso,
+        fecha_retiro: null,
+        cargo: cargo || reintegroEmp.cargo || null,
+        dependencia: dependencia || reintegroEmp.dependencia || null,
+        es_periodo_actual: true,
+        observaciones: observaciones || 'Reintegro bajo nuevo contrato laboral',
+      })
+      if (errorPeriodo) throw errorPeriodo
+
+      // 2. Actualizar tabla empleados con los datos del nuevo contrato
+      const { error } = await empleadosApi.actualizarEmpleado(reintegroEmp.id, {
+        activo: true,
+        fecha_ingreso: nueva_fecha_ingreso,
+        fecha_retiro: null,
+        cargo: cargo || reintegroEmp.cargo || null,
+        dependencia: dependencia || reintegroEmp.dependencia || null,
+      })
+      if (error) throw error
+
+      logAccion('REINTEGRAR', 'empleados', reintegroEmp.id, currentCompany, {
+        nueva_fecha_ingreso,
+        numero_periodo: siguienteNumero,
+      })
+      setMsg({ type: 'success', text: `Colaborador ${reintegroEmp.nombre_completo} reintegrado exitosamente en nuevo ciclo.` })
+      setReintegroEmp(null)
+      await load()
+      setTimeout(() => setMsg(null), 3500)
+    } catch (e) {
+      setMsg({ type: 'error', text: 'Error al reintegrar colaborador: ' + e.message })
+    } finally {
+      setActionSaving(false)
+    }
   }
 
   const f = (k) => (e) => {
@@ -413,9 +508,11 @@ export default function Empleados() {
             <EmpleadoCards
               paged={paged}
               novedadesPorEmpleado={novedadesPorEmpleado}
+              periodosPorEmpleado={periodosPorEmpleado}
               onSelect={setSelectedEmp}
               openEdit={openEdit}
-              toggleActivo={toggleActivo}
+              onRetirar={setRetiroEmp}
+              onReintegrar={setReintegroEmp}
               setDeleteId={setDeleteId}
             />
             {pagination}
@@ -425,9 +522,11 @@ export default function Empleados() {
             <EmpleadoTable
               paged={paged}
               novedadesPorEmpleado={novedadesPorEmpleado}
+              periodosPorEmpleado={periodosPorEmpleado}
               onSelect={setSelectedEmp}
               openEdit={openEdit}
-              toggleActivo={toggleActivo}
+              onRetirar={setRetiroEmp}
+              onReintegrar={setReintegroEmp}
               setDeleteId={setDeleteId}
             />
             {pagination}
@@ -450,6 +549,25 @@ export default function Empleados() {
         />
       )}
 
+      {retiroEmp && (
+        <ModalRetiroEmpleado
+          emp={retiroEmp}
+          onClose={() => setRetiroEmp(null)}
+          onConfirm={handleConfirmRetiro}
+          saving={actionSaving}
+        />
+      )}
+
+      {reintegroEmp && (
+        <ModalReintegroEmpleado
+          emp={reintegroEmp}
+          departamentos={depsEnUso}
+          onClose={() => setReintegroEmp(null)}
+          onConfirm={handleConfirmReintegro}
+          saving={actionSaving}
+        />
+      )}
+
       <DeleteConfirmModal
         deleteId={deleteId}
         onClose={() => setDeleteId(null)}
@@ -462,6 +580,7 @@ export default function Empleados() {
         <EmpleadoHistorialModal
           selectedEmp={selectedEmp}
           novedadesPorEmpleado={novedadesPorEmpleado}
+          periodos={selectedEmp ? periodosPorEmpleado[selectedEmp.id] || [] : []}
           onClose={() => setSelectedEmp(null)}
           onEdit={() => { setSelectedEmp(null); openEdit(selectedEmp) }}
         />

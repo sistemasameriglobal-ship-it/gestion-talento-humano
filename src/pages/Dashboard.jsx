@@ -25,6 +25,7 @@ export default function Dashboard({ onNavigate }) {
   const { currentCompany, companyConfig } = useCompany()
   const [allData, setAllData] = useState([])
   const [empleados, setEmpleados] = useState([])
+  const [periodosLaborales, setPeriodosLaborales] = useState([])
   const [showColaboradoresBase, setShowColaboradoresBase] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -48,15 +49,17 @@ export default function Dashboard({ onNavigate }) {
 
   const fetchData = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true)
-    const [{ data, error }, { data: empData, error: empError }] = await Promise.all([
+    const [{ data, error }, { data: empData, error: empError }, { data: persData }] = await Promise.all([
       novedadesApi.listarNovedadesCompleto(currentCompany),
       empleadosApi.listarEmpleados(currentCompany),
+      empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
     ])
     if (!error) {
       setAllData(data || [])
       setLastUpdated(new Date())
     }
     if (!empError) setEmpleados(empData || [])
+    if (persData) setPeriodosLaborales(persData || [])
     if (!silent) setLoading(false)
     setRefreshing(false)
   }, [currentCompany])
@@ -129,23 +132,44 @@ export default function Dashboard({ onNavigate }) {
   // terminara el período Y no se había retirado antes de que empezara.
   const empleadosActivosPeriodo = useMemo(() => {
     const hoy = hoyISO()
+    // Indexar periodos laborales por empleado_id
+    const periodosPorEmp = new Map()
+    periodosLaborales.forEach(p => {
+      if (!periodosPorEmp.has(p.empleado_id)) {
+        periodosPorEmp.set(p.empleado_id, [])
+      }
+      periodosPorEmp.get(p.empleado_id).push(p)
+    })
+
     return empleados.filter(e => {
       if (filterDependencia && (e.dependencia || 'Sin área') !== filterDependencia) return false
+
+      const misPeriodos = periodosPorEmp.get(e.id)
+      if (misPeriodos && misPeriodos.length > 0) {
+        // Un empleado estuvo activo en el rango del dashboard si al menos UNO de sus periodos
+        // laborales se solapa con el intervalo [periodoIni, periodoFin].
+        return misPeriodos.some(p => {
+          // Si el periodo inició después de que terminó el rango del dashboard, no se solapa
+          if (p.fecha_ingreso && periodoFin && p.fecha_ingreso > periodoFin) return false
+          // Si el periodo terminó antes de que iniciara el rango del dashboard, no se solapa
+          if (p.fecha_retiro && periodoIni && p.fecha_retiro < periodoIni) return false
+          return true
+        })
+      }
+
+      // Fallback a los campos de la tabla empleados para compatibilidad previa
       // Aún no había ingresado cuando terminó el período
       if (e.fecha_ingreso && periodoFin && e.fecha_ingreso > periodoFin) return false
       if (e.fecha_retiro) {
         // Ya se había retirado antes de que empezara el período
         if (periodoIni && e.fecha_retiro < periodoIni) return false
       } else if (e.activo === false && periodoFin >= hoy) {
-        // Inactivo pero sin fecha de retiro registrada (dato antiguo): como no
-        // sabemos desde cuándo, solo lo excluimos cuando el período llega
-        // hasta hoy (para no seguir contándolo en la tasa "actual"). Para
-        // períodos históricos cerrados se mantiene, por no tener mejor dato.
+        // Inactivo pero sin fecha de retiro registrada (dato antiguo)
         return false
       }
       return true
     })
-  }, [empleados, filterDependencia, periodoIni, periodoFin])
+  }, [empleados, periodosLaborales, filterDependencia, periodoIni, periodoFin])
 
   const clearFilters = () => { setFilterAnio(''); setFilterMeses([]); setFilterPeriodo(''); setFilterConcepto('Incapacidad'); setFilterDependencia('') }
 

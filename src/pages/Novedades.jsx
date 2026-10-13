@@ -81,9 +81,10 @@ export default function Novedades() {
   const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true)
     else setLoading(true)
-    const [{ data }, { data: empData }] = await Promise.all([
+    const [{ data }, { data: empData }, { data: periodosData }] = await Promise.all([
       novedadesApi.listarNovedades(currentCompany),
       empleadosApi.listarEmpleadosParaNovedades(currentCompany),
+      empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
     ])
     setRows(data || [])
     const ps = [...new Set((data || []).map(r => r.periodo).filter(Boolean))].sort().reverse()
@@ -95,10 +96,13 @@ export default function Novedades() {
       })
       const fichas = {}
       empData.forEach(e => {
+        const empPeriodos = (periodosData || []).filter(p => p.empleado_id === e.id)
         fichas[e.nombre_completo] = {
+          id: e.id,
           activo: e.activo !== false,
           fecha_ingreso: e.fecha_ingreso || null,
           fecha_retiro: e.fecha_retiro || null,
+          periodos: empPeriodos,
         }
       })
       setFichasEmpleados(fichas)

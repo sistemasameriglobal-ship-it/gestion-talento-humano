@@ -13,7 +13,7 @@ import { Plus, X, Download, AlertCircle, Sun } from 'lucide-react'
 import {
   PAGE_SIZE, MESES, ANIOS, EMPTY,
 } from '../utils/vacacionesConstants'
-import { calcDias, formatFecha, diasAcumuladosAnio } from '../utils/vacacionesHelpers'
+import { formatFecha, diasAcumuladosAnio, calcularSaldoVacacionesPeriodo } from '../utils/vacacionesHelpers'
 import ModalDetalle from '../components/vacaciones/ModalDetalle'
 import ModalForm from '../components/vacaciones/ModalForm'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
@@ -27,6 +27,7 @@ export default function Vacaciones() {
   const { currentCompany } = useCompany()
   const [rows, setRows]           = useState([])
   const [empleados, setEmpleados] = useState([])
+  const [periodos, setPeriodos]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
   const [filterEstado, setFilterEstado]   = useState('')
@@ -47,59 +48,73 @@ export default function Vacaciones() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: vac }, { data: emp }] = await Promise.all([
+    const [{ data: vac }, { data: emp }, { data: pers }] = await Promise.all([
       vacacionesApi.listarVacaciones(currentCompany),
       empleadosApi.listarEmpleadosParaVacaciones(currentCompany),
+      empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
     ])
     setRows(vac || [])
     setEmpleados(emp || [])
+    setPeriodos(pers || [])
     setLoading(false)
   }, [currentCompany])
 
   useEffect(() => { Promise.resolve().then(() => load()) }, [load])
 
-  // Auto-calcular días cuando cambian fechas
-  useEffect(() => {
-    if (form.fecha_inicio && form.fecha_fin) {
-      const dias = calcDias(form.fecha_inicio, form.fecha_fin)
-      if (dias !== '') Promise.resolve().then(() => setForm(p => ({ ...p, total_dias: String(dias) })))
-    }
-  }, [form.fecha_inicio, form.fecha_fin])
+  const saldoVacacionesForm = useMemo(() => {
+    if (!form.nombre_empleado?.trim()) return null
+    const emp = empleados.find(e => e.nombre_completo?.trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
+    const periodoActivo = periodos.find(p => (emp && p.empleado_id === emp.id && p.es_periodo_actual))
+    const fechaIngreso = periodoActivo?.fecha_ingreso || emp?.fecha_ingreso || form.fecha_ingreso
+    if (!fechaIngreso) return null
 
-  // Auto-calcular días en dinero = 15 - días hábiles tomados
-  useEffect(() => {
-    if (form.tipo_vacacion === 'Vacaciones en dinero') return
-    if (form.fecha_inicio && form.fecha_fin) {
-      const habiles = diasHabilesEntre(form.fecha_inicio, form.fecha_fin) || 0
-      const enDinero = Math.max(0, 15 - habiles)
-      Promise.resolve().then(() => setForm(p => ({ ...p, dias_en_dinero: String(enDinero) })))
-    }
-  }, [form.fecha_inicio, form.fecha_fin, form.tipo_vacacion])
+    // 1. Solicitudes guardadas de este empleado (excluyendo la que se está editando en el modal)
+    const otrasVacs = rows.filter(r =>
+      r.id !== form.id &&
+      r.nombre_empleado?.trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase()
+    )
 
-  // "Vacaciones en dinero" no usa fechas: se limpian y se fijan 15 días en dinero
-  useEffect(() => {
-    if (form.tipo_vacacion === 'Vacaciones en dinero') {
-      Promise.resolve().then(() =>
-        setForm(p => {
-          if (!p.fecha_inicio && !p.fecha_fin && !p.total_dias && p.dias_en_dinero === '15') return p
-          return { ...p, fecha_inicio: '', fecha_fin: '', total_dias: '', dias_en_dinero: '15' }
-        }))
-    }
-  }, [form.tipo_vacacion])
+    // Saldo considerando únicamente las otras solicitudes (tope disponible para esta solicitud)
+    const saldoOtras = calcularSaldoVacacionesPeriodo({
+      id: form.periodo_id || periodoActivo?.id,
+      fecha_ingreso: fechaIngreso,
+      fecha_retiro: periodoActivo?.fecha_retiro || null,
+    }, otrasVacs)
 
-  // Auto-rellenar dependencia y cargo al seleccionar empleado
-  useEffect(() => {
-    if (!form.nombre_empleado) return
-    const emp = empleados.find(e => e.nombre_completo === form.nombre_empleado)
-    if (emp) {
-      Promise.resolve().then(() =>
-        setForm(p => ({
-          ...p,
-          dependencia: emp.dependencia || p.dependencia,
-        })))
+    // 2. Incluir dinámicamente la solicitud actual si su estado es válido (Aprobada, En curso, Finalizada)
+    const ESTADOS_VALIDOS = ['Aprobada', 'En curso', 'Finalizada']
+    const vacsParaSaldo = [...otrasVacs]
+    if (form.estado && ESTADOS_VALIDOS.includes(form.estado)) {
+      vacsParaSaldo.push({
+        id: form.id || 'temp-current-id',
+        periodo_id: form.periodo_id || periodoActivo?.id,
+        nombre_empleado: form.nombre_empleado,
+        estado: form.estado,
+        tipo_vacacion: form.tipo_vacacion,
+        fecha_inicio: form.fecha_inicio,
+        fecha_fin: form.fecha_fin,
+        total_dias: form.total_dias,
+        dias_disfrutados: form.dias_disfrutados,
+        dias_en_dinero: form.dias_en_dinero,
+      })
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.nombre_empleado])
+
+    const saldoActual = calcularSaldoVacacionesPeriodo({
+      id: form.periodo_id || periodoActivo?.id,
+      fecha_ingreso: fechaIngreso,
+      fecha_retiro: periodoActivo?.fecha_retiro || null,
+    }, vacsParaSaldo)
+
+    return {
+      ...saldoActual,
+      topeDisponible: saldoOtras.saldoPendiente,
+    }
+  }, [
+    form.nombre_empleado, form.id, form.periodo_id, form.fecha_ingreso,
+    form.estado, form.tipo_vacacion, form.fecha_inicio, form.fecha_fin,
+    form.total_dias, form.dias_disfrutados, form.dias_en_dinero,
+    empleados, periodos, rows
+  ])
 
   const filtered = useMemo(() => {
     let res = rows.filter(r => {
@@ -145,6 +160,8 @@ export default function Vacaciones() {
     return diasAcumuladosAnio(rows, form.nombre_empleado, anioActual, modal === 'edit' ? form.id : null)
   }, [form.nombre_empleado, rows, modal, form.id, anioActual])
 
+
+
   const toggleSort = (field) => {
     if (sortField === field) setSortAsc(a => !a)
     else { setSortField(field); setSortAsc(true) }
@@ -184,9 +201,40 @@ export default function Vacaciones() {
       }
     }
 
+    // Validar límite estricto de días disponibles según el saldo del periodo
+    if (saldoVacacionesForm != null) {
+      const diasDisfrute = (form.fecha_inicio && form.fecha_fin)
+        ? (diasHabilesEntre(form.fecha_inicio, form.fecha_fin) || 0)
+        : (Number(form.dias_disfrutados) || Number(form.total_dias) || 0)
+      const diasDinero = (form.tipo_vacacion === 'Vacaciones en dinero')
+        ? (Number(form.dias_en_dinero) || 15)
+        : (Number(form.dias_en_dinero) || 0)
+      const diasSolicitados = (form.tipo_vacacion === 'Vacaciones en dinero')
+        ? diasDinero
+        : (diasDisfrute + diasDinero)
+
+      const topeMax = saldoVacacionesForm.topeDisponible != null
+        ? saldoVacacionesForm.topeDisponible
+        : saldoVacacionesForm.saldoPendiente
+
+      if (diasSolicitados > topeMax) {
+        return flash('error', `No puedes solicitar ${diasSolicitados} días. El colaborador solo tiene ${topeMax} días disponibles.`)
+      }
+    }
+
     setSaving(true)
+    let periodoId = form.periodo_id || null
+    if (!periodoId && form.nombre_empleado) {
+      const emp = empleados.find(e => e.nombre_completo?.trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
+      if (emp) {
+        const pActivo = periodos.find(p => p.empleado_id === emp.id && p.es_periodo_actual)
+        if (pActivo) periodoId = pActivo.id
+      }
+    }
+
     const payload = {
       nombre_empleado:     form.nombre_empleado.trim(),
+      periodo_id:          periodoId,
       dependencia:         form.dependencia || null,
       periodo_vacaciones:  form.periodo_vacaciones || null,
       fecha_inicio:        form.fecha_inicio || null,
@@ -254,7 +302,7 @@ export default function Vacaciones() {
       flash('success', modal === 'add' ? 'Vacación registrada.' : 'Registro actualizado.')
     }
     setModal(null)
-    load()
+    await load()
   }
 
   const remove = async (id) => {
@@ -263,7 +311,7 @@ export default function Vacaciones() {
     if (error) return flash('error', 'Error al eliminar.')
     logAccion('ELIMINAR', 'vacaciones', id, currentCompany)
     flash('success', 'Registro eliminado.')
-    load()
+    await load()
   }
 
   // Guardado rápido del estado (edición inline desde la tabla/tarjetas)
@@ -272,6 +320,7 @@ export default function Vacaciones() {
       const { error } = await vacacionesApi.actualizarEstadoVacacion(id, value)
       if (error) throw error
       setRows(prev => prev.map(r => r.id === id ? { ...r, estado: value } : r))
+      await load()
     } catch (e) {
       flash('error', 'Error al actualizar estado: ' + e.message)
     }
@@ -329,6 +378,21 @@ export default function Vacaciones() {
     filterDep    && { label: filterDep,        clear: () => { setFilterDep(''); setPage(1) } },
     filterAnio   && { label: filterMes ? `${filterMes} ${filterAnio}` : filterAnio, clear: () => { setFilterAnio(''); setFilterMes(''); setPage(1) } },
   ].filter(Boolean)
+
+  const enrichedViewRow = useMemo(() => {
+    if (!viewRow) return null
+    if (viewRow.fecha_ingreso) return viewRow
+    const emp = empleados.find(e => e.nombre_completo?.trim().toLowerCase() === viewRow.nombre_empleado?.trim().toLowerCase())
+    const pActivo = periodos.find(p => emp && p.empleado_id === emp.id && p.es_periodo_actual)
+    if (pActivo?.fecha_ingreso || emp?.fecha_ingreso) {
+      return {
+        ...viewRow,
+        fecha_ingreso: pActivo?.fecha_ingreso || emp?.fecha_ingreso,
+        periodo_id: viewRow.periodo_id || pActivo?.id || null,
+      }
+    }
+    return viewRow
+  }, [viewRow, empleados, periodos])
 
   return (
     <div>
@@ -411,6 +475,8 @@ export default function Vacaciones() {
           modal={modal} form={form} setForm={setForm} f={f} save={save} saving={saving}
           empActivos={empActivos} empInactivos={empInactivos}
           diasAcumuladosForm={diasAcumuladosForm} anioActual={anioActual}
+          saldoVacacionesForm={saldoVacacionesForm}
+          periodos={periodos}
           onClose={() => setModal(null)}
         />
       )}
@@ -421,9 +487,9 @@ export default function Vacaciones() {
         message="¿Estás seguro de que deseas eliminar este registro de vacaciones? Esta acción no se puede deshacer." />
 
       {/* ── Modal ver detalle ─────────────────────────────────────────────────── */}
-      {viewRow && (
+      {enrichedViewRow && (
         <ModalDetalle
-          row={viewRow}
+          row={enrichedViewRow}
           onClose={() => setViewRow(null)}
           onEdit={row => { setViewRow(null); openEdit(row) }}
           allRows={rows}

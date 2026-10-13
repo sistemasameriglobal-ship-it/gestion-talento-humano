@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import {
   TrendingUp, Trophy, Medal, AlertTriangle, Award,
   Pencil, Loader2, ChevronDown, ChevronUp, DollarSign, Sparkles,
-  Layers, ShieldAlert, FileSpreadsheet, Target, CheckCircle2,
+  ShieldAlert, FileSpreadsheet, Target, CheckCircle2,
 } from 'lucide-react'
 import { MESES_FULL, CIERRE_CFG, CIERRE_METRICAS, normalizeNombre } from '../../utils/productividadConstants'
 import { fmtMoneda, iniciales, fmtFecha, noHabiaIngresado, calcPct } from '../../utils/productividadHelpers'

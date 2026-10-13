@@ -56,7 +56,7 @@ export default function VacacionesCards({
                   )}
                   {habiles && (
                     <span style={{ background: '#F5F3FF', color: '#7C3AED', borderRadius: 999, padding: '1px 8px', fontWeight: 700, fontSize: 11, marginLeft: 'auto' }}>
-                      {habiles}d hábiles
+                      {habiles} {habiles === 1 ? 'día hábil' : 'días hábiles'}
                     </span>
                   )}
                 </div>

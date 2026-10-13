@@ -59,7 +59,7 @@ export default function VacacionesTabla({
                 <td style={{ textAlign: 'center' }}>
                   {row.dias_en_dinero != null && row.dias_en_dinero !== '' ? (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid color-mix(in srgb, var(--warning) 40%, transparent)' }}>
-                      💰 {row.dias_en_dinero}d
+                      💰 {row.dias_en_dinero} días
                     </span>
                   ) : '—'}
                 </td>

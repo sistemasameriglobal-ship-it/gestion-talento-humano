@@ -4,6 +4,7 @@
 // Vista de tarjetas de empleados con acciones rápidas.
 // =============================================================
 import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar } from 'lucide-react'
+import { calcAntiguedad } from '../../utils/vacacionesHelpers'
 
 function iniciales(nombre) {
   const partes = (nombre || '').trim().split(/\s+/).filter(Boolean)
@@ -13,13 +14,16 @@ function iniciales(nombre) {
 }
 
 export default function EmpleadoCards({
-  paged, novedadesPorEmpleado, onSelect, openEdit, toggleActivo, setDeleteId,
+  paged, novedadesPorEmpleado, periodosPorEmpleado = {}, onSelect, openEdit, onRetirar, onReintegrar, setDeleteId,
 }) {
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 12, marginBottom: 16 }}>
         {paged.map(emp => {
           const nov = novedadesPorEmpleado[emp.nombre_completo]
+          const periodosEmp = periodosPorEmpleado[emp.id] || []
+          const esReintegrado = periodosEmp.length > 1
+          const antig = emp.fecha_ingreso ? calcAntiguedad(emp.fecha_ingreso, emp.activo === false ? emp.fecha_retiro : null) : null
           return (
             <div
               key={emp.id}
@@ -43,15 +47,37 @@ export default function EmpleadoCards({
                   <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {emp.nombre_completo}
                   </div>
-                  <span style={{
-                    fontSize: 10, borderRadius: 4, padding: '1px 6px', fontWeight: 600,
-                    background: emp.activo === false ? 'var(--danger-bg)' : 'var(--success-bg)',
-                    color: emp.activo === false ? 'var(--danger-text)' : 'var(--success-text)',
-                  }}>{emp.activo === false ? 'Inactivo' : 'Activo'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                    <span style={{
+                      fontSize: 10, borderRadius: 4, padding: '1px 6px', fontWeight: 600,
+                      background: emp.activo === false ? 'var(--danger-bg)' : 'var(--success-bg)',
+                      color: emp.activo === false ? 'var(--danger-text)' : 'var(--success-text)',
+                    }}>{emp.activo === false ? 'Inactivo' : 'Activo'}</span>
+                    {esReintegrado && (
+                      <span
+                        title={`Empleado con ${periodosEmp.length} periodos registrados`}
+                        style={{
+                          fontSize: 10, borderRadius: 4, padding: '1px 6px', fontWeight: 700,
+                          background: '#F3E8FF', color: '#7E22CE', border: '1px solid #E9D5FF',
+                        }}
+                      >
+                        Reintegrado
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                   <button className="icon-btn" title="Editar" onClick={() => openEdit(emp)}><Edit2 size={13} /></button>
-                  <button className="btn btn-sm" style={{ background: emp.activo === false ? 'var(--success-bg)' : 'var(--warning-bg)', color: emp.activo === false ? 'var(--success-text)' : 'var(--warning-text)', border: 'none' }} title={emp.activo === false ? 'Reactivar' : 'Desactivar'} onClick={() => toggleActivo(emp)}>
+                  <button
+                    className="btn btn-sm"
+                    style={{
+                      background: emp.activo === false ? 'var(--success-bg)' : 'var(--warning-bg)',
+                      color: emp.activo === false ? 'var(--success-text)' : 'var(--warning-text)',
+                      border: 'none'
+                    }}
+                    title={emp.activo === false ? 'Reintegrar empleado' : 'Retirar empleado'}
+                    onClick={() => emp.activo === false ? onReintegrar(emp) : onRetirar(emp)}
+                  >
                     {emp.activo === false ? <RotateCcw size={13} /> : <Archive size={13} />}
                   </button>
                   <button className="icon-btn icon-btn--danger" title="Eliminar" onClick={() => setDeleteId(emp.id)}><Trash2 size={13} /></button>
@@ -75,9 +101,14 @@ export default function EmpleadoCards({
                 </div>
               )}
               {emp.fecha_ingreso && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                   <Calendar size={12} style={{ flexShrink: 0 }} />
                   <span>Ingreso: {emp.fecha_ingreso}</span>
+                  {antig?.texto && (
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      • Antigüedad: <strong style={{ fontWeight: 600, color: 'var(--text)' }}>{antig.texto}</strong>
+                    </span>
+                  )}
                 </div>
               )}
               {emp.activo === false && emp.fecha_retiro && (

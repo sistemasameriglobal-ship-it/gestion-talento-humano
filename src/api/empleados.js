@@ -31,7 +31,7 @@ export function listarEmpleadosParaNovedades(empresa) {
 export function listarEmpleadosParaVacaciones(empresa) {
   let query = supabase
     .from(TABLA)
-    .select('nombre_completo,dependencia,cargo,activo,empresa')
+    .select('id,nombre_completo,dependencia,cargo,activo,empresa,fecha_ingreso')
     .order('nombre_completo')
   if (empresa) query = query.eq('empresa', empresa)
   return query
@@ -69,12 +69,34 @@ export async function crearEmpleado(payload, empresa = 'ameriglobal') {
     empresa: empresaFinal,
     dependencia: payload.dependencia,
   })
-  return supabase.from(TABLA).insert([{
+  const res = await supabase.from(TABLA).insert([{
     ...payload,
     empresa: empresaFinal,
     empresa_id,
     departamento_id,
-  }])
+  }]).select()
+
+  // Si se crea el empleado con éxito, se crea automáticamente su Periodo 1 en empleado_periodos
+  if (!res.error && res.data?.[0]?.id) {
+    const nuevoEmp = res.data[0]
+    await crearPeriodo({
+      empleado_id: nuevoEmp.id,
+      empresa: empresaFinal,
+      empresa_id,
+      departamento_id,
+      numero_periodo: 1,
+      fecha_ingreso: nuevoEmp.fecha_ingreso || new Date().toISOString().split('T')[0],
+      fecha_retiro: nuevoEmp.fecha_retiro || null,
+      cargo: nuevoEmp.cargo || null,
+      dependencia: nuevoEmp.dependencia || null,
+      es_periodo_actual: nuevoEmp.activo !== false,
+      observaciones: 'Inicio de contrato inicial',
+    }).catch(err => {
+      console.warn('Nota: no se pudo crear periodo inicial (puede requerir migración SQL):', err)
+    })
+  }
+
+  return res
 }
 
 export async function actualizarEmpleado(id, payload) {
@@ -107,4 +129,109 @@ export async function actualizarEmpleado(id, payload) {
 
 export function eliminarEmpleado(id) {
   return supabase.from(TABLA).delete().eq('id', id)
+}
+
+// =============================================================
+// GESTIÓN DE PERIODOS LABORALES (empleado_periodos)
+// =============================================================
+const TABLA_PERIODOS = 'empleado_periodos'
+
+/** Lista todos los periodos laborales de un empleado ordenados cronológicamente. */
+export async function listarPeriodosEmpleado(empleadoId) {
+  try {
+    const { data, error } = await supabase
+      .from(TABLA_PERIODOS)
+      .select('*')
+      .eq('empleado_id', empleadoId)
+      .order('numero_periodo', { ascending: true })
+    if (error) {
+      console.warn('Error al listar periodos del empleado:', error.message)
+      return { data: [], error }
+    }
+    return { data: data || [], error: null }
+  } catch (err) {
+    return { data: [], error: err }
+  }
+}
+
+/** Obtiene el periodo laboral vigente (activo) de un empleado. */
+export async function obtenerPeriodoActivo(empleadoId) {
+  try {
+    const { data, error } = await supabase
+      .from(TABLA_PERIODOS)
+      .select('*')
+      .eq('empleado_id', empleadoId)
+      .eq('es_periodo_actual', true)
+      .maybeSingle()
+    return { data, error }
+  } catch (err) {
+    return { data: null, error: err }
+  }
+}
+
+/** Cierra un periodo laboral registrando fecha de retiro y observaciones. */
+export async function cerrarPeriodo(periodoId, { fecha_retiro, observaciones }) {
+  try {
+    const { data, error } = await supabase
+      .from(TABLA_PERIODOS)
+      .update({
+        fecha_retiro,
+        observaciones,
+        es_periodo_actual: false,
+      })
+      .eq('id', periodoId)
+      .select()
+    return { data, error }
+  } catch (err) {
+    return { data: null, error: err }
+  }
+}
+
+/** Crea un nuevo periodo laboral para un empleado (reintegro o alta). */
+export async function crearPeriodo(payload) {
+  try {
+    const empresaFinal = payload.empresa || 'ameriglobal'
+    let { empresa_id, departamento_id } = payload
+    if (!empresa_id || !departamento_id) {
+      const res = await resolverIdsRelacionales({
+        empresa: empresaFinal,
+        dependencia: payload.dependencia,
+      })
+      empresa_id = empresa_id || res.empresa_id
+      departamento_id = departamento_id || res.departamento_id
+    }
+
+    const { data, error } = await supabase
+      .from(TABLA_PERIODOS)
+      .insert([{
+        ...payload,
+        empresa: empresaFinal,
+        empresa_id,
+        departamento_id,
+      }])
+      .select()
+    return { data, error }
+  } catch (err) {
+    return { data: null, error: err }
+  }
+}
+
+/** Lista todos los periodos de los empleados de una empresa (usado en Dashboard/Empleados). */
+export async function listarTodosLosPeriodos(empresa) {
+  try {
+    let query = supabase
+      .from(TABLA_PERIODOS)
+      .select('*')
+      .order('fecha_ingreso', { ascending: true })
+    if (empresa) query = query.eq('empresa', empresa)
+    const { data, error } = await query
+    if (error) {
+      console.warn('empleado_periodos aún no disponible o error:', error.message)
+      return { data: [], error }
+    }
+    return { data: data || [], error: null }
+  } catch (err) {
+    console.warn('Error al listar todos los periodos:', err)
+    return { data: [], error: err }
+  }
 }

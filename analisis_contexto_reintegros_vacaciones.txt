@@ -1,0 +1,575 @@
+================================================================================
+INFORME TÉCNICO DE ARQUITECTURA DE SOFTWARE
+EVALUACIÓN INTEGRAL Y HOJA DE RUTA: REINTEGROS, ANTIGÜEDAD Y CONTROL DE VACACIONES
+================================================================================
+Proyecto: AmeriGlobal & Global Link - Talento Humano y Gestión Operativa
+Fecha: Octubre 2026
+Autor: Arquitecto de Software Senior
+Archivo objetivo: analisis_contexto_reintegros_vacaciones.txt
+================================================================================
+
+RESUMEN EJECUTIVO
+--------------------------------------------------------------------------------
+Se ha ejecutado una inspección estática y dinámica exhaustiva de la base de código
+(frontend en React 19 + Vite 8) y la capa de persistencia en PostgreSQL (Supabase).
+El objetivo central es estructurar la base técnica para implementar con éxito tres
+módulos críticos de gestión de talento humano:
+  1. Gestión de periodos laborales y reintegros de empleados.
+  2. Cálculo dinámico de antigüedad laboral por periodo contractual.
+  3. Control, causación y saldo de vacaciones (días ganados, disfrutados,
+     compensados en dinero y balance pendiente).
+
+Regla de Negocio Confirmada:
+"Cuando un empleado se reintegra a la empresa mediante un nuevo contrato, su
+historial anterior se conserva intacto como archivo/registro histórico, pero sus
+vacaciones y antigüedad para el nuevo ciclo inician desde cero en el nuevo periodo."
+
+A continuación se detalla el diagnóstico del sistema actual, el mapa de hallazgos
+y el plan técnico de implementación estructurado en las 5 secciones solicitadas.
+
+
+================================================================================
+1. ARQUITECTURA GENERAL Y ACCESO A DATOS
+================================================================================
+
+1.1. Estructura del Proyecto y Tecnologías Clave
+--------------------------------------------------------------------------------
+El proyecto es una Single Page Application (SPA) moderna desarrollada con:
+  - Runtime / Bundler: Vite 8.0.12 con React 19.2.6 (ES Modules puros).
+  - Backend as a Service (BaaS): Supabase (@supabase/supabase-js v2.108.1).
+  - Componentes de UI: Lucide React v1.17.0 (iconografía), CSS modules / vanilla
+    moderno con soporte de variables CSS de diseño y LightningCSS (v1.33.0).
+  - Visualización y Datos: Recharts v3.8.1 para analítica en Dashboard.
+  - Procesamiento de Archivos: ExcelJS (v4.4.0) y XLSX / SheetJS (v0.18.5) con
+    carga diferida (dynamic imports) para optimizar el bundle inicial.
+
+Carpetas Clave:
+  - /SQL: Contiene los scripts DDL/DML estructurados secuencialmente:
+      * 00_SCRIPT_MAESTRO_COMPLETO.sql: Consolidado de producción.
+      * 01_SUPABASE_SETUP.sql a 06_ADMIN_METRICAS_SISTEMA.sql: Migraciones históricas.
+  - /src/api: Capa de abstracción de acceso a datos (Patrón Data Access Layer).
+    Cada entidad (`empleados.js`, `novedades.js`, `vacaciones.js`, `departamentos.js`,
+    `productividad.js`, `auditLogs.js`, `idResolvers.js`) encapsula sus consultas.
+  - /src/context: Estado global transversal:
+      * AuthContext.jsx: Autenticación con Supabase Auth, gestión del perfil
+        (`perfiles`), roles (`es_admin`, `operativo`) y estado de cuenta activo.
+      * CompanyContext.jsx: Orquestador multitenancy. Maneja la empresa activa
+        ('ameriglobal' vs 'global_link'), departamentos dinámicos y matriz de permisos.
+  - /src/pages: Vistas principales de negocio (`Empleados.jsx`, `Novedades.jsx`,
+    `Vacaciones.jsx`, `Dashboard.jsx`, `Colaboradores.jsx`, `Informe.jsx`, etc.).
+  - /src/components: Componentes reutilizables segregados por módulo (`/empleados`,
+    `/vacaciones`, `/novedades`, `/dashboard`, `/colaboradores`, `/ui`).
+  - /src/utils: Funciones puras de cálculo de negocio (`diasHabiles.js`, `fecha.js`,
+    `dashboardStats.js`, `novedadesValidacion.js`, `vacacionesHelpers.js`,
+    `parseExcel.js`, `exportarExcel.js`, `auditLogger.js`).
+
+1.2. Configuración de Supabase y Base de Datos
+--------------------------------------------------------------------------------
+  - Row Level Security (RLS):
+    * ACTIVADO en todas las tablas (`ALTER TABLE public.<tabla> ENABLE ROW LEVEL SECURITY`).
+    * Implementa funciones `SECURITY DEFINER` en PostgreSQL para evaluar accesos:
+        1. `public.usuario_activo()`: Retorna TRUE si `auth.uid()` existe en
+           `public.perfiles` con `activo = true`.
+        2. `public.es_admin()`: Retorna TRUE si `auth.uid()` tiene `es_admin = true`.
+    * Las tablas operativas (`empleados`, `novedades`, `vacaciones`, etc.) utilizan
+      la política:
+        `FOR ALL USING (usuario_activo()) WITH CHECK (usuario_activo())`.
+    * No hay accesos públicos anónimos: toda lectura/escritura exige sesión válida
+      y perfil activo.
+
+  - Multitenancy (Arquitectura Híbrida):
+    * Existe un esquema multitenancy híbrido y retrocompatible:
+      a) Discriminador textual: Columna `empresa TEXT DEFAULT 'ameriglobal'`
+         (valores admitidos: `'ameriglobal'` y `'global_link'`).
+      b) Clave foránea relacional: Columna `empresa_id UUID REFERENCES public.empresas(id)`.
+      c) Clave departamental relacional: Columna `departamento_id UUID REFERENCES public.departamentos(id)`.
+    * La empresa activa se selecciona en UI mediante `CompanySwitcher.jsx`, se
+      persiste en `localStorage` ('active_company') y se expone por `CompanyContext`.
+    * Al consultar, las APIs filtran por `empresa = currentCompany`.
+    * Al insertar/actualizar, el helper `src/api/idResolvers.js` resuelve en paralelo
+      el `empresa_id` y `departamento_id` a partir del texto para poblar ambas columnas.
+
+1.3. Manejo de Clientes Supabase y Llamadas API
+--------------------------------------------------------------------------------
+  - Cliente único inicializado como singleton en `src/supabaseClient.js`:
+    ```javascript
+    export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    ```
+  - Regla arquitectónica del proyecto: Las vistas y componentes de UI NUNCA
+    deben importar `supabase` directamente (salvo el logger de auditoría). Todas
+    las operaciones se ejecutan mediante las funciones exportadas en `/src/api/*`.
+  - Las funciones retornan la promesa generada por la API fluida de Supabase
+    (`{ data, error }`), permitiendo manejo uniforme de errores y estados de carga.
+
+
+================================================================================
+2. ESTADO ACTUAL DEL MÓDULO EMPLEADOS
+================================================================================
+
+2.1. Esquema Exacto de la Tabla `empleados`
+--------------------------------------------------------------------------------
+Definición DDL extraída de `00_SCRIPT_MAESTRO_COMPLETO.sql`:
+
+  Columna           | Tipo        | Restricciones / Valores por defecto
+  ------------------+-------------+-----------------------------------------------
+  id                | UUID        | PRIMARY KEY DEFAULT gen_random_uuid()
+  nombre_completo   | TEXT        | NOT NULL
+  correo            | TEXT        | Nullable
+  dependencia       | TEXT        | Nullable (Nombre del área en texto, ej. 'RRHH')
+  cargo             | TEXT        | Nullable
+  activo            | BOOLEAN     | DEFAULT true
+  fecha_ingreso     | DATE        | Nullable (Formato 'YYYY-MM-DD')
+  fecha_retiro      | DATE        | Nullable (Formato 'YYYY-MM-DD')
+  tiene_vehiculo    | BOOLEAN     | NOT NULL DEFAULT false
+  empresa           | TEXT        | DEFAULT 'ameriglobal'
+  departamento_id   | UUID        | REFERENCES public.departamentos(id)
+  empresa_id        | UUID        | REFERENCES public.empresas(id)
+  created_at        | TIMESTAMPTZ | DEFAULT now()
+  updated_at        | TIMESTAMPTZ | DEFAULT now() (Trigger `update_updated_at()`)
+
+Índices en `empleados`:
+  - `idx_empleados_activo` ON (activo)
+  - `idx_empleados_nombre` ON (nombre_completo)
+  - `idx_empleados_empresa` ON (empresa)
+  - `idx_empleados_empresa_id` ON (empresa_id)
+  - `idx_empleados_departamento_id` ON (departamento_id)
+  - `idx_empleados_dependencia` ON (dependencia)
+
+2.2. Componentes Clave de UI
+--------------------------------------------------------------------------------
+  - `src/pages/Empleados.jsx`: Orquestador principal.
+      * Controla los estados `rows` (lista de empleados), `novedades`, filtros
+        por área/estado, búsqueda, ordenamiento y paginación (`PAGE_SIZE = 12`).
+      * Maneja la apertura de modales: `openAdd`, `openEdit`, `selectedEmp`.
+  - `src/components/empleados/EmpleadoTable.jsx`: Vista tabular.
+      * Muestra columnas: Nombre, Área, Cargo, Correo, Estado (Badge verde/rojo),
+        conteo de Novedades y botones de acción (Editar, Toggle Activo, Eliminar).
+  - `src/components/empleados/EmpleadoCards.jsx`: Vista alternativa en tarjetas.
+      * Renderiza avatar con iniciales, badges de estado, chips con número de
+        novedades/días de incapacidad y los mismos botones de acción.
+  - `src/components/empleados/EmpleadoFormModal.jsx`: Modal de creación y edición.
+      * Campos: Nombre, Correo, Cargo, selector visual de Área (dependencia),
+        `fecha_ingreso` y selector de Estado (Activo / Inactivo).
+      * Si se selecciona "Inactivo", despliega condicionalmente el campo `fecha_retiro`.
+  - `src/components/empleados/EmpleadoHistorialModal.jsx`: Modal de consulta.
+      * Al hacer clic sobre un empleado, muestra sus KPIs de ausentismo y su
+        tabla de novedades registradas.
+
+2.3. Manejo Actual de Fechas, Estado y Validación de Duplicados
+--------------------------------------------------------------------------------
+  - El Problema del Modelo Monoperiódico Actual:
+    El sistema asume que un colaborador solo tiene un único ciclo vital en la
+    organización. Esto genera las siguientes fallas críticas:
+
+    1. Destrucción de Historial al Reactivar (`toggleActivo` en `Empleados.jsx`, L202-210):
+       ```javascript
+       const toggleActivo = async (emp) => {
+         const nuevoActivo = emp.activo === false
+         const payload = nuevoActivo
+           ? { activo: true, fecha_retiro: null } // ¡BORRA LA FECHA DE RETIRO ANTERIOR!
+           : { activo: false, fecha_retiro: emp.fecha_retiro || hoyISO() }
+         await empleadosApi.actualizarEmpleado(emp.id, payload)
+       }
+       ```
+       Al reactivar a un empleado previamente retirado:
+       * Se sobreescribe `fecha_retiro = null`, eliminando la constancia histórica
+         de cuándo terminó su contrato previo.
+       * No se solicita ni se registra una nueva `fecha_ingreso`, dejando la fecha
+         del contrato original.
+       * En `save()` (L179): `fecha_retiro: form.activo ? null : (form.fecha_retiro || null)`.
+         Cualquier edición a un empleado activo elimina su fecha de retiro previa.
+
+    2. Bloqueo por Validación de Duplicados (`checkDuplicado`, L140-150 y L164-167):
+       * `checkDuplicado` normaliza cadenas (remueve tildes, diacríticos y espacios)
+         y compara contra todos los empleados en `rows`.
+       * Si se intenta registrar un empleado con el mismo nombre para iniciar un
+         nuevo contrato, el sistema arroja:
+         `"Ya existe un empleado llamado 'X'. Cambia el nombre o edita el registro existente."`
+       * Si el usuario edita el registro existente, cae en la sobreescritura
+         destructiva mencionada en el punto anterior.
+
+
+================================================================================
+3. ESTADO ACTUAL DE NOVEDADES Y AUSENTISMO
+================================================================================
+
+3.1. Esquema y Estructura de la Tabla `novedades`
+--------------------------------------------------------------------------------
+Definición DDL extraída de `00_SCRIPT_MAESTRO_COMPLETO.sql`:
+
+  Columna                   | Tipo        | Descripción
+  --------------------------+-------------+---------------------------------------
+  id                        | UUID        | PRIMARY KEY DEFAULT gen_random_uuid()
+  nombre_empleado           | TEXT        | NOT NULL (Nombre textual del empleado)
+  concepto                  | TEXT        | NOT NULL ('Incapacidad', 'LNR', 'LR', etc.)
+  fecha_inicio              | DATE        | Inicio del evento
+  fecha_fin                 | DATE        | Fin del evento
+  total_dias                | NUMERIC     | Total días calculados o hábiles
+  dependencia               | TEXT        | Área operativa
+  periodo                   | TEXT        | NOT NULL (Ejemplo: '2025-03')
+  observacion               | TEXT        | Observaciones generales
+  observacion_contabilidad  | TEXT        | Notas para nómina/contabilidad
+  validacion_incapacidad    | TEXT        | 'Validada' / 'Pendiente'
+  radicacion_incapacidad    | TEXT        | Radicación ante EPS/ARL
+  prorroga                  | TEXT        | 'Sí' / 'No'
+  nomina_electronica        | TEXT        | Estado de transmisión
+  seguridad_social          | TEXT        | Estado de cobro/seguridad social
+  jornada                   | TEXT        | Diurna/Nocturna/etc.
+  diagnostico               | TEXT        | Código CIE-10 o descripción médica
+  empresa                   | TEXT        | DEFAULT 'ameriglobal'
+  empleado_id               | UUID        | REFERENCES public.empleados(id)
+  departamento_id           | UUID        | REFERENCES public.departamentos(id)
+  empresa_id                | UUID        | REFERENCES public.empresas(id)
+  created_at / updated_at   | TIMESTAMPTZ | Auditoría de tiempo
+
+3.2. Cálculo del Ausentismo y Validaciones de Fechas (`novedadesValidacion.js`)
+--------------------------------------------------------------------------------
+  - Cálculo de la Tasa de Ausentismo en el Dashboard:
+    Implementado en `src/utils/dashboardStats.js` y `src/pages/Dashboard.jsx`.
+    Fórmula oficial:
+      Tasa Ausentismo (%) = [ Días de Ausencia / (Empleados Base × Días Calendario) ] × 100
+
+    * Numerador: Días de novedades con conceptos de ausencia real:
+      `CONCEPTOS_AUSENTISMO = ['Incapacidad', 'LNR', 'LR', '1/2 LR y 1/2 LNR',
+      'Maternidad', 'Paternidad', 'Calamidad/Luto', 'Hospitalización', 'Ausente', 'Suspensión']`.
+      (Se excluyen Vacaciones, Ingreso, Terminación, Retiros, Día Familia, etc.).
+    * Denominador (`empleadosActivosPeriodo`, `Dashboard.jsx`, L130-148):
+      Calcula qué colaboradores estaban laborando en el rango `[periodoIni, periodoFin]`:
+      ```javascript
+      if (e.fecha_ingreso && periodoFin && e.fecha_ingreso > periodoFin) return false
+      if (e.fecha_retiro) {
+        if (periodoIni && e.fecha_retiro < periodoIni) return false
+      } else if (e.activo === false && periodoFin >= hoy) {
+        return false
+      }
+      ```
+    * Falla ante reintegros: Si un colaborador ingresó en 2023, se retiró en junio
+      2024 y reingresó en enero 2025:
+      - Si se le actualiza su única `fecha_ingreso` a enero 2025, el Dashboard
+        del año 2023 lo excluye por completo (`fecha_ingreso > periodoFin`),
+        adulterando retroactivamente la tasa de ausentismo de 2023.
+      - Si no se le actualiza, durante los meses en que estuvo retirado (julio a
+        diciembre 2024) se cuenta erróneamente como activo porque su `fecha_retiro`
+        fue borrada.
+
+  - Validaciones de Fechas en `src/utils/novedadesValidacion.js`:
+    Contiene dos funciones de validación previas al guardado:
+
+    1. `validarContraFichaEmpleado(data, fichasEmpleados)` (L6-28):
+       - Bloquea novedades previas a `ficha.fecha_ingreso`:
+         `"No se puede registrar una novedad con fecha X, anterior a su ingreso."`
+       - Bloquea novedades posteriores a `ficha.fecha_retiro` (si `!ficha.activo`).
+       - Impacto: Al reingresar un empleado con nueva fecha, si alguien edita o
+         recalcula una novedad de su contrato anterior, el sistema la rechaza
+         porque la fecha es "anterior a su ingreso".
+
+    2. `validarContraHistorial(data, rows)` (L35-71):
+       - Algoritmo empírico: Busca en la tabla de novedades registros donde
+         `concepto === 'Ingreso'` o `'Terminación de Contrato'`.
+       - Empareja cada Ingreso con la siguiente Terminación para armar tramos activos:
+         `tramosActivos = [{ desde: ingresoActual, hasta: fechaTerminacion }]`.
+       - Exige que cualquier novedad caiga dentro de uno de esos tramos.
+       - Vulnerabilidad: El propio código documenta que estas novedades "son
+         opcionales y muchas veces no se cargan". Si no se registran novedades
+         explícitas de ingreso/terminación, la validación se omite; y si se
+         cargan de forma incompleta, bloquea novedades válidas.
+
+3.3. Interacción con "Ingreso", "Terminación de Contrato" y Reingreso
+--------------------------------------------------------------------------------
+  - En `novedadesConstants.js`, `'Ingreso'` y `'Terminación de Contrato'` son
+    simples cadenas dentro del array `CONCEPTOS_LIST`.
+  - En `Novedades.jsx` (L299): Se desactiva la limitación de inputs de fecha
+    únicamente si `form.concepto === 'Ingreso' || form.concepto === 'Terminación de Contrato'`.
+  - En `novedadesImport.js`: Importaciones con texto "No superación P. Prueba" se
+    mapean a `'Terminación de Contrato'`.
+  - Conclusión: Novedades no posee una estructura relacional de contratos. Utiliza
+    filas de novedades como "parches" para deducir fechas, sin conexión directa
+    con el ciclo contractual de la tabla `empleados`. No existe actualmente ninguna
+    etiqueta o concepto formal de "Reingreso".
+
+
+================================================================================
+4. ESTADO ACTUAL DEL MÓDULO VACACIONES
+================================================================================
+
+4.1. Componentes y Lógica Existente de Vacaciones
+--------------------------------------------------------------------------------
+  - Tabla `public.vacaciones` en Supabase:
+    * Columnas principales: `id`, `nombre_empleado`, `dependencia`, `cargo`,
+      `tipo_vacacion` ('Vacaciones', 'Vacaciones en dinero', 'Vacaciones compensadas'),
+      `fecha_inicio`, `fecha_fin`, `total_dias`, `dias_disfrutados`, `dias_en_dinero`,
+      `estado` ('Pendiente', 'Aprobada', 'En curso', 'Finalizada', 'Cancelada'),
+      `fecha_ingreso`, `periodo_vacaciones` (TEXT libre, ej. "2024-2025"),
+      `aprobado_por`, `observacion`, `observacion_contable`, `empresa`, `empleado_id`.
+
+  - Componentes de UI:
+    * `src/pages/Vacaciones.jsx`: Página principal. Filtros por año, mes, área,
+      tipo y estado. Vistas de tabla y tarjetas. Control de duplicados en memoria
+      por `nombre_empleado` + `periodo_vacaciones`.
+    * `src/components/vacaciones/ModalForm.jsx`: Modal de registro/edición.
+    * `src/components/vacaciones/ModalDetalle.jsx`: Vista de solo lectura. Permite
+      imprimir solicitud formal en PDF (`pdfGenerator.js`).
+    * `src/components/vacaciones/VacacionesKPIs.jsx`: Métricas globales de la vista
+      (Total solicitudes, Pendientes, Aprobadas, En curso, Días totales solicitados).
+    * `src/api/vacaciones.js`: Capa API con métodos de CRUD y búsqueda.
+
+  - Sincronización Automática con Novedades:
+    * En `Vacaciones.jsx` (L216-241): Al crear una vacación de tipo 'Vacaciones',
+      se busca o inserta automáticamente una novedad de concepto `'Vacaciones'`
+      en la tabla `novedades` para que impacte el calendario y las ausencias.
+    * En `Novedades.jsx` (L196-221): Al crear una novedad de concepto `'Vacaciones'`,
+      se inserta automáticamente en la tabla `vacaciones`.
+
+4.2. Cómo se Calculan o Muestran Actualmente los Días y la Antigüedad
+--------------------------------------------------------------------------------
+  - Cálculo de Antigüedad (`src/utils/vacacionesHelpers.js`):
+    ```javascript
+    export function calcAntiguedad(fechaIngreso) {
+      if (!fechaIngreso) return null
+      const ingreso = new Date(fechaIngreso + 'T00:00:00')
+      const hoy = new Date()
+      // ... resta años y meses ...
+      return `${yStr}, ${mStr}` // Devuelve string: "2 años, 3 meses"
+    }
+    ```
+    * Deficiencia de Arquitectura: Si el empleado fue reincorporado y tiene la
+      fecha de ingreso original, la antigüedad cuenta todo el tiempo intermedio
+      en que estuvo fuera de la empresa.
+    * Hallazgo / Bug Detectado en `ModalDetalle.jsx` (L64-65):
+      `calcAntiguedad` retorna un `string`, pero `ModalDetalle.jsx` asume que es
+      un objeto: `{antiguedad.anios} a {antiguedad.meses} m`. Como no existen esas
+      propiedades en un string, la interfaz renderiza `undefined a undefined m`.
+
+  - Cálculo de Días Disfrutados y en Dinero:
+    * Días disfrutados: Se calculan como días hábiles (`diasHabilesEntre`) entre
+      `fecha_inicio` y `fecha_fin`, excluyendo domingos y festivos en Colombia.
+    * Días en dinero: En `Vacaciones.jsx` (L70-76) y `ModalForm.jsx` (L248):
+      `dias_en_dinero = Math.max(0, 15 - diasHabiles)`.
+      Se asume una regla rígida de que cada periodo tiene exactamente 15 días
+      y que cualquier saldo no tomado en tiempo se toma inmediatamente en dinero.
+    * Acumulado anual (`diasAcumuladosAnio`): Solo suma los días de vacaciones
+      con `fecha_inicio` en el mismo año calendario (`String(anioActual)`).
+
+  - Ausencia Total de Causación y Saldos:
+    * NO existe cálculo de días ganados (causados) en función del tiempo trabajado:
+      En la legislación laboral estándar, por cada año laborado (360 días) se causan
+      15 días hábiles de vacaciones ($\approx 1.25$ días por mes trabajado).
+    * NO se calcula el saldo consolidado:
+      $\text{Saldo Pendiente} = \text{Días Ganados} - (\text{Días Disfrutados} + \text{Días Compensados})$.
+    * NO existe control de reinicio de saldo: Cuando un empleado se retira, su saldo
+      debería quedar liquidado a cero. Si se reintegra, su causación debe arrancar
+      estrictamente desde 0 días en la nueva fecha de ingreso contractual.
+
+
+================================================================================
+5. ARCHIVOS Y LÍNEAS AFECTADAS: PLAN DE ACCIÓN TÉCNICO
+================================================================================
+
+Para implementar la solución de forma limpia, retrocompatible y robusta, se define
+a continuación la matriz exacta de archivos a crear y modificar:
+
+--------------------------------------------------------------------------------
+A) IMPLEMENTAR LA TABLA `empleado_periodos` Y SUS POLÍTICAS RLS
+--------------------------------------------------------------------------------
+1. Archivo Nuevo: `SQL/07_GESTION_PERIODOS_Y_VACACIONES.sql`
+   - Creación de la tabla `public.empleado_periodos`:
+     ```sql
+     create table if not exists public.empleado_periodos (
+       id uuid primary key default gen_random_uuid(),
+       empleado_id uuid not null references public.empleados(id) on delete cascade,
+       empresa_id uuid references public.empresas(id),
+       empresa text not null default 'ameriglobal',
+       numero_periodo integer not null default 1,
+       fecha_ingreso date not null,
+       fecha_retiro date,
+       motivo_retiro text,
+       cargo text,
+       dependencia text,
+       es_periodo_actual boolean not null default true,
+       dias_vacaciones_ganados numeric default 0,
+       dias_vacaciones_disfrutados numeric default 0,
+       dias_vacaciones_dinero numeric default 0,
+       dias_vacaciones_saldo numeric default 0,
+       observaciones text,
+       created_at timestamptz not null default now(),
+       updated_at timestamptz not null default now(),
+       constraint uq_empleado_periodo unique (empleado_id, numero_periodo)
+     );
+     ```
+   - Índice único parcial para garantizar un único periodo activo por empleado:
+     ```sql
+     create unique index if not exists idx_empleado_un_solo_periodo_activo
+     on public.empleado_periodos (empleado_id)
+     where es_periodo_actual = true;
+     ```
+   - Políticas RLS y triggers de auditoría:
+     ```sql
+     alter table public.empleado_periodos enable row level security;
+     create policy "empleado_periodos_acceso_usuario_activo" on public.empleado_periodos
+       for all using (public.usuario_activo()) with check (public.usuario_activo());
+     create trigger trg_empleado_periodos_updated_at before update on public.empleado_periodos
+       for each row execute function public.update_updated_at();
+     ```
+   - Script de migración inicial (Seed / Backfill):
+     Poblar automáticamente el periodo inicial (Periodo 1) para todos los empleados
+     existentes en `public.empleados`, preservando sus fechas actuales.
+
+2. Archivo a Modificar: `src/api/empleados.js`
+   - Líneas a agregar al final (L112+):
+     * `listarPeriodosEmpleado(empleadoId)`: Obtiene el historial de periodos ordenado.
+     * `obtenerPeriodoActivo(empleadoId)`: Retorna el periodo con `es_periodo_actual = true`.
+     * `crearPeriodoEmpleado(payload)`: Inserta un nuevo periodo laboral.
+     * `cerrarPeriodoEmpleado(periodoId, payload)`: Cierra periodo actual (`fecha_retiro`,
+       `es_periodo_actual = false`, `motivo_retiro`).
+
+--------------------------------------------------------------------------------
+B) SEPARAR EL TOGGLE EN DOS FLUJOS EXPLÍCITOS: "RETIRAR" Y "REINTEGRAR"
+--------------------------------------------------------------------------------
+1. Archivo a Modificar: `src/pages/Empleados.jsx`
+   - Líneas 52-67: Declarar estados para modales dedicados:
+     `modalRetiro` (boolean/objeto), `modalReintegro` (boolean/objeto).
+   - Líneas 202-210: ELIMINAR la función ambigua `toggleActivo`.
+   - Implementar las dos acciones explícitas:
+     * `ejecutarRetiro(empleadoId, { fecha_retiro, motivo_retiro, observacion })`:
+       1. Actualiza `empleados`: `activo = false`, `fecha_retiro = fecha_retiro`.
+       2. Cierra el periodo actual en `empleado_periodos`: fija `fecha_retiro`,
+          `motivo_retiro`, y marca `es_periodo_actual = false`.
+       3. Registra log de auditoría ('RETIRAR', 'empleados', ...).
+     * `ejecutarReintegro(empleadoId, { nueva_fecha_ingreso, cargo, dependencia, observacion })`:
+       1. Valida que `nueva_fecha_ingreso` sea estrictamente posterior al último retiro.
+       2. Crea nuevo registro en `empleado_periodos`: `numero_periodo = anterior + 1`,
+          `fecha_ingreso = nueva_fecha_ingreso`, `fecha_retiro = null`,
+          `es_periodo_actual = true`, reiniciando saldos de vacaciones a 0.
+       3. Actualiza `empleados`: `activo = true`, `fecha_ingreso = nueva_fecha_ingreso`,
+          `fecha_retiro = null`, `cargo`, `dependencia`.
+       4. Registra log de auditoría ('REINTEGRAR', 'empleados', ...).
+   - Líneas 140-150 (`checkDuplicado`):
+     * Si el nombre existe pero el empleado está inactivo, ofrecer en la advertencia
+       un acceso directo: `"Este empleado ya existe y se encuentra inactivo. ¿Deseas reintegrarlo con un nuevo contrato?"`.
+
+2. Archivos de Componentes a Modificar:
+   - `src/components/empleados/EmpleadoTable.jsx` (L42-45):
+     Reemplazar el botón toggle ambiguo por dos botones condicionales:
+     * Si `emp.activo !== false`: Botón "Retirar Colaborador" (`LogOut` o `Archive`).
+     * Si `emp.activo === false`: Botón "Reintegrar Colaborador" (`UserCheck` o `RotateCcw`).
+   - `src/components/empleados/EmpleadoCards.jsx` (L54-57):
+     Aplicar el mismo cambio de botones en la vista de tarjetas.
+   - `src/components/empleados/EmpleadoHistorialModal.jsx` (L24-70):
+     Incorporar pestaña o sección "Historial de Periodos / Contratos" donde se
+     muestren todos los periodos del empleado (Periodo 1: Ingreso - Retiro;
+     Periodo 2: Reingreso - Vigente).
+
+3. Componentes Nuevos a Crear:
+   - `src/components/empleados/ModalRetiroEmpleado.jsx`:
+     Modal limpio con inputs: Empleado, Fecha de Retiro (default `hoyISO()`),
+     Motivo de Retiro (select: Fin de Contrato, Renuncia Voluntaria, Despido, etc.),
+     Observación y confirmación.
+   - `src/components/empleados/ModalReintegroEmpleado.jsx`:
+     Modal con inputs: Empleado, Nueva Fecha de Ingreso (validada contra el último
+     retiro), Cargo para el nuevo periodo, Dependencia/Área, y aviso destacado:
+     "Al reintegrar, iniciará un nuevo ciclo laboral. El historial anterior se
+     conservará intacto y las vacaciones y antigüedad comenzarán desde cero."
+
+--------------------------------------------------------------------------------
+C) AJUSTAR VALIDACIONES Y REPORTES PARA TOMAR EL PERIODO VIGENTE
+--------------------------------------------------------------------------------
+1. Archivo a Modificar: `src/utils/novedadesValidacion.js`
+   - Líneas 6-28 (`validarContraFichaEmpleado`):
+     * Refactorizar para validar la fecha de la novedad contra el **periodo
+       correspondiente**: Si la novedad tiene fecha $F$, debe ubicarse dentro
+       de un periodo laboral válido del empleado donde $F \ge \text{ingreso}$ y
+       ($F \le \text{retiro}$ si el periodo está cerrado).
+     * Si el empleado tiene un nuevo periodo activo, novedades del nuevo contrato
+       no deben ser bloqueadas por fechas de periodos archivados.
+   - Líneas 35-71 (`validarContraHistorial`):
+     * Reemplazar la búsqueda informal de novedades con concepto 'Ingreso' /
+       'Terminación de Contrato' por la lectura de los periodos estructurados de
+       `empleado_periodos`.
+
+2. Archivo a Modificar: `src/pages/Novedades.jsx`
+   - Líneas 298-302: Los atributos `min` y `max` de los selectores de fecha en el
+     formulario de novedades deben parametrizarse con la `fecha_ingreso` del
+     periodo correspondiente al registro que se está editando o creando.
+
+3. Archivo a Modificar: `src/pages/Dashboard.jsx`
+   - Líneas 130-148 (`empleadosActivosPeriodo`):
+     * Modificar la consulta y el hook `useMemo`. En lugar de filtrar con un único
+       par `e.fecha_ingreso` / `e.fecha_retiro` estático, verificar si el empleado
+       posee **al menos un periodo laboral en `empleado_periodos` que coincida o se
+       solape con el rango del dashboard**:
+       ```javascript
+       const activoEnPeriodo = e.periodos?.some(p => {
+         const inicioOk = !p.fecha_ingreso || !periodoFin || p.fecha_ingreso <= periodoFin
+         const finOk = !p.fecha_retiro || !periodoIni || p.fecha_retiro >= periodoIni
+         return inicioOk && finOk
+       })
+       ```
+     * Resultado: El ausentismo histórico y actual será matemáticamente exacto,
+       sin contaminar las tasas pasadas cuando un empleado reingrese en el futuro.
+
+--------------------------------------------------------------------------------
+D) IMPLEMENTAR EL MÓDULO DE VACACIONES CON ACUMULACIÓN Y REINICIO DE SALDO
+--------------------------------------------------------------------------------
+1. Archivo a Modificar: `src/utils/vacacionesHelpers.js`
+   - Líneas 17-35 (`calcAntiguedad`):
+     * Modificar para calcular la antigüedad laboral tomando la fecha de inicio
+       del **periodo vigente** (o periodo consultado).
+     * Corregir el formato de retorno para que exporte un objeto con estructura
+       predecible: `{ texto: '1 año, 2 meses', anios: 1, meses: 2, totalDias: 425 }`.
+   - Nuevas Funciones a Agregar (L57+):
+     * `calcularDiasCausados(fechaIngreso, fechaCorte = hoyISO())`:
+       Calcula los días ganados de vacaciones con precisión:
+       $\text{Días Causados} = \frac{\text{Días Calendario Trabajados} \times 15}{360}$.
+     * `calcularResumenVacacionesPeriodo(periodo, vacacionesDelPeriodo)`:
+       Calcula el balance general del ciclo:
+       a) Días Ganados (Causados a la fecha).
+       b) Días Disfrutados (suma de días hábiles de solicitudes 'Vacaciones').
+       c) Días Compensados en Dinero (suma de `dias_en_dinero`).
+       d) Saldo Pendiente: $\text{Ganados} - (\text{Disfrutados} + \text{Compensados})$.
+
+2. Archivo a Modificar: `src/components/vacaciones/ModalDetalle.jsx`
+   - Líneas 20-25 y 61-69:
+     * Corregir el bug existente donde renderizaba `antiguedad.anios` sobre un string.
+     * Reemplazar la visualización por el nuevo objeto retornado por `calcAntiguedad`.
+     * Agregar caja de resumen del saldo del periodo vigente: Días Causados,
+       Días Disfrutados, Días en Dinero y Saldo Disponible.
+
+3. Archivo a Modificar: `src/components/vacaciones/ModalForm.jsx`
+   - Líneas 107-118:
+     * Mostrar en la cabecera del empleado su Saldo Disponible actual para el
+       periodo en curso.
+   - Líneas 197-200:
+     * Convertir el input de texto libre `periodo_vacaciones` en un selector que
+       cargue automáticamente el periodo contractual vigente o permita vincular
+       la vacación a un periodo específico.
+   - Líneas 220-240:
+     * Validar en tiempo real que los días solicitados no excedan el saldo
+       disponible (o mostrar alerta preventiva si es anticipo de vacaciones).
+
+4. Archivo a Modificar: `src/pages/Vacaciones.jsx`
+   - Líneas 143-147: Reemplazar el cálculo plano `diasAcumuladosAnio` por el
+     balance de vacaciones calculado dinámicamente con el periodo contractual activo.
+   - Líneas 188-203: Incluir `periodo_id` en el payload de creación/actualización
+     de vacaciones para vincular la vacación al periodo contractual del empleado.
+
+5. Archivo a Modificar: `src/api/vacaciones.js`
+   - Agregar soporte para consultar y filtrar solicitudes de vacaciones por
+     `periodo_id` o `empleado_id`.
+
+
+================================================================================
+CONCLUSIÓN ARQUITECTÓNICA
+================================================================================
+La arquitectura actual del proyecto cuenta con una separación de responsabilidades
+muy bien estructurada (API Layer, Contextos, UI desacoplada, RLS estricto). Sin
+embargo, adolece de un acoplamiento monoperiódico en las entidades `empleados` y
+`vacaciones`.
+
+La implementación de la tabla `empleado_periodos` junto con los flujos explícitos
+de "Retirar" y "Reintegrar" resuelve de manera definitiva la deuda técnica:
+  1. Protege la integridad histórica de ausencias y despidos pasados.
+  2. Permite reingresos limpios donde la antigüedad y las vacaciones inician
+     desde cero sin borrar registros previos.
+  3. Convierte el módulo de Vacaciones de un registro pasivo de solicitudes a un
+     sistema activo de causación, control de saldos y compensaciones legales.
+================================================================================

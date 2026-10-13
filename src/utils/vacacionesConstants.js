@@ -25,6 +25,7 @@ export const EMPTY = {
   observacion: '', observacion_contable: '', aprobado_por: '',
   fecha_solicitud: hoyISO(),
   fecha_ingreso: '',
+  periodo_id: null,
 }
 
 export const TIPOS_VACACION = ['Vacaciones', 'Vacaciones en dinero', 'Vacaciones compensadas']

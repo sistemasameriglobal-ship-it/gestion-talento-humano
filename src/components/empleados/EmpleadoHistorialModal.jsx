@@ -8,12 +8,26 @@ import { X, Edit2 } from 'lucide-react'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { CONCEPTOS_CON_FECHA } from './empleadosConstants'
 
-export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmpleado, onClose, onEdit }) {
+export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmpleado, periodos = [], onClose, onEdit }) {
   const nov = novedadesPorEmpleado[selectedEmp.nombre_completo]
+
+  // Si no hay lista de periodos de la BD, armar periodo base con los datos del empleado
+  const listaPeriodos = (periodos && periodos.length > 0)
+    ? periodos
+    : (selectedEmp.fecha_ingreso ? [{
+        id: 'base',
+        numero_periodo: 1,
+        fecha_ingreso: selectedEmp.fecha_ingreso,
+        fecha_retiro: selectedEmp.fecha_retiro,
+        cargo: selectedEmp.cargo,
+        dependencia: selectedEmp.dependencia,
+        es_periodo_actual: selectedEmp.activo !== false,
+        observaciones: 'Periodo inicial registrado'
+      }] : [])
 
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 650 }}>
+      <div className="modal" style={{ maxWidth: 680 }}>
         <div className="modal-header">
           <div>
             <h2>{selectedEmp.nombre_completo}</h2>
@@ -21,7 +35,52 @@ export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmplea
           </div>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
-        <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
+          {/* Historial de Contratos / Periodos */}
+          {listaPeriodos.length > 0 && (
+            <div style={{ marginBottom: 18, background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>📜 Periodos Laborales ({listaPeriodos.length})</span>
+                {listaPeriodos.length > 1 && (
+                  <span style={{ background: '#F3E8FF', color: '#7E22CE', padding: '1px 7px', borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
+                    Reintegrado
+                  </span>
+                )}
+              </div>
+              <div className="table-container" style={{ border: 'none', margin: 0 }}>
+                <table style={{ fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding: '6px 8px' }}>Periodo</th>
+                      <th style={{ padding: '6px 8px' }}>Ingreso</th>
+                      <th style={{ padding: '6px 8px' }}>Retiro</th>
+                      <th style={{ padding: '6px 8px' }}>Área / Cargo</th>
+                      <th style={{ textAlign: 'center', padding: '6px 8px' }}>Estado</th>
+                      <th style={{ padding: '6px 8px' }}>Detalles</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listaPeriodos.map(p => (
+                      <tr key={p.id || p.numero_periodo}>
+                        <td style={{ fontWeight: 700, padding: '6px 8px' }}>#{p.numero_periodo}</td>
+                        <td style={{ padding: '6px 8px' }}>{p.fecha_ingreso || '—'}</td>
+                        <td style={{ padding: '6px 8px', color: p.fecha_retiro ? 'var(--danger-text)' : 'inherit' }}>{p.fecha_retiro || '—'}</td>
+                        <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{[p.dependencia, p.cargo].filter(Boolean).join(' · ') || '—'}</td>
+                        <td style={{ textAlign: 'center', padding: '6px 8px' }}>
+                          {p.es_periodo_actual
+                            ? <span style={{ background: 'var(--success-bg)', color: 'var(--success-text)', borderRadius: 12, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>Vigente</span>
+                            : <span style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 12, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>Cerrado</span>}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 8px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.observaciones || ''}>
+                          {p.observaciones || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {!nov || nov.novedades.length === 0 ? (
             <div className="empty-state"><p>Este empleado no tiene novedades registradas.</p></div>
           ) : (

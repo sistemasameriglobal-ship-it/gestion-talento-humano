@@ -10,6 +10,28 @@ export function validarContraFichaEmpleado(data, fichasEmpleados) {
 
   const fechas = [data.fecha_inicio, data.fecha_fin].filter(Boolean)
 
+  // Si tiene lista de periodos laborales registrados en la ficha
+  if (ficha.periodos && ficha.periodos.length > 0) {
+    const fIni = data.fecha_inicio
+    const fFin = data.fecha_fin || data.fecha_inicio
+
+    const periodoValido = ficha.periodos.some(p => {
+      const matchIngreso = !p.fecha_ingreso || fIni >= p.fecha_ingreso
+      const matchRetiro = !p.fecha_retiro || fFin <= p.fecha_retiro
+      return matchIngreso && matchRetiro
+    })
+
+    if (!periodoValido) {
+      const primerIngreso = ficha.periodos.reduce((min, p) => (!min || (p.fecha_ingreso && p.fecha_ingreso < min) ? p.fecha_ingreso : min), null)
+      if (primerIngreso && fIni < primerIngreso) {
+        return `${data.nombre_empleado} ingresó a la empresa el ${primerIngreso}. No se puede registrar una novedad con fecha ${fIni}, anterior a su primer ingreso.`
+      }
+      return `Las fechas (${fIni}${data.fecha_fin ? ` a ${data.fecha_fin}` : ''}) no se encuentran dentro de ningún periodo laboral registrado para ${data.nombre_empleado}.`
+    }
+    return null
+  }
+
+  // Fallback: Si no tiene lista de periodos, validar contra los campos directos de la ficha
   if (ficha.fecha_ingreso) {
     const antesDeIngreso = fechas.find(f => f < ficha.fecha_ingreso)
     if (antesDeIngreso) {

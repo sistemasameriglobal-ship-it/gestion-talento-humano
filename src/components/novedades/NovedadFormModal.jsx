@@ -165,11 +165,23 @@ export default function NovedadFormModal({
                   let esRespaldoFicha = false
                   const ficha = fichasEmpleados[form.nombre_empleado]
 
-                  // Caso 1: no hay ninguna novedad de Ingreso/Terminación (lo más
-                  // común, porque muchos empleados se cargaron directo en la
-                  // pestaña Empleados). Se arma un historial "sintético" completo
-                  // a partir de su ficha (fecha_ingreso / fecha_retiro).
-                  if (historial.length === 0 && ficha?.fecha_ingreso) {
+                  // Caso 1: si no hay novedades de Ingreso/Terminación, armar historial
+                  // a partir de sus periodos laborales registrados o de su ficha.
+                  if (historial.length === 0 && ficha?.periodos && ficha.periodos.length > 0) {
+                    esRespaldoFicha = true
+                    historial = []
+                    ficha.periodos
+                      .slice()
+                      .sort((a, b) => (a.fecha_ingreso || '').localeCompare(b.fecha_ingreso || ''))
+                      .forEach(p => {
+                        if (p.fecha_ingreso) {
+                          historial.push({ id: `p-ing-${p.id}`, concepto: 'Ingreso', fecha_inicio: p.fecha_ingreso })
+                        }
+                        if (p.fecha_retiro) {
+                          historial.push({ id: `p-ret-${p.id}`, concepto: 'Terminación de Contrato', fecha_inicio: p.fecha_retiro })
+                        }
+                      })
+                  } else if (historial.length === 0 && ficha?.fecha_ingreso) {
                     esRespaldoFicha = true
                     historial = [{ id: 'ficha-ingreso', concepto: 'Ingreso', fecha_inicio: ficha.fecha_ingreso }]
                     if (ficha.activo === false && ficha.fecha_retiro) {

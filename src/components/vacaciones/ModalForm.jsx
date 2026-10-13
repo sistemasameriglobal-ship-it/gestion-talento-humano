@@ -1,7 +1,7 @@
 import { X, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
-import { calcAntiguedad } from '../../utils/vacacionesHelpers'
+import { calcAntiguedad, calcDias } from '../../utils/vacacionesHelpers'
 import { ESTADOS, ESTADO_STYLES, DEPENDENCIAS } from '../../utils/vacacionesConstants'
 import SearchableSelect from '../ui/SearchableSelect'
 
@@ -19,6 +19,8 @@ const TIPO_BGS = { 'Vacaciones': 'var(--success-bg)', 'Vacaciones en dinero': 'v
 export default function ModalForm({
   modal, form, setForm, f, save, saving,
   empActivos, empInactivos, diasAcumuladosForm, anioActual,
+  saldoVacacionesForm = null,
+  periodos = [],
   onClose,
 }) {
   const { departamentos } = useCompany()
@@ -28,6 +30,95 @@ export default function ModalForm({
   const estStyle = ESTADO_STYLES[EST] || ESTADO_STYLES['Pendiente']
   const campos = [form.nombre_empleado, form.tipo_vacacion, form.estado]
   const pct = Math.round((campos.filter(Boolean).length / campos.length) * 100)
+
+  // Cálculo de días solicitados en este formulario
+  const diasDisfrute = (form.fecha_inicio && form.fecha_fin)
+    ? (diasHabilesEntre(form.fecha_inicio, form.fecha_fin) || 0)
+    : (Number(form.dias_disfrutados) || Number(form.total_dias) || 0)
+  const diasDinero = (form.tipo_vacacion === 'Vacaciones en dinero')
+    ? (Number(form.dias_en_dinero) || 15)
+    : (Number(form.dias_en_dinero) || 0)
+  const diasSolicitados = (form.tipo_vacacion === 'Vacaciones en dinero')
+    ? diasDinero
+    : (diasDisfrute + diasDinero)
+
+  const saldoDisponible = saldoVacacionesForm != null
+    ? Math.max(0, Math.round(saldoVacacionesForm.saldoPendiente))
+    : 0
+  const topeDisponible = saldoVacacionesForm?.topeDisponible != null
+    ? Math.max(0, Math.round(saldoVacacionesForm.topeDisponible))
+    : saldoDisponible
+  const excedeSaldo = diasSolicitados > 0 && diasSolicitados > topeDisponible
+  const sinSaldo = topeDisponible <= 0
+  const saldoRestante = Math.max(0, topeDisponible - diasSolicitados)
+
+  const onEmpleadoChange = (val) => {
+    const todos = [...(empActivos || []), ...(empInactivos || [])]
+    const emp = todos.find(e => e.nombre_completo?.trim().toLowerCase() === val?.trim().toLowerCase())
+    const pActivo = periodos?.find(p => emp && p.empleado_id === emp.id && p.es_periodo_actual)
+    setForm(p => ({
+      ...p,
+      nombre_empleado: val,
+      dependencia: emp?.dependencia || p.dependencia,
+      fecha_ingreso: pActivo?.fecha_ingreso || emp?.fecha_ingreso || p.fecha_ingreso,
+      periodo_id: pActivo?.id || p.periodo_id || null,
+    }))
+  }
+
+  const onTipoChange = (tipoVal) => {
+    if (tipoVal === 'Vacaciones en dinero') {
+      const tope = topeDisponible != null ? topeDisponible : 15
+      const dineroDefault = String(Math.max(0, Math.min(15, tope)))
+      setForm(p => ({
+        ...p,
+        tipo_vacacion: tipoVal,
+        fecha_inicio: '',
+        fecha_fin: '',
+        total_dias: '',
+        dias_en_dinero: p.dias_en_dinero || dineroDefault,
+      }))
+    } else {
+      setForm(p => ({ ...p, tipo_vacacion: tipoVal }))
+    }
+  }
+
+  const onFechaInicioChange = (e) => {
+    const fIni = e.target.value
+    const fFin = form.fecha_fin
+    const dias = (fIni && fFin) ? calcDias(fIni, fFin) : form.total_dias
+    let dinero = form.dias_en_dinero
+    if (modal === 'add' && fIni && fFin && (form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero') {
+      const habiles = diasHabilesEntre(fIni, fFin) || 0
+      const tope = topeDisponible != null ? topeDisponible : 15
+      const disponibleParaDinero = Math.max(0, tope - habiles)
+      dinero = String(Math.min(Math.max(0, 15 - habiles), disponibleParaDinero))
+    }
+    setForm(p => ({
+      ...p,
+      fecha_inicio: fIni,
+      total_dias: (fIni && fFin && dias !== '') ? String(dias) : p.total_dias,
+      dias_en_dinero: dinero,
+    }))
+  }
+
+  const onFechaFinChange = (e) => {
+    const fFin = e.target.value
+    const fIni = form.fecha_inicio
+    const dias = (fIni && fFin) ? calcDias(fIni, fFin) : form.total_dias
+    let dinero = form.dias_en_dinero
+    if (modal === 'add' && fIni && fFin && (form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero') {
+      const habiles = diasHabilesEntre(fIni, fFin) || 0
+      const tope = topeDisponible != null ? topeDisponible : 15
+      const disponibleParaDinero = Math.max(0, tope - habiles)
+      dinero = String(Math.min(Math.max(0, 15 - habiles), disponibleParaDinero))
+    }
+    setForm(p => ({
+      ...p,
+      fecha_fin: fFin,
+      total_dias: (fIni && fFin && dias !== '') ? String(dias) : p.total_dias,
+      dias_en_dinero: dinero,
+    }))
+  }
 
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}
@@ -64,7 +155,7 @@ export default function ModalForm({
                   </span>
                 )}
                 {form.total_dias && (
-                  <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>⏱ {form.total_dias}d</span>
+                  <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>⏱ {form.total_dias} día{Number(form.total_dias) !== 1 ? 's' : ''}</span>
                 )}
               </div>
             </div>
@@ -100,19 +191,46 @@ export default function ModalForm({
             </div>
             <SearchableSelect
               value={form.nombre_empleado}
-              onChange={val => setForm(p => ({ ...p, nombre_empleado: val }))}
+              onChange={onEmpleadoChange}
               activos={empActivos} inactivos={empInactivos}
               placeholder="— Seleccionar empleado —"
             />
             {form.nombre_empleado?.trim() && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span
+                  title={saldoVacacionesForm ? `Años cumplidos: ${saldoVacacionesForm.aniosCumplidos ?? 0} | Causados: ${saldoVacacionesForm.diasCausados} días | Tomados/dinero: ${saldoVacacionesForm.diasDisfrutados + saldoVacacionesForm.diasEnDinero} días` : undefined}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    background: (saldoDisponible > 0) ? 'var(--success-bg)' : 'var(--danger-bg)',
+                    color: (saldoDisponible > 0) ? 'var(--success-text)' : 'var(--danger-text)',
+                    border: `1px solid ${saldoDisponible > 0 ? 'color-mix(in srgb, var(--success) 35%, transparent)' : 'color-mix(in srgb, var(--danger) 35%, transparent)'}`,
+                    borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700
+                  }}>
+                  🌴 Días disponibles: {saldoDisponible} días
+                </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F5F3FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>
                   <Calendar size={11} /> Días hábiles {anioActual}: {diasAcumuladosForm}
                 </span>
                 {form.fecha_ingreso && calcAntiguedad(form.fecha_ingreso) && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--info-bg)', color: 'var(--info-text)', border: '1px solid color-mix(in srgb, var(--info) 30%, transparent)', borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>
-                    <Clock size={11} /> Antigüedad: {calcAntiguedad(form.fecha_ingreso)}
+                    <Clock size={11} /> Antigüedad: {calcAntiguedad(form.fecha_ingreso)?.texto}
                   </span>
+                )}
+
+                {sinSaldo && (
+                  <div style={{
+                    width: '100%', marginTop: 4,
+                    background: 'var(--danger-bg)',
+                    border: '1px solid color-mix(in srgb, var(--danger) 40%, transparent)',
+                    color: 'var(--danger-text)',
+                    borderRadius: 8, padding: '8px 12px', fontSize: 12, fontWeight: 600,
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                    <span>
+                      Este colaborador no tiene días de vacaciones disponibles en su contrato vigente (Saldo disponible: {saldoDisponible} días).
+                    </span>
+                  </div>
                 )}
               </div>
             )}
@@ -140,7 +258,7 @@ export default function ModalForm({
                   const col = TIPO_COLS[opt.val], bg = TIPO_BGS[opt.val]
                   return (
                     <button key={opt.val} type="button"
-                      onClick={() => setForm(p => ({ ...p, tipo_vacacion: opt.val }))}
+                      onClick={() => onTipoChange(opt.val)}
                       style={{
                         padding: '12px 10px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
                         border: sel ? `2px solid ${col}` : '2px solid var(--border)',
@@ -203,7 +321,12 @@ export default function ModalForm({
           <div style={{ height: 1, background: 'var(--border)' }} />
 
           {/* S3: Fechas y días */}
-          <div style={{ background: 'var(--bg,#F9FAFB)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
+          <div style={{
+            background: excedeSaldo ? 'color-mix(in srgb, var(--danger-bg) 35%, var(--bg,#F9FAFB))' : 'var(--bg,#F9FAFB)',
+            borderRadius: 10, padding: '14px 16px',
+            border: excedeSaldo ? '1.5px solid var(--danger)' : '1px solid var(--border)',
+            transition: 'all .2s ease',
+          }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>📅</div>
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: (form.tipo_vacacion || 'Vacaciones') === 'Vacaciones en dinero' ? 'var(--text-muted)' : 'var(--text)' }}>
@@ -212,19 +335,25 @@ export default function ModalForm({
             </div>
 
             {(form.tipo_vacacion || 'Vacaciones') === 'Vacaciones en dinero' ? (
-              <div style={{ background: 'var(--warning-bg)', border: '1px solid color-mix(in srgb, var(--warning) 40%, transparent)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--warning-text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                background: excedeSaldo ? 'var(--danger-bg)' : 'var(--warning-bg)',
+                border: `1px solid ${excedeSaldo ? 'color-mix(in srgb, var(--danger) 40%, transparent)' : 'color-mix(in srgb, var(--warning) 40%, transparent)'}`,
+                borderRadius: 8, padding: '10px 14px', fontSize: 13,
+                color: excedeSaldo ? 'var(--danger-text)' : 'var(--warning-text)',
+                display: 'flex', alignItems: 'center', gap: 8
+              }}>
                 <AlertCircle size={15} style={{ flexShrink: 0 }} />
-                No requiere fechas. Se asignan automáticamente <strong>15 días en dinero</strong>.
+                <span>No requiere fechas. Días en dinero a compensar: <strong>{form.dias_en_dinero || 15} días</strong>.</span>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px', gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>↘ Inicio</label>
-                  <input className="form-control" type="date" value={form.fecha_inicio || ''} onChange={f('fecha_inicio')} />
+                  <input className="form-control" type="date" value={form.fecha_inicio || ''} onChange={onFechaInicioChange} />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>↗ Fin</label>
-                  <input className="form-control" type="date" value={form.fecha_fin || ''} onChange={f('fecha_fin')} />
+                  <input className="form-control" type="date" min={form.fecha_inicio || undefined} value={form.fecha_fin || ''} onChange={onFechaFinChange} />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block', whiteSpace: 'nowrap' }}>
@@ -238,17 +367,46 @@ export default function ModalForm({
               </div>
             )}
 
-            {/* Días hábiles info */}
-            {form.fecha_inicio && form.fecha_fin && (form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero' && (
-              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {/* Días solicitados e info de saldo restante */}
+            {diasSolicitados > 0 && (
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F5F3FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 999, padding: '3px 11px', fontSize: 12, fontWeight: 700 }}>
-                  {diasHabilesEntre(form.fecha_inicio, form.fecha_fin)} días hábiles
+                  ⏱ {diasSolicitados} día{diasSolicitados !== 1 ? 's' : ''} solicitado{diasSolicitados !== 1 ? 's' : ''}
+                  {diasDinero > 0 && ` (${diasDisfrute} disfrute + ${diasDinero} dinero)`}
                 </span>
-                {form.dias_en_dinero && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid color-mix(in srgb, var(--warning) 40%, transparent)', borderRadius: 999, padding: '3px 11px', fontSize: 12, fontWeight: 700 }}>
-                    💰 {form.dias_en_dinero} en dinero
+                {saldoDisponible != null && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    background: excedeSaldo ? 'var(--danger-bg)' : 'var(--success-bg)',
+                    color: excedeSaldo ? 'var(--danger-text)' : 'var(--success-text)',
+                    border: `1px solid ${excedeSaldo ? 'color-mix(in srgb, var(--danger) 35%, transparent)' : 'color-mix(in srgb, var(--success) 35%, transparent)'}`,
+                    borderRadius: 999, padding: '3px 11px', fontSize: 12, fontWeight: 700
+                  }}>
+                    {excedeSaldo ? '⚠️' : '✓'} Saldo restante: {saldoRestante} días
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* Alerta de bloqueo si se excede el saldo */}
+            {excedeSaldo && (
+              <div style={{
+                marginTop: 10,
+                background: 'var(--danger-bg)',
+                border: '1px solid color-mix(in srgb, var(--danger) 40%, transparent)',
+                color: 'var(--danger-text)',
+                borderRadius: 8,
+                padding: '9px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>
+                  No puedes solicitar más de los <strong>{topeDisponible} días</strong> disponibles. Estás solicitando <strong>{diasSolicitados} días</strong> (exceso de {diasSolicitados - topeDisponible} días).
+                </span>
               </div>
             )}
           </div>
@@ -266,13 +424,13 @@ export default function ModalForm({
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>
                   Días en dinero
                   <span style={{ fontWeight: 400, fontSize: 10, marginLeft: 4, color: 'var(--text-muted)' }}>
-                    {(form.tipo_vacacion || 'Vacaciones') === 'Vacaciones en dinero' ? '(fijo)' : '(15 − hábiles)'}
+                    {(form.tipo_vacacion || 'Vacaciones') === 'Vacaciones en dinero' ? '(a compensar)' : '(compensación)'}
                   </span>
                 </label>
                 <input className="form-control" type="number" min="0"
+                  max={topeDisponible != null ? topeDisponible : undefined}
                   value={form.dias_en_dinero || ''} onChange={f('dias_en_dinero')}
-                  readOnly={(form.tipo_vacacion || 'Vacaciones') === 'Vacaciones en dinero'}
-                  placeholder="Auto"
+                  placeholder="0"
                   style={form.dias_en_dinero ? { background: '#FEF9C3', color: '#78350F', fontWeight: 700, textAlign: 'center' } : { fontWeight: 700, textAlign: 'center' }} />
               </div>
               <div>
@@ -280,7 +438,7 @@ export default function ModalForm({
                 <input className="form-control" type="date" value={form.fecha_ingreso || ''} onChange={f('fecha_ingreso')} />
                 {form.fecha_ingreso && calcAntiguedad(form.fecha_ingreso) && (
                   <div style={{ fontSize: 10, color: '#7C3AED', marginTop: 4, fontWeight: 600 }}>
-                    ⏱ {calcAntiguedad(form.fecha_ingreso)}
+                    ⏱ {calcAntiguedad(form.fecha_ingreso)?.texto}
                   </div>
                 )}
               </div>
@@ -321,13 +479,19 @@ export default function ModalForm({
               form.nombre_empleado && '👤 ' + form.nombre_empleado.split(' ')[0],
               form.tipo_vacacion && form.tipo_vacacion,
               form.estado && form.estado,
-              form.total_dias && '⏱ ' + form.total_dias + 'd',
+              form.total_dias && '⏱ ' + form.total_dias + ' días',
             ].filter(Boolean).join(' · ') || 'Completa los campos obligatorios *'}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" onClick={save} disabled={saving}
-              style={{ minWidth: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <button className="btn btn-primary" onClick={save}
+              disabled={saving || excedeSaldo || (sinSaldo && diasSolicitados > 0)}
+              title={excedeSaldo ? `No puedes guardar: la solicitud supera los ${topeDisponible} días disponibles` : undefined}
+              style={{
+                minWidth: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                opacity: (excedeSaldo || (sinSaldo && diasSolicitados > 0)) ? 0.5 : 1,
+                cursor: (excedeSaldo || (sinSaldo && diasSolicitados > 0)) ? 'not-allowed' : 'pointer'
+              }}>
               {saving
                 ? <><span>⏳</span> Guardando...</>
                 : <><span>{modal === 'add' ? '🌴' : '💾'}</span> {modal === 'add' ? 'Crear solicitud' : 'Guardar cambios'}</>}

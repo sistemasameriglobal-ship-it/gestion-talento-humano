@@ -1,6 +1,6 @@
 import { X, Edit2, Sun, CheckCircle2, AlertCircle, Printer } from 'lucide-react'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
-import { calcAntiguedad, diasAcumuladosAnio, formatFecha } from '../../utils/vacacionesHelpers'
+import { calcAntiguedad, diasAcumuladosAnio, formatFecha, calcularSaldoVacacionesPeriodo } from '../../utils/vacacionesHelpers'
 import { generarPdfSolicitudVacaciones } from '../../utils/pdfGenerator'
 import { useCompany } from '../../context/CompanyContext'
 import { EstadoBadge, TipoBadge } from './Badges'
@@ -21,6 +21,13 @@ export default function ModalDetalle({ row, onClose, onEdit, allRows = [] }) {
   const antiguedad = calcAntiguedad(row.fecha_ingreso)
   const anioRow = (row.fecha_inicio || row.fecha_solicitud || '').substring(0, 4) || String(new Date().getFullYear())
   const diasAcumulados = diasAcumuladosAnio(allRows, row.nombre_empleado, anioRow)
+
+  // Balance de vacaciones del periodo de este empleado
+  const vacsEmpleado = allRows.filter(r => r.nombre_empleado?.trim().toLowerCase() === row.nombre_empleado?.trim().toLowerCase())
+  const saldoResumen = calcularSaldoVacacionesPeriodo({
+    fecha_ingreso: row.fecha_ingreso,
+    periodo_id: row.periodo_id,
+  }, vacsEmpleado)
 
   // Comparación: días en dinero calculados (15 - días hábiles) vs guardados
   const habiles = row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin) : null
@@ -62,12 +69,35 @@ export default function ModalDetalle({ row, onClose, onEdit, allRows = [] }) {
               label="Antigüedad"
               value={antiguedad ? (
                 <span>
-                  {antiguedad.anios} a {antiguedad.meses} m
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>(acum: {diasAcumulados}d)</span>
+                  {antiguedad.texto}
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>(acum {anioRow}: {diasAcumulados} días)</span>
                 </span>
               ) : undefined}
             />
           </div>
+
+          {/* Resumen de Saldo del Periodo Vigente */}
+          {row.fecha_ingreso && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
+                Balance de Vacaciones (Contrato Actual)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, textAlign: 'center' }}>
+                <div style={{ background: 'var(--info-bg)', padding: '6px 8px', borderRadius: 6 }}>
+                  <div style={{ fontSize: 10, color: 'var(--info-text)', fontWeight: 600 }}>Causados</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--info-text)' }}>{saldoResumen.diasCausados} días</div>
+                </div>
+                <div style={{ background: 'var(--warning-bg)', padding: '6px 8px', borderRadius: 6 }}>
+                  <div style={{ fontSize: 10, color: 'var(--warning-text)', fontWeight: 600 }}>Tomados / Dinero</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--warning-text)' }}>{saldoResumen.diasDisfrutados + saldoResumen.diasEnDinero} días</div>
+                </div>
+                <div style={{ background: saldoResumen.saldoPendiente >= 0 ? 'var(--success-bg)' : 'var(--danger-bg)', padding: '6px 8px', borderRadius: 6 }}>
+                  <div style={{ fontSize: 10, color: saldoResumen.saldoPendiente >= 0 ? 'var(--success-text)' : 'var(--danger-text)', fontWeight: 600 }}>Saldo Pendiente</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: saldoResumen.saldoPendiente >= 0 ? 'var(--success-text)' : 'var(--danger-text)' }}>{saldoResumen.saldoPendiente} días</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Comparación Días en Dinero */}
           <div style={{ background: 'var(--bg,#F8FAFC)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
