@@ -242,6 +242,10 @@ export function detectarIndicesEncabezadoNovedades(headerRow) {
       map.dias_en_dinero = idx
     } else if (map.validacion_incapacidad === undefined && norm.includes('validacion')) {
       map.validacion_incapacidad = idx
+    } else if (map.prorroga === undefined && (norm.includes('prorroga') || norm.includes('proroga'))) {
+      map.prorroga = idx
+    } else if (map.radicacion_incapacidad === undefined && (norm.includes('radicacion') || norm.includes('radicac'))) {
+      map.radicacion_incapacidad = idx
     } else if (map.dependencia === undefined && (norm.includes('dependencia') || norm.includes('area') || norm.includes('departamento'))) {
       map.dependencia = idx
     } else if (map.observacion_contabilidad === undefined && (norm.includes('contab') || norm.includes('observacion contabilidad'))) {

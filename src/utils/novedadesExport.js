@@ -1,33 +1,16 @@
 import { exportarExcel } from './exportarExcel'
 import { hoyISO } from './fecha'
 
-export const COLUMNAS_NOVEDADES_REPORTE = [
-  'Colaborador',
-  'Concepto',
-  'Jornada',
-  'Fecha Inicio',
-  'Fecha Fin',
-  'Total Días',
-  'Días en Tiempo',
-  'Días en Dinero',
-  'Periodo',
-  'Dependencia/Área',
-  'Observación',
-  'Observación Contabilidad',
-  'Validación Incapacidad',
-  'Nómina Electrónica',
-  'Seguridad Social',
-  'Empresa',
-]
-
-export const COLUMNAS_NOVEDADES_IMPORTACION = [
+// Columnas oficiales de la plantilla en el orden estricto exigido
+export const COLUMNAS_PLANTILLA_NOVEDADES = [
   'Nombre',
   'Concepto',
   'Fecha inicio',
   'Fecha fin',
   'Total días',
-  'Días en dinero',
   'Validación incapacidad',
+  'Prórroga',
+  'RADICACION INCAPACIDADES',
   'Dependencia',
   'Observación',
   'Observación contabilidad',
@@ -35,16 +18,59 @@ export const COLUMNAS_NOVEDADES_IMPORTACION = [
   'Seguridad social',
 ]
 
-// Mapeo al formato de importación estándar (para editar en bloque y volver a subir)
-export function filaAFormatoImportacion(r) {
+// Lista oficial de conceptos para Data Validation (Desplegables en Excel)
+export const LISTA_CONCEPTOS_VALIDACION = [
+  'Incapacidad',
+  'Vacaciones',
+  'LNR',
+  'LR',
+  '1/2 LR y 1/2 LNR',
+  'Maternidad',
+  'Paternidad',
+  'Calamidad/Luto',
+  'Renuncia',
+  'Ingreso',
+  'Terminación de Contrato',
+  'Ascenso',
+  'Cambio de Cargo',
+  'Cambio de Área',
+  'Suspensión',
+  'Recargo Dominical o Festivos',
+  'Ausente',
+  'Otros',
+]
+
+// Lista oficial de opciones para validación contable y nómina
+export const LISTA_VALIDACION_CONTABLE = [
+  'OK-DIANA',
+  'OK-ANDRES',
+  'OK-ALEJANDRO',
+  'VALIDAR',
+]
+
+export const VALIDACIONES_NOVEDADES = {
+  'Concepto': LISTA_CONCEPTOS_VALIDACION,
+  'Observación contabilidad': LISTA_VALIDACION_CONTABLE,
+  'Nómina electrónica': LISTA_VALIDACION_CONTABLE,
+  'Seguridad social': LISTA_VALIDACION_CONTABLE,
+}
+
+// Mapeo de una novedad hacia las 13 columnas de la plantilla oficial
+export function filaAPlantillaNovedades(r) {
+  let conceptoFinal = r.concepto || ''
+  if (r.jornada === 'Medio día' && !conceptoFinal.startsWith('1/2')) {
+    conceptoFinal = `1/2 ${conceptoFinal}`
+  }
+
   return {
     'Nombre': r.nombre_empleado || '',
-    'Concepto': r.jornada === 'Medio día' ? `1/2 ${r.concepto}` : (r.concepto || ''),
+    'Concepto': conceptoFinal,
     'Fecha inicio': r.fecha_inicio ? String(r.fecha_inicio).slice(0, 10) : '',
     'Fecha fin': r.fecha_fin ? String(r.fecha_fin).slice(0, 10) : '',
-    'Total días': r.total_dias ?? '',
-    'Días en dinero': r.dias_en_dinero ?? '',
+    'Total días': r.total_dias != null ? Number(r.total_dias) : '',
     'Validación incapacidad': r.validacion_incapacidad || '',
+    'Prórroga': r.prorroga || '',
+    'RADICACION INCAPACIDADES': r.radicacion_incapacidad || '',
     'Dependencia': r.dependencia || '',
     'Observación': r.observacion || '',
     'Observación contabilidad': r.observacion_contabilidad || '',
@@ -53,47 +79,30 @@ export function filaAFormatoImportacion(r) {
   }
 }
 
-// Exporta un conjunto de novedades con diseño profesional y columnas completas
+// Exporta un conjunto de novedades (ej. las filtradas en pantalla) en el formato oficial
 export function exportarNovedadesExcel(filas, label = '', empresa = 'AmeriGlobal') {
   const dataToExport = filas || []
-  const filasMapeadas = dataToExport.map(r => {
-    return {
-      'Colaborador': r.nombre_empleado || '—',
-      'Concepto': r.concepto || '—',
-      'Jornada': r.jornada || 'Día completo',
-      'Fecha Inicio': r.fecha_inicio ? String(r.fecha_inicio).slice(0, 10) : '—',
-      'Fecha Fin': r.fecha_fin ? String(r.fecha_fin).slice(0, 10) : '—',
-      'Total Días': r.total_dias != null ? Number(r.total_dias) : '—',
-      'Días en Tiempo': r.dias_disfrutados != null && r.dias_disfrutados !== '' ? Number(r.dias_disfrutados) : '—',
-      'Días en Dinero': r.dias_en_dinero != null && r.dias_en_dinero !== '' ? Number(r.dias_en_dinero) : '—',
-      'Periodo': r.periodo || '—',
-      'Dependencia/Área': r.dependencia || '—',
-      'Observación': r.observacion || '—',
-      'Observación Contabilidad': r.observacion_contabilidad || '—',
-      'Validación Incapacidad': r.validacion_incapacidad || '—',
-      'Nómina Electrónica': r.nomina_electronica || '—',
-      'Seguridad Social': r.seguridad_social || '—',
-      'Empresa': r.empresa || empresa || 'AmeriGlobal',
-    }
-  })
+  const filasMapeadas = dataToExport.map(filaAPlantillaNovedades)
 
   exportarExcel(filasMapeadas, {
     nombreHoja: 'Novedades',
-    nombreArchivo: `Novedades_${empresa}_${label || hoyISO()}.xlsx`,
-    titulo: `Registro de Novedades - ${empresa}`,
-    marca: true,
-    columnasDef: COLUMNAS_NOVEDADES_REPORTE,
+    nombreArchivo: `Plantilla_Importar_Novedades_${empresa}_${label || hoyISO()}.xlsx`,
+    marca: false, // Formato oficial de plantilla con encabezado en fila 1
+    columnasDef: COLUMNAS_PLANTILLA_NOVEDADES,
+    validaciones: VALIDACIONES_NOVEDADES,
   })
 }
 
-// Exporta TODOS los registros (sin importar filtros activos), pensado para
-// editar en bloque en Excel y volver a subirlo con "Importar Excel".
+// Exporta TODOS los registros en el mismo formato oficial de plantilla
 export function exportarNovedadesParaImportar(filas, empresa = 'AmeriGlobal') {
   const dataToExport = filas || []
-  exportarExcel(dataToExport.map(filaAFormatoImportacion), {
+  const filasMapeadas = dataToExport.map(filaAPlantillaNovedades)
+
+  exportarExcel(filasMapeadas, {
     nombreHoja: 'Novedades',
-    nombreArchivo: `Novedades_ParaImportar_${empresa}_${hoyISO()}.xlsx`,
-    marca: false, // este archivo se vuelve a subir con "Importar Excel": encabezado en fila 1
-    columnasDef: COLUMNAS_NOVEDADES_IMPORTACION,
+    nombreArchivo: `Plantilla_Importar_Novedades_${empresa}_${hoyISO()}.xlsx`,
+    marca: false,
+    columnasDef: COLUMNAS_PLANTILLA_NOVEDADES,
+    validaciones: VALIDACIONES_NOVEDADES,
   })
 }

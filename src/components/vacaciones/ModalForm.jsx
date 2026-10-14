@@ -87,8 +87,9 @@ export default function ModalForm({
     setForm(p => ({
       ...p,
       nombre_empleado: val,
-      dependencia: emp?.dependencia || p.dependencia,
-      fecha_ingreso: fIngreso || p.fecha_ingreso,
+      cargo: emp?.cargo || pActivo?.cargo || p.cargo || '',
+      dependencia: emp?.dependencia || pActivo?.dependencia || p.dependencia || '',
+      fecha_ingreso: fIngreso || emp?.fecha_ingreso || p.fecha_ingreso || '',
       periodo_id: pActivo?.id || p.periodo_id || null,
       periodo_vacaciones: p.periodo_vacaciones || periodoSugerido || p.periodo_vacaciones,
     }))
@@ -332,13 +333,17 @@ export default function ModalForm({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Área / Dependencia</label>
                 <select className="form-control" value={form.dependencia || ''} onChange={f('dependencia')}>
                   <option value="">— Seleccionar —</option>
                   {listaDepartamentos.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Cargo</label>
+                <input className="form-control" value={form.cargo || ''} onChange={f('cargo')} placeholder="Cargo del colaborador" />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Período de vacaciones</label>
@@ -463,8 +468,18 @@ export default function ModalForm({
                   style={form.dias_en_dinero ? { background: '#FEF9C3', color: '#78350F', fontWeight: 700, textAlign: 'center' } : { fontWeight: 700, textAlign: 'center' }} />
               </div>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Fecha de ingreso</label>
-                <input className="form-control" type="date" value={form.fecha_ingreso || ''} onChange={f('fecha_ingreso')} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>
+                  Fecha de ingreso <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>(Solo lectura)</span>
+                </label>
+                <input
+                  className="form-control"
+                  type="date"
+                  value={form.fecha_ingreso || ''}
+                  readOnly
+                  disabled
+                  style={{ background: 'var(--bg, #f3f4f6)', cursor: 'not-allowed', color: 'var(--text)' }}
+                  title="Fecha de ingreso contractual vigente del colaborador (bloqueada)"
+                />
                 {form.fecha_ingreso && calcAntiguedad(form.fecha_ingreso) && (
                   <div style={{ fontSize: 10, color: '#7C3AED', marginTop: 4, fontWeight: 600 }}>
                     ⏱ {calcAntiguedad(form.fecha_ingreso)?.texto}

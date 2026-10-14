@@ -67,7 +67,7 @@ function estilizarCelda(cell, banda) {
 // (sin filas extra), solo con estilo de color/bordes. Úsalo para exports que
 // el usuario puede volver a IMPORTAR (el lector de importación asume que los
 // datos empiezan en la fila 1 o 2, así que no se le puede correr la fila).
-export async function crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo, marca = true, columnasDef } = {}) {
+export async function crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo, marca = true, columnasDef, validaciones } = {}) {
   const ws = wb.addWorksheet(nombreHoja.slice(0, 31))
   const columnas = (columnasDef && columnasDef.length)
     ? columnasDef
@@ -137,10 +137,35 @@ export async function crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo,
     columnas.forEach((key, i) => {
       const cell = row.getCell(i + 1)
       const val = fila[key]
-      cell.value = (val === null || val === undefined) ? '—' : val
+      cell.value = (val === null || val === undefined) ? (marca ? '—' : '') : val
       estilizarCelda(cell, idx % 2 === 1)
     })
   })
+
+  // Aplicar validaciones de datos (Data Validation / Desplegables de Excel)
+  if (validaciones && typeof validaciones === 'object') {
+    columnas.forEach((key, i) => {
+      if (validaciones[key]) {
+        const opciones = validaciones[key]
+        const formulaList = Array.isArray(opciones)
+          ? `"${opciones.join(',')}"`
+          : (opciones.formulae ? opciones.formulae[0] : `"${opciones}"`)
+        const validationObj = {
+          type: 'list',
+          allowBlank: true,
+          formulae: [formulaList],
+          showErrorMessage: true,
+          errorTitle: 'Valor no permitido',
+          error: 'Por favor selecciona un valor de la lista desplegable.',
+        }
+        const maxFilas = Math.max(filaEncabezado + datos.length, filaEncabezado + 250)
+        for (let r = filaEncabezado + 1; r <= maxFilas; r++) {
+          const c = ws.getCell(r, i + 1)
+          c.dataValidation = validationObj
+        }
+      }
+    })
+  }
 
   if (columnas.length) {
     ws.autoFilter = { from: { row: filaEncabezado, column: 1 }, to: { row: filaEncabezado, column: columnas.length } }
@@ -189,8 +214,8 @@ export async function descargarWorkbook(wb, nombreArchivo) {
 // ─── Export de una sola hoja ────────────────────────────────────────────────
 // Cubre el caso común: un array de datos → un archivo .xlsx de una sola hoja,
 // con el diseño de marca (logo, colores, bordes) ya aplicado.
-export async function exportarExcel(datos, { nombreHoja = 'Hoja1', nombreArchivo, anchosColumnas, titulo, marca = true, columnasDef } = {}) {
+export async function exportarExcel(datos, { nombreHoja = 'Hoja1', nombreArchivo, anchosColumnas, titulo, marca = true, columnasDef, validaciones } = {}) {
   const wb = await crearLibro()
-  await crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo, marca, columnasDef })
+  await crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo, marca, columnasDef, validaciones })
   await descargarWorkbook(wb, nombreArchivo)
 }

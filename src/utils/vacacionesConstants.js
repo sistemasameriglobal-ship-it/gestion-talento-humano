@@ -16,7 +16,7 @@ export const ESTADO_STYLES = {
 }
 
 export const EMPTY = {
-  nombre_empleado: '', dependencia: '',
+  nombre_empleado: '', cargo: '', dependencia: '',
   periodo_vacaciones: '',
   fecha_inicio: '', fecha_fin: '', total_dias: '',
   dias_disfrutados: '', dias_en_dinero: '',

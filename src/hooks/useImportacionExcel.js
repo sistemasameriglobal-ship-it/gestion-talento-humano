@@ -8,10 +8,10 @@ import { detectarIndicesEncabezadoNovedades } from '../utils/parseExcel'
 
 const clean = v => { const t = (v || '').toString().trim(); return (!t || t.toUpperCase() === 'N/A' || t === '—' || t === '-') ? null : t }
 
-// Hook que encapsula toda la importación masiva desde Excel: parseo de filas,
-// detección dinámica de encabezados, armado de la vista previa, y la confirmación
-// que inserta los registros conectando el modelo relacional.
-export function useImportacionExcel({ empleadosIndex, load }) {
+// Hook que encapsula la importación masiva desde Excel según la plantilla oficial:
+// lectura de la hoja 'Novedades', omisión de notas/ejemplos, mapeo a campos
+// de BD y resolución relacional automática.
+export function useImportacionExcel({ empleadosIndex, load, currentCompany = 'ameriglobal' }) {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const [importPreview, setImportPreview] = useState(null)
@@ -19,19 +19,24 @@ export function useImportacionExcel({ empleadosIndex, load }) {
   const [fileInputKey, setFileInputKey] = useState(0)
 
   const parsearFilaImport = (row, colIndices) => {
-    // Si tenemos encabezados detectados dinámicamente, usamos sus índices; si no, posiciones estándar
+    // Si tenemos encabezados detectados dinámicamente, usamos sus índices;
+    // de lo contrario, aplicamos las posiciones de la plantilla oficial (13 columnas):
+    // 0: Nombre, 1: Concepto, 2: Fecha inicio, 3: Fecha fin, 4: Total días,
+    // 5: Validación incapacidad, 6: Prórroga, 7: RADICACION INCAPACIDADES,
+    // 8: Dependencia, 9: Observación, 10: Observación contabilidad, 11: Nómina electrónica, 12: Seguridad social
     const idxNombre = colIndices?.nombre !== undefined ? colIndices.nombre : 0
     const idxConcepto = colIndices?.concepto !== undefined ? colIndices.concepto : 1
     const idxInicio = colIndices?.fecha_inicio !== undefined ? colIndices.fecha_inicio : 2
     const idxFin = colIndices?.fecha_fin !== undefined ? colIndices.fecha_fin : 3
     const idxTotal = colIndices?.total_dias !== undefined ? colIndices.total_dias : 4
-    const idxDinero = colIndices?.dias_en_dinero !== undefined ? colIndices.dias_en_dinero : 5
-    const idxValidacion = colIndices?.validacion_incapacidad !== undefined ? colIndices.validacion_incapacidad : (colIndices ? null : 5)
-    const idxDep = colIndices?.dependencia !== undefined ? colIndices.dependencia : (row[8] !== undefined ? 8 : 7)
-    const idxObs = colIndices?.observacion !== undefined ? colIndices.observacion : (row[9] !== undefined ? 9 : 8)
-    const idxObsCont = colIndices?.observacion_contabilidad !== undefined ? colIndices.observacion_contabilidad : (row[10] !== undefined ? 10 : 9)
-    const idxNomina = colIndices?.nomina_electronica !== undefined ? colIndices.nomina_electronica : (row[11] !== undefined ? 11 : 10)
-    const idxSegSocial = colIndices?.seguridad_social !== undefined ? colIndices.seguridad_social : (row[12] !== undefined ? 12 : 11)
+    const idxValidacion = colIndices?.validacion_incapacidad !== undefined ? colIndices.validacion_incapacidad : 5
+    const idxProrroga = colIndices?.prorroga !== undefined ? colIndices.prorroga : 6
+    const idxRadicacion = colIndices?.radicacion_incapacidad !== undefined ? colIndices.radicacion_incapacidad : 7
+    const idxDep = colIndices?.dependencia !== undefined ? colIndices.dependencia : 8
+    const idxObs = colIndices?.observacion !== undefined ? colIndices.observacion : 9
+    const idxObsCont = colIndices?.observacion_contabilidad !== undefined ? colIndices.observacion_contabilidad : 10
+    const idxNomina = colIndices?.nomina_electronica !== undefined ? colIndices.nomina_electronica : 11
+    const idxSegSocial = colIndices?.seguridad_social !== undefined ? colIndices.seguridad_social : 12
 
     const nombre = (row[idxNombre] || '').toString().trim()
     const conceptoRaw = (row[idxConcepto] || '').toString().trim()
@@ -39,7 +44,7 @@ export function useImportacionExcel({ empleadosIndex, load }) {
       return { omitir: true, motivoOmision: 'Falta nombre o concepto', filaOriginal: row }
     }
 
-    // Validar que el empleado exista en Empleados antes de seguir
+    // Validar que el empleado exista en el catálogo de Empleados
     const nombreNormalizado = normalizarNombre(nombre)
     const nombreEnBD = empleadosIndex.get(nombreNormalizado)
     if (!nombreEnBD) {
@@ -74,14 +79,6 @@ export function useImportacionExcel({ empleadosIndex, load }) {
       }
     }
 
-    // Extracción de días en dinero si la columna existe en el archivo
-    let dias_en_dinero = null
-    const dineroRaw = idxDinero !== null && row[idxDinero] !== undefined ? (row[idxDinero] || '').toString().trim() : ''
-    if (dineroRaw && !isNaN(parseFloat(dineroRaw.replace(',', '.')))) {
-      const n = parseFloat(dineroRaw.replace(',', '.'))
-      if (n > 0) dias_en_dinero = n
-    }
-
     const dependencia = (row[idxDep] || '').toString().trim().toUpperCase() || null
     let observacion = (row[idxObs] || '').toString().trim()
     if (observacionExtra) observacion = observacion ? `${observacion} — ${observacionExtra}` : observacionExtra
@@ -94,17 +91,17 @@ export function useImportacionExcel({ empleadosIndex, load }) {
       fecha_inicio,
       fecha_fin: fecha_fin || null,
       total_dias,
-      dias_en_dinero,
       dependencia,
       observacion: observacion || null,
       observacion_contabilidad: idxObsCont !== null ? clean(row[idxObsCont]) : null,
       validacion_incapacidad: idxValidacion !== null ? clean(row[idxValidacion]) : null,
-      radicacion_incapacidad: null,
-      prorroga: null,
+      prorroga: idxProrroga !== null ? clean(row[idxProrroga]) : null,
+      radicacion_incapacidad: idxRadicacion !== null ? clean(row[idxRadicacion]) : null,
       nomina_electronica: idxNomina !== null ? clean(row[idxNomina]) : null,
       seguridad_social: idxSegSocial !== null ? clean(row[idxSegSocial]) : null,
       periodo,
       jornada: medioDia ? 'Medio día' : null,
+      empresa: currentCompany,
     }
 
     const advertencias = []
@@ -123,11 +120,14 @@ export function useImportacionExcel({ empleadosIndex, load }) {
       const XLSX = await import('xlsx')
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf, { type: 'array', cellDates: true })
-      const ws = wb.Sheets[wb.SheetNames[0]]
+
+      // 1. Priorizar lectura de la hoja oficial 'Novedades' (sin importar mayúsculas/minúsculas)
+      const sheetName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'novedades') || wb.SheetNames[0]
+      const ws = wb.Sheets[sheetName]
       let raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
 
       if (!raw || !raw.length) {
-        setImportResult({ error: 'El archivo Excel no contiene filas con datos.' })
+        setImportResult({ error: `El archivo no contiene filas legibles en la hoja "${sheetName}".` })
         return
       }
 
@@ -138,23 +138,53 @@ export function useImportacionExcel({ empleadosIndex, load }) {
         return
       }
 
-      // Detectar dinámicamente si la primera fila es encabezado
+      // 2. Detectar dinámicamente la fila de encabezados examinando las primeras filas
       let colIndices = null
-      const encabezadosDetectados = detectarIndicesEncabezadoNovedades(raw[0])
-      if (encabezadosDetectados) {
-        colIndices = encabezadosDetectados
-        raw = raw.slice(1)
+      let headerRowIdx = -1
+
+      for (let i = 0; i < Math.min(raw.length, 6); i++) {
+        const detected = detectarIndicesEncabezadoNovedades(raw[i])
+        if (detected) {
+          colIndices = detected
+          headerRowIdx = i
+          break
+        }
+      }
+
+      let dataRows = []
+      if (headerRowIdx >= 0) {
+        dataRows = raw.slice(headerRowIdx + 1)
       } else {
         const first0 = (raw[0][0] || '').toString().trim().toLowerCase()
         const first1 = (raw[0][1] || '').toString().trim().toLowerCase()
         if (['nombre', 'empleado', 'nombre completo', 'nombre_empleado', 'colaborador'].includes(first0) || first1 === 'concepto') {
-          raw = raw.slice(1)
+          dataRows = raw.slice(1)
+        } else {
+          dataRows = raw
         }
       }
 
-      const filas = raw.map(row => parsearFilaImport(row, colIndices))
+      // 3. Ignorar filas de ejemplo explicativas, notas o instrucciones de la plantilla
+      const dataRowsLimpias = dataRows.filter(row => {
+        const idxNombre = colIndices?.nombre !== undefined ? colIndices.nombre : 0
+        const nombreVal = (row[idxNombre] || '').toString().trim().toLowerCase()
+        if (!nombreVal) return false
+        if (
+          nombreVal.startsWith('ejemplo') ||
+          nombreVal.startsWith('nota') ||
+          nombreVal.startsWith('instrucci') ||
+          nombreVal.startsWith('formato') ||
+          nombreVal.startsWith('atencion') ||
+          nombreVal.includes('seleccione')
+        ) {
+          return false
+        }
+        return true
+      })
+
+      const filas = dataRowsLimpias.map(row => parsearFilaImport(row, colIndices))
       if (!filas.length) {
-        setImportResult({ error: 'El archivo no tiene filas con datos para importar.' })
+        setImportResult({ error: 'El archivo no tiene filas de datos válidas para importar.' })
       } else {
         setImportPreview(filas)
       }
@@ -178,14 +208,14 @@ export function useImportacionExcel({ empleadosIndex, load }) {
         const { payload, conceptoOriginal } = fila
         if (payload.concepto === 'Otros') otrosDetectados.push(conceptoOriginal)
 
-        const { error } = await novedadesApi.crearNovedad(payload)
+        const { error } = await novedadesApi.crearNovedad(payload, currentCompany)
         if (error) { errores++; continue }
         creadas++
 
-        // Si el concepto es "Vacaciones", se sincroniza con la tabla vacaciones
+        // Si el concepto es "Vacaciones", sincronizar con la tabla vacaciones
         if (payload.concepto === 'Vacaciones' && payload.fecha_inicio) {
           const { data: existentes } = await vacacionesApi.buscarVacacionPorEmpleadoYFecha(
-            payload.nombre_empleado, payload.fecha_inicio
+            payload.nombre_empleado, payload.fecha_inicio, currentCompany
           )
           const vacacionPayload = {
             nombre_empleado: payload.nombre_empleado,
@@ -193,15 +223,15 @@ export function useImportacionExcel({ empleadosIndex, load }) {
             fecha_inicio: payload.fecha_inicio,
             fecha_fin: payload.fecha_fin,
             total_dias: payload.total_dias,
-            tipo_vacacion: payload.dias_en_dinero && !payload.total_dias ? 'Vacaciones en dinero' : 'Vacaciones',
+            tipo_vacacion: 'Vacaciones',
             estado: 'Pendiente',
             observacion_contable: payload.observacion,
-            dias_en_dinero: payload.dias_en_dinero || null,
+            empresa: currentCompany,
           }
           if (existentes && existentes.length > 0) {
             await vacacionesApi.actualizarVacacion(existentes[0].id, vacacionPayload)
           } else {
-            await vacacionesApi.crearVacacion(vacacionPayload)
+            await vacacionesApi.crearVacacion(vacacionPayload, currentCompany)
           }
         }
       }

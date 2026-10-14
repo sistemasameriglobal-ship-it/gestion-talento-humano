@@ -190,7 +190,7 @@ export default function Novedades() {
   const {
     importing, importResult, setImportResult, importPreview, importConfirming,
     fileInputKey, handleImportFile, confirmarImportacion, cancelarImportacion,
-  } = useImportacionExcel({ empleadosIndex, load })
+  } = useImportacionExcel({ empleadosIndex, load, currentCompany })
 
   // Auto-refresh cada 60s (silencioso, sin pantalla de carga)
   useEffect(() => {

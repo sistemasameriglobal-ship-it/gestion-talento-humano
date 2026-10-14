@@ -13,7 +13,7 @@ import { Plus, X, Download, AlertCircle, Sun } from 'lucide-react'
 import {
   PAGE_SIZE, MESES, ANIOS, EMPTY,
 } from '../utils/vacacionesConstants'
-import { formatFecha, diasAcumuladosAnio, calcularSaldoVacacionesPeriodo, calcularAniosCumplidos } from '../utils/vacacionesHelpers'
+import { formatFecha, diasAcumuladosAnio, calcularSaldoVacacionesPeriodo, calcularAniosCumplidos, obtenerFechaIngresoContinua } from '../utils/vacacionesHelpers'
 import ModalDetalle from '../components/vacaciones/ModalDetalle'
 import ModalForm from '../components/vacaciones/ModalForm'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
@@ -190,7 +190,20 @@ export default function Vacaciones() {
     setModal('add')
   }
   const openEdit = row => {
-    setForm({ ...EMPTY, ...row })
+    const emp = empleados.find(e => e.nombre_completo?.trim().toLowerCase() === row.nombre_empleado?.trim().toLowerCase())
+    const periodosEmp = periodos?.filter(p => emp && p.empleado_id === emp.id) || []
+    const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || null
+    const fIngreso = pActivo
+      ? (obtenerFechaIngresoContinua(pActivo, periodosEmp) || pActivo.fecha_ingreso)
+      : (emp?.fecha_ingreso || row.fecha_ingreso || '')
+
+    setForm({
+      ...EMPTY,
+      ...row,
+      cargo: row.cargo || emp?.cargo || pActivo?.cargo || '',
+      dependencia: row.dependencia || emp?.dependencia || pActivo?.dependencia || '',
+      fecha_ingreso: fIngreso || row.fecha_ingreso || '',
+    })
     setModal('edit')
   }
 
@@ -234,6 +247,7 @@ export default function Vacaciones() {
 
     const payload = {
       nombre_empleado:     form.nombre_empleado.trim(),
+      cargo:               form.cargo || null,
       periodo_id:          periodoId,
       dependencia:         form.dependencia || null,
       periodo_vacaciones:  form.periodo_vacaciones || null,
