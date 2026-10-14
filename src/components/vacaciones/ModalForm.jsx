@@ -1,7 +1,8 @@
+import { useMemo } from 'react'
 import { X, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
-import { calcAntiguedad, calcDias } from '../../utils/vacacionesHelpers'
+import { calcAntiguedad, calcDias, calcularAniosCumplidos, obtenerFechaIngresoContinua } from '../../utils/vacacionesHelpers'
 import { ESTADOS, ESTADO_STYLES, DEPENDENCIAS } from '../../utils/vacacionesConstants'
 import SearchableSelect from '../ui/SearchableSelect'
 
@@ -21,6 +22,7 @@ export default function ModalForm({
   empActivos, empInactivos, diasAcumuladosForm, anioActual,
   saldoVacacionesForm = null,
   periodos = [],
+  rows = [],
   onClose,
 }) {
   const { departamentos } = useCompany()
@@ -30,6 +32,11 @@ export default function ModalForm({
   const estStyle = ESTADO_STYLES[EST] || ESTADO_STYLES['Pendiente']
   const campos = [form.nombre_empleado, form.tipo_vacacion, form.estado]
   const pct = Math.round((campos.filter(Boolean).length / campos.length) * 100)
+
+  // Años de servicio cumplidos para referencia informativa
+  const aniosCumplidos = saldoVacacionesForm?.aniosCumplidos != null
+    ? saldoVacacionesForm.aniosCumplidos
+    : (form.fecha_ingreso ? calcularAniosCumplidos(form.fecha_ingreso) : 0)
 
   // Cálculo de días solicitados en este formulario
   const diasDisfrute = (form.fecha_inicio && form.fecha_fin)
@@ -55,13 +62,35 @@ export default function ModalForm({
   const onEmpleadoChange = (val) => {
     const todos = [...(empActivos || []), ...(empInactivos || [])]
     const emp = todos.find(e => e.nombre_completo?.trim().toLowerCase() === val?.trim().toLowerCase())
-    const pActivo = periodos?.find(p => emp && p.empleado_id === emp.id && p.es_periodo_actual)
+    const periodosEmp = periodos?.filter(p => emp && p.empleado_id === emp.id) || []
+    const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || null
+    const fIngreso = pActivo
+      ? (obtenerFechaIngresoContinua(pActivo, periodosEmp) || pActivo.fecha_ingreso)
+      : (emp?.fecha_ingreso || null)
+
+    let periodoSugerido = ''
+    if (fIngreso && modal === 'add') {
+      const nom = (val || '').trim().toLowerCase()
+      const prevVacs = (rows || []).filter(r =>
+        (r.nombre_empleado || '').trim().toLowerCase() === nom &&
+        ['Pendiente', 'Aprobada', 'En curso', 'Finalizada'].includes(r.estado || 'Pendiente')
+      )
+      const cicloNum = prevVacs.length + 1
+      const hireYear = new Date(fIngreso + 'T00:00:00').getFullYear()
+      if (!isNaN(hireYear)) {
+        const y1 = hireYear + (cicloNum - 1)
+        const y2 = y1 + 1
+        periodoSugerido = `${y1}-${y2}`
+      }
+    }
+
     setForm(p => ({
       ...p,
       nombre_empleado: val,
       dependencia: emp?.dependencia || p.dependencia,
-      fecha_ingreso: pActivo?.fecha_ingreso || emp?.fecha_ingreso || p.fecha_ingreso,
+      fecha_ingreso: fIngreso || p.fecha_ingreso,
       periodo_id: pActivo?.id || p.periodo_id || null,
+      periodo_vacaciones: p.periodo_vacaciones || periodoSugerido || p.periodo_vacaciones,
     }))
   }
 
@@ -486,7 +515,11 @@ export default function ModalForm({
             <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
             <button className="btn btn-primary" onClick={save}
               disabled={saving || excedeSaldo || (sinSaldo && diasSolicitados > 0)}
-              title={excedeSaldo ? `No puedes guardar: la solicitud supera los ${topeDisponible} días disponibles` : undefined}
+              title={
+                excedeSaldo
+                  ? `No puedes guardar: la solicitud supera los ${topeDisponible} días disponibles`
+                  : undefined
+              }
               style={{
                 minWidth: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 opacity: (excedeSaldo || (sinSaldo && diasSolicitados > 0)) ? 0.5 : 1,

@@ -9,7 +9,7 @@ import { resolverIdsRelacionales } from './idResolvers'
 const TABLA = 'vacaciones'
 
 /** Lista completa de vacaciones de una empresa, más recientes primero. */
-export function listarVacaciones(empresa) {
+export async function listarVacaciones(empresa) {
   let query = supabase.from(TABLA).select('*').order('fecha_inicio', { ascending: false })
   if (empresa) query = query.eq('empresa', empresa)
   return query

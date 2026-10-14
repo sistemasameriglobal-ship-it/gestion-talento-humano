@@ -4,6 +4,7 @@ import SearchableSelect from '../ui/SearchableSelect'
 import { PILL_STYLES } from './pillsConstants'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { hoyISO, formatDuracion } from '../../utils/fecha'
+import { diasHabilesEntre } from '../../utils/diasHabiles'
 import { CONCEPTOS_LIST, ICONOS } from '../../utils/novedadesConstants'
 
 export default function NovedadFormModal({
@@ -378,6 +379,71 @@ export default function NovedadFormModal({
                           </button>
                         )
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {form.concepto === 'Vacaciones' && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed var(--border)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>
+                          💰 Días en dinero (compensados)
+                        </label>
+                        <input
+                          className="form-control"
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={form.dias_en_dinero || ''}
+                          onChange={e => {
+                            const val = e.target.value
+                            setForm(p => {
+                              const dDin = val === '' ? 0 : Number(val)
+                              const dFis = p.fecha_inicio && p.fecha_fin ? (diasHabilesEntre(p.fecha_inicio, p.fecha_fin) || 0) : 0
+                              const tot = (dFis + dDin) > 0 ? (dFis + dDin) : p.total_dias
+                              return {
+                                ...p,
+                                dias_en_dinero: val,
+                                total_dias: tot
+                              }
+                            })
+                            setFormDirty(true)
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>
+                          Desglose calculado
+                        </label>
+                        <div style={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          padding: '8px 10px',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: '#0369a1',
+                          minHeight: 38,
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}>
+                          {(() => {
+                            const dDin = Number(form.dias_en_dinero) || 0
+                            const dFis = form.fecha_inicio && form.fecha_fin ? (diasHabilesEntre(form.fecha_inicio, form.fecha_fin) || 0) : 0
+                            if (dDin > 0 && dFis > 0) {
+                              return `🌴 ${dFis}d disfrute + 💰 ${dDin}d dinero`
+                            }
+                            if (dDin > 0) {
+                              return `💰 ${dDin} días en dinero`
+                            }
+                            if (dFis > 0) {
+                              return `🌴 ${dFis} días disfrute físico`
+                            }
+                            return <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Sin días calculados</span>
+                          })()}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

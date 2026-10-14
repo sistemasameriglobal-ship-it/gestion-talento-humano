@@ -9,6 +9,7 @@ import { omit } from '../utils/omit'
 import { logAccion } from '../utils/auditLogger'
 import { diasHabilesEntre } from '../utils/diasHabiles'
 import { normalizarConcepto } from '../utils/parseExcel'
+import { extraerDiasEnDinero } from '../utils/vacacionesHelpers'
 import { exportarNovedadesExcel, exportarNovedadesParaImportar } from '../utils/novedadesExport'
 import { validarContraFichaEmpleado, validarContraHistorial, sanitizeForm } from '../utils/novedadesValidacion'
 import {
@@ -81,12 +82,81 @@ export default function Novedades() {
   const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true)
     else setLoading(true)
-    const [{ data }, { data: empData }, { data: periodosData }] = await Promise.all([
+    let [{ data }, { data: empData }, { data: periodosData }, { data: vacData }] = await Promise.all([
       novedadesApi.listarNovedades(currentCompany),
       empleadosApi.listarEmpleadosParaNovedades(currentCompany),
       empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
+      Promise.resolve(vacacionesApi.listarVacaciones(currentCompany)).catch(() => ({ data: [] })),
     ])
-    setRows(data || [])
+
+    // Detectar y auto-sincronizar colaboradores recientes que no tengan su novedad de Ingreso registrada
+    if (empData && empData.length > 0) {
+      const ahora = Date.now()
+      const sieteDiasMs = 7 * 24 * 60 * 60 * 1000
+      let huboSincronizacion = false
+
+      for (const emp of empData) {
+        const esReciente = emp.created_at && (ahora - new Date(emp.created_at).getTime() < sieteDiasMs)
+        if (esReciente) {
+          const tieneIngreso = (data || []).some(n =>
+            n.concepto === 'Ingreso' &&
+            ((n.empleado_id && n.empleado_id === emp.id) ||
+             (n.nombre_empleado && n.nombre_empleado.trim().toLowerCase() === emp.nombre_completo?.trim().toLowerCase()))
+          )
+          if (!tieneIngreso) {
+            const fIngreso = emp.fecha_ingreso || (emp.created_at ? emp.created_at.slice(0, 10) : new Date().toISOString().split('T')[0])
+            const { error: errIns } = await novedadesApi.crearNovedad({
+              concepto: 'Ingreso',
+              fecha_inicio: fIngreso,
+              fecha_fin: fIngreso,
+              total_dias: 0,
+              periodo: fIngreso.slice(0, 7),
+              observacion: 'Registro inicial de ingreso del colaborador',
+              empleado_id: emp.id,
+              nombre_empleado: emp.nombre_completo,
+              dependencia: emp.dependencia || null,
+              empresa: currentCompany,
+              empresa_id: emp.empresa_id || null,
+              departamento_id: emp.departamento_id || null,
+            }, currentCompany)
+            if (!errIns) huboSincronizacion = true
+          }
+        }
+      }
+
+      if (huboSincronizacion) {
+        const { data: freshData } = await novedadesApi.listarNovedades(currentCompany)
+        if (freshData) data = freshData
+      }
+    }
+
+    const enrichedRows = (data || []).map(r => {
+      let diasEnDinero
+      let diasDisfrutados = null
+      const esVac = r.concepto === 'Vacaciones' || (r.concepto || '').toLowerCase().includes('vacacion')
+      if (esVac) {
+        const rNombre = (r.nombre_empleado || '').trim().toLowerCase()
+        const vacMatch = (vacData || []).find(v => {
+          const vNombre = (v.nombre_empleado || '').trim().toLowerCase()
+          if (vNombre !== rNombre) return false
+          if (v.fecha_inicio && r.fecha_inicio) return v.fecha_inicio === r.fecha_inicio
+          return true
+        })
+        diasEnDinero = extraerDiasEnDinero(r, vacMatch)
+        diasDisfrutados = vacMatch?.dias_disfrutados != null
+          ? Number(vacMatch.dias_disfrutados)
+          : (r.fecha_inicio && r.fecha_fin ? diasHabilesEntre(r.fecha_inicio, r.fecha_fin) : null)
+      } else {
+        diasEnDinero = extraerDiasEnDinero(r, null)
+      }
+      return {
+        ...r,
+        dias_en_dinero: diasEnDinero > 0 ? diasEnDinero : null,
+        dias_disfrutados: diasDisfrutados,
+      }
+    })
+
+    setRows(enrichedRows)
     const ps = [...new Set((data || []).map(r => r.periodo).filter(Boolean))].sort().reverse()
     setPeriodos(ps)
     if (empData && empData.length > 0) {
@@ -186,50 +256,73 @@ export default function Novedades() {
     try {
       let savedId = null
       let errorVacacion = null
+
+      const esVac = cleanForm.concepto === 'Vacaciones'
+      const diasDinero = cleanForm.dias_en_dinero != null && cleanForm.dias_en_dinero !== '' ? Number(cleanForm.dias_en_dinero) : 0
+      const diasFisicos = cleanForm.fecha_inicio && cleanForm.fecha_fin ? diasHabilesEntre(cleanForm.fecha_inicio, cleanForm.fecha_fin) : (cleanForm.dias_disfrutados != null && cleanForm.dias_disfrutados !== '' ? Number(cleanForm.dias_disfrutados) : null)
+
+      if (esVac && diasDinero > 0) {
+        const detalleDinero = `Compensación: ${diasDinero} días en dinero`
+        const desglose = diasFisicos != null ? `${diasFisicos} días disfrute + ${diasDinero} en dinero` : detalleDinero
+        if (!cleanForm.observacion_contabilidad) {
+          cleanForm.observacion_contabilidad = detalleDinero
+        }
+        if (cleanForm.observacion && !cleanForm.observacion.includes('en dinero')) {
+          cleanForm.observacion = `[${desglose}] ${cleanForm.observacion}`
+        } else if (!cleanForm.observacion) {
+          cleanForm.observacion = `[${desglose}]`
+        }
+        if (diasFisicos != null) {
+          cleanForm.total_dias = diasFisicos + diasDinero
+        } else if (!cleanForm.total_dias) {
+          cleanForm.total_dias = diasDinero
+        }
+      }
+
+      const payloadSupabase = omit(['id', 'created_at', 'updated_at', 'dias_en_dinero', 'dias_disfrutados'], cleanForm)
+
       if (modal === 'add') {
-        const insertData = omit(['id', 'created_at', 'updated_at'], cleanForm)
-        const { data, error } = await novedadesApi.crearNovedad(insertData, currentCompany)
+        const { data, error } = await novedadesApi.crearNovedad(payloadSupabase, currentCompany)
         if (error) throw error
         savedId = data?.[0]?.id ?? null
         logAccion('CREAR', 'novedades', savedId, currentCompany, { concepto: cleanForm.concepto, empleado: cleanForm.nombre_empleado })
-
-        // Si la novedad es de concepto "Vacaciones", se refleja automáticamente
-        // en el apartado de Vacaciones (misma fecha de inicio y fecha fin).
-        // Si ya existe una vacación para ese empleado con esa misma fecha de
-        // inicio, se actualiza en vez de duplicarla.
-        if (insertData.concepto === 'Vacaciones' && insertData.fecha_inicio) {
-          const { data: existentes, error: errorCheck } = await vacacionesApi.buscarVacacionPorEmpleadoYFecha(
-            insertData.nombre_empleado, insertData.fecha_inicio, currentCompany
-          )
-
-          const vacacionPayload = {
-            nombre_empleado: insertData.nombre_empleado,
-            dependencia: insertData.dependencia || null,
-            fecha_inicio: insertData.fecha_inicio,
-            fecha_fin: insertData.fecha_fin || null,
-            total_dias: insertData.total_dias === '' ? null : insertData.total_dias,
-            tipo_vacacion: 'Vacaciones',
-            estado: 'Pendiente',
-            observacion_contable: insertData.observacion || null,
-          }
-
-          if (errorCheck) {
-            errorVacacion = errorCheck
-          } else if (existentes && existentes.length > 0) {
-            const { error: errorUpdate } = await vacacionesApi.actualizarVacacion(existentes[0].id, vacacionPayload)
-            errorVacacion = errorUpdate
-          } else {
-            const { error: errorInsert } = await vacacionesApi.crearVacacion(vacacionPayload, currentCompany)
-            errorVacacion = errorInsert
-          }
-        }
       } else {
         if (!cleanForm.id) throw new Error('ID de registro no encontrado.')
-        const rest = omit(['id', 'created_at', 'updated_at'], cleanForm)
-        const { error } = await novedadesApi.actualizarNovedad(cleanForm.id, rest)
+        const { error } = await novedadesApi.actualizarNovedad(cleanForm.id, payloadSupabase)
         if (error) throw error
         savedId = cleanForm.id
         logAccion('ACTUALIZAR', 'novedades', savedId, currentCompany, { concepto: cleanForm.concepto, empleado: cleanForm.nombre_empleado })
+      }
+
+      // Sincronización bidireccional hacia la tabla 'vacaciones'
+      if (esVac && cleanForm.fecha_inicio) {
+        const vacacionPayload = {
+          nombre_empleado: cleanForm.nombre_empleado,
+          dependencia: cleanForm.dependencia || null,
+          fecha_inicio: cleanForm.fecha_inicio,
+          fecha_fin: cleanForm.fecha_fin || null,
+          total_dias: cleanForm.total_dias === '' ? null : cleanForm.total_dias,
+          dias_disfrutados: diasFisicos,
+          dias_en_dinero: diasDinero || null,
+          tipo_vacacion: (diasDinero > 0 && !cleanForm.fecha_fin) ? 'Vacaciones en dinero' : 'Vacaciones',
+          estado: 'Pendiente',
+          observacion_contable: cleanForm.observacion_contabilidad || null,
+          observacion: cleanForm.observacion || null,
+        }
+
+        const { data: existentes, error: errorCheck } = await vacacionesApi.buscarVacacionPorEmpleadoYFecha(
+          cleanForm.nombre_empleado, cleanForm.fecha_inicio, currentCompany
+        )
+
+        if (errorCheck) {
+          errorVacacion = errorCheck
+        } else if (existentes && existentes.length > 0) {
+          const { error: errorUpdate } = await vacacionesApi.actualizarVacacion(existentes[0].id, vacacionPayload)
+          errorVacacion = errorUpdate
+        } else {
+          const { error: errorInsert } = await vacacionesApi.crearVacacion(vacacionPayload, currentCompany)
+          errorVacacion = errorInsert
+        }
       }
 
       if (errorVacacion) {

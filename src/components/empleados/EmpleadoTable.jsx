@@ -5,10 +5,10 @@
 // =============================================================
 import { Edit2, Trash2, RotateCcw, Archive } from 'lucide-react'
 import PersonCell from '../ui/PersonCell'
-import { calcAntiguedad } from '../../utils/vacacionesHelpers'
+import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 
 export default function EmpleadoTable({
-  paged, novedadesPorEmpleado, periodosPorEmpleado = {}, onSelect, openEdit, onRetirar, onReintegrar, setDeleteId,
+  paged, novedadesPorEmpleado, periodosPorEmpleado = {}, vacacionesPorEmpleado = {}, onSelect, openEdit, onRetirar, onReintegrar, setDeleteId,
 }) {
   return (
     <>
@@ -18,6 +18,7 @@ export default function EmpleadoTable({
             <tr>
               <th>Nombre</th><th>Área</th><th>Cargo</th><th>Correo</th>
               <th style={{ textAlign: 'center' }}>Estado</th>
+              <th style={{ textAlign: 'center' }}>Vacaciones</th>
               <th style={{ textAlign: 'center' }}>Novedades</th>
               <th></th>
             </tr>
@@ -27,7 +28,12 @@ export default function EmpleadoTable({
               const nov = novedadesPorEmpleado[emp.nombre_completo]
               const periodosEmp = periodosPorEmpleado[emp.id] || []
               const esReintegrado = periodosEmp.length > 1
-              const antig = emp.fecha_ingreso ? calcAntiguedad(emp.fecha_ingreso, emp.activo === false ? emp.fecha_retiro : null) : null
+              const antig = calcAntiguedadEmpleado(emp, periodosEmp)
+              const normNombre = (emp.nombre_completo || '').trim().toLowerCase()
+              const vacsEmp = vacacionesPorEmpleado[emp.id] || vacacionesPorEmpleado[normNombre] || []
+              const vacacionActiva = getEstadoVacacionActual(emp, vacsEmp, nov?.novedades)
+              const periodoActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || (emp.fecha_ingreso ? { fecha_ingreso: emp.fecha_ingreso, es_periodo_actual: true } : null)
+              const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp)
               return (
                 <tr key={emp.id} style={{ cursor: 'pointer', opacity: emp.activo === false ? 0.55 : 1 }} onClick={() => onSelect(emp)}>
                   <td style={{ maxWidth: 260 }}>
@@ -45,22 +51,93 @@ export default function EmpleadoTable({
                         ? <span title={emp.fecha_retiro ? `Retiro: ${emp.fecha_retiro}` : 'Sin fecha de retiro registrada'} style={{ background: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>Inactivo</span>
                         : <span style={{ background: 'var(--success-bg)', color: 'var(--success-text)', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>Activo</span>}
                       {esReintegrado && (
-                        <span
-                          title={`Empleado con ${periodosEmp.length} periodos contractuales registrados`}
-                          style={{
-                            background: '#F3E8FF',
-                            color: '#7E22CE',
-                            border: '1px solid #E9D5FF',
-                            borderRadius: 20,
-                            padding: '1px 6px',
-                            fontSize: 10,
-                            fontWeight: 700,
-                          }}
-                        >
-                          Reintegrado
-                        </span>
+                        periodoActivo?.continuidad_laboral ? (
+                          <span
+                            title={`Periodo vigente #${periodoActivo.numero_periodo} con continuidad laboral (${periodoActivo.motivo_transicion === 'ascenso' ? 'Ascenso' : 'Cambio de cargo'}). Conserva antigüedad.`}
+                            style={{
+                              background: '#FDF2F8',
+                              color: '#BE185D',
+                              border: '1px solid #FBCFE8',
+                              borderRadius: 20,
+                              padding: '1px 6px',
+                              fontSize: 10,
+                              fontWeight: 700,
+                            }}
+                          >
+                            ⭐ {periodoActivo.motivo_transicion === 'ascenso' ? 'Ascenso' : 'Continuidad'}
+                          </span>
+                        ) : (
+                          <span
+                            title={`Empleado con ${periodosEmp.length} periodos contractuales registrados`}
+                            style={{
+                              background: '#F3E8FF',
+                              color: '#7E22CE',
+                              border: '1px solid #E9D5FF',
+                              borderRadius: 20,
+                              padding: '1px 6px',
+                              fontSize: 10,
+                              fontWeight: 700,
+                            }}
+                          >
+                            Reintegrado
+                          </span>
+                        )
                       )}
                     </div>
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {vacacionActiva ? (
+                      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                        <span
+                          title={vacacionActiva.estaDeVacaciones
+                            ? `De vacaciones: ${vacacionActiva.fechaInicio} al ${vacacionActiva.fechaFin}. ${vacacionActiva.countdownTexto}`
+                            : `Vacaciones programadas: ${vacacionActiva.fechaInicio} al ${vacacionActiva.fechaFin}. ${vacacionActiva.countdownTexto}`
+                          }
+                          style={{
+                            background: vacacionActiva.estaDeVacaciones
+                              ? (vacacionActiva.esUltimoDia ? '#FEF3C7' : '#DBEAFE')
+                              : '#EEF2FF',
+                            color: vacacionActiva.estaDeVacaciones
+                              ? (vacacionActiva.esUltimoDia ? '#92400E' : '#1D4ED8')
+                              : '#4338CA',
+                            border: `1px solid ${
+                              vacacionActiva.estaDeVacaciones
+                                ? (vacacionActiva.esUltimoDia ? '#F59E0B' : '#93C5FD')
+                                : '#C7D2FE'
+                            }`,
+                            borderRadius: 20,
+                            padding: '2px 8px',
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3
+                          }}
+                        >
+                          🌴 {vacacionActiva.estaDeVacaciones ? vacacionActiva.badgeTexto : `Programadas (${vacacionActiva.countdownTexto})`}
+                        </span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          Saldo: {saldoVac.saldoPendiente}d
+                        </span>
+                      </div>
+                    ) : (
+                      <span
+                        title={`Saldo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d, Disfrutados: ${saldoVac.diasDisfrutados}d, Dinero: ${saldoVac.diasEnDinero}d)`}
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: saldoVac.saldoPendiente > 0 ? '#047857' : 'var(--text-muted)',
+                          background: saldoVac.saldoPendiente > 0 ? '#ECFDF5' : 'transparent',
+                          padding: saldoVac.saldoPendiente > 0 ? '2px 7px' : '0',
+                          borderRadius: 999,
+                          border: saldoVac.saldoPendiente > 0 ? '1px solid #A7F3D0' : 'none',
+                          display: 'inline-block'
+                        }}
+                      >
+                        {saldoVac.saldoPendiente > 0 ? `🌴 ${saldoVac.saldoPendiente}d disp.` : '—'}
+                      </span>
+                    )}
                   </td>
                   <td style={{ textAlign: 'center', color: '#2563EB', fontWeight: 600 }}>{nov ? nov.novedades.length : 0}</td>
                   <td onClick={e => e.stopPropagation()}>

@@ -2,6 +2,7 @@ import { X, Edit2 } from 'lucide-react'
 import AnimatedModal from '../ui/AnimatedModal'
 import { statusPill } from './pillsConstants'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
+import { diasHabilesEntre } from '../../utils/diasHabiles'
 
 function Section({ title, children }) {
   return (
@@ -44,6 +45,20 @@ export default function ViewDetailModal({ viewRow, onClose, onEdit }) {
                 <Field label="Fecha inicio" value={viewRow.fecha_inicio} />
                 <Field label="Fecha fin" value={viewRow.fecha_fin} />
                 <Field label="Total días" value={viewRow.total_dias != null ? String(viewRow.total_dias) : null} />
+                {viewRow.dias_en_dinero != null && Number(viewRow.dias_en_dinero) > 0 && (() => {
+                  const dDisfrute = viewRow.dias_disfrutados != null && viewRow.dias_disfrutados !== ''
+                    ? Number(viewRow.dias_disfrutados)
+                    : (viewRow.fecha_inicio && viewRow.fecha_fin
+                        ? diasHabilesEntre(viewRow.fecha_inicio, viewRow.fecha_fin)
+                        : Math.max(0, Number(viewRow.total_dias || 0) - Number(viewRow.dias_en_dinero)))
+                  return (
+                    <>
+                      <Field label="Días en dinero" value={`💰 ${viewRow.dias_en_dinero} días`} />
+                      <Field label="Días disfrute (tiempo)" value={dDisfrute > 0 ? `${dDisfrute} días` : '0 días'} />
+                      <Field label="Desglose vacaciones" value={dDisfrute > 0 ? `${dDisfrute} días disfrute + ${viewRow.dias_en_dinero} en dinero` : `${viewRow.dias_en_dinero} días en dinero`} full />
+                    </>
+                  )
+                })()}
                 <Field label="Jornada" value={viewRow.jornada === 'Medio día' ? '🕐 Medio día' : (viewRow.concepto === 'LNR' || viewRow.concepto === 'LR') ? 'Día completo' : null} />
                 <Field label="Diagnóstico" value={viewRow.diagnostico} />
                 <Field label="Dependencia / Área" value={viewRow.dependencia} full />

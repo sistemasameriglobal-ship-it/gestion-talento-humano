@@ -4,7 +4,7 @@
 // Vista de tarjetas de empleados con acciones rápidas.
 // =============================================================
 import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar } from 'lucide-react'
-import { calcAntiguedad } from '../../utils/vacacionesHelpers'
+import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 
 function iniciales(nombre) {
   const partes = (nombre || '').trim().split(/\s+/).filter(Boolean)
@@ -14,7 +14,7 @@ function iniciales(nombre) {
 }
 
 export default function EmpleadoCards({
-  paged, novedadesPorEmpleado, periodosPorEmpleado = {}, onSelect, openEdit, onRetirar, onReintegrar, setDeleteId,
+  paged, novedadesPorEmpleado, periodosPorEmpleado = {}, vacacionesPorEmpleado = {}, onSelect, openEdit, onRetirar, onReintegrar, setDeleteId,
 }) {
   return (
     <>
@@ -23,7 +23,12 @@ export default function EmpleadoCards({
           const nov = novedadesPorEmpleado[emp.nombre_completo]
           const periodosEmp = periodosPorEmpleado[emp.id] || []
           const esReintegrado = periodosEmp.length > 1
-          const antig = emp.fecha_ingreso ? calcAntiguedad(emp.fecha_ingreso, emp.activo === false ? emp.fecha_retiro : null) : null
+          const antig = calcAntiguedadEmpleado(emp, periodosEmp)
+          const normNombre = (emp.nombre_completo || '').trim().toLowerCase()
+          const vacsEmp = vacacionesPorEmpleado[emp.id] || vacacionesPorEmpleado[normNombre] || []
+          const vacacionActiva = getEstadoVacacionActual(emp, vacsEmp, nov?.novedades)
+          const periodoActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || (emp.fecha_ingreso ? { fecha_ingreso: emp.fecha_ingreso, es_periodo_actual: true } : null)
+          const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp)
           return (
             <div
               key={emp.id}
@@ -54,14 +59,48 @@ export default function EmpleadoCards({
                       color: emp.activo === false ? 'var(--danger-text)' : 'var(--success-text)',
                     }}>{emp.activo === false ? 'Inactivo' : 'Activo'}</span>
                     {esReintegrado && (
+                      periodoActivo?.continuidad_laboral ? (
+                        <span
+                          title={`Periodo vigente #${periodoActivo.numero_periodo} con continuidad laboral (${periodoActivo.motivo_transicion === 'ascenso' ? 'Ascenso' : 'Cambio de cargo'}). Conserva antigüedad.`}
+                          style={{
+                            fontSize: 10, borderRadius: 4, padding: '1px 6px', fontWeight: 700,
+                            background: '#FDF2F8', color: '#BE185D', border: '1px solid #FBCFE8',
+                          }}
+                        >
+                          ⭐ {periodoActivo.motivo_transicion === 'ascenso' ? 'Ascenso' : 'Continuidad'}
+                        </span>
+                      ) : (
+                        <span
+                          title={`Empleado con ${periodosEmp.length} periodos registrados`}
+                          style={{
+                            fontSize: 10, borderRadius: 4, padding: '1px 6px', fontWeight: 700,
+                            background: '#F3E8FF', color: '#7E22CE', border: '1px solid #E9D5FF',
+                          }}
+                        >
+                          Reintegrado
+                        </span>
+                      )
+                    )}
+                    {vacacionActiva && (
                       <span
-                        title={`Empleado con ${periodosEmp.length} periodos registrados`}
+                        title={vacacionActiva.estaDeVacaciones ? `De vacaciones: ${vacacionActiva.badgeTexto}` : `Vacaciones programadas: ${vacacionActiva.badgeTexto}`}
                         style={{
                           fontSize: 10, borderRadius: 4, padding: '1px 6px', fontWeight: 700,
-                          background: '#F3E8FF', color: '#7E22CE', border: '1px solid #E9D5FF',
+                          background: vacacionActiva.estaDeVacaciones
+                            ? (vacacionActiva.esUltimoDia ? '#FEF3C7' : '#DBEAFE')
+                            : '#EEF2FF',
+                          color: vacacionActiva.estaDeVacaciones
+                            ? (vacacionActiva.esUltimoDia ? '#92400E' : '#1D4ED8')
+                            : '#4338CA',
+                          border: `1px solid ${
+                            vacacionActiva.estaDeVacaciones
+                              ? (vacacionActiva.esUltimoDia ? '#F59E0B' : '#93C5FD')
+                              : '#C7D2FE'
+                          }`,
+                          display: 'inline-flex', alignItems: 'center', gap: 3,
                         }}
                       >
-                        Reintegrado
+                        🌴 {vacacionActiva.estaDeVacaciones ? vacacionActiva.badgeTexto : `Programadas (${vacacionActiva.countdownTexto})`}
                       </span>
                     )}
                   </div>
@@ -83,6 +122,25 @@ export default function EmpleadoCards({
                   <button className="icon-btn icon-btn--danger" title="Eliminar" onClick={() => setDeleteId(emp.id)}><Trash2 size={13} /></button>
                 </div>
               </div>
+              {vacacionActiva && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 8px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  background: vacacionActiva.esUltimoDia ? '#FFFBEB' : '#EFF6FF',
+                  color: vacacionActiva.esUltimoDia ? '#92400E' : '#1D4ED8',
+                  border: `1px solid ${vacacionActiva.esUltimoDia ? '#F59E0B' : '#BFDBFE'}`,
+                }}>
+                  <span>🌴</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {vacacionActiva.textoLargo}
+                  </span>
+                </div>
+              )}
               {(emp.cargo || emp.dependencia) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
                   <Briefcase size={12} style={{ flexShrink: 0 }} />
@@ -117,8 +175,25 @@ export default function EmpleadoCards({
                   <span>Retiro: {emp.fecha_retiro}</span>
                 </div>
               )}
-              {/* Chips de novedades */}
+              {/* Chips de novedades y vacaciones */}
               <div style={{ display: 'flex', gap: 6, marginTop: 2, paddingTop: 8, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                <span
+                  title={`Saldo de vacaciones del periodo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d, Disfrutados: ${saldoVac.diasDisfrutados}d, En dinero: ${saldoVac.diasEnDinero}d)`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    background: saldoVac.saldoPendiente > 0 ? '#ECFDF5' : 'var(--bg)',
+                    color: saldoVac.saldoPendiente > 0 ? '#047857' : 'var(--text-muted)',
+                    border: `0.5px solid ${saldoVac.saldoPendiente > 0 ? '#A7F3D0' : 'var(--border)'}`,
+                  }}
+                >
+                  🌴 Saldo vac.: {saldoVac.saldoPendiente}d
+                </span>
                 {nov && nov.novedades.length > 0 ? (
                   <>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600, background: '#E6F1FB', color: '#0C447C', border: '0.5px solid #B5D4F4' }}>

@@ -13,7 +13,7 @@ import { Plus, X, Download, AlertCircle, Sun } from 'lucide-react'
 import {
   PAGE_SIZE, MESES, ANIOS, EMPTY,
 } from '../utils/vacacionesConstants'
-import { formatFecha, diasAcumuladosAnio, calcularSaldoVacacionesPeriodo } from '../utils/vacacionesHelpers'
+import { formatFecha, diasAcumuladosAnio, calcularSaldoVacacionesPeriodo, calcularAniosCumplidos } from '../utils/vacacionesHelpers'
 import ModalDetalle from '../components/vacaciones/ModalDetalle'
 import ModalForm from '../components/vacaciones/ModalForm'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
@@ -53,7 +53,18 @@ export default function Vacaciones() {
       empleadosApi.listarEmpleadosParaVacaciones(currentCompany),
       empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
     ])
-    setRows(vac || [])
+
+    const hoy = hoyISO()
+    let listaVac = vac || []
+
+    // Transicionar automáticamente solicitudes que ya concluyeron (hoy > fecha_fin) y siguen "En curso"
+    const concluidas = listaVac.filter(v => v.estado === 'En curso' && v.fecha_fin && v.fecha_fin < hoy)
+    if (concluidas.length > 0) {
+      Promise.all(concluidas.map(c => vacacionesApi.actualizarEstadoVacacion(c.id, 'Finalizada').catch(() => {})))
+      listaVac = listaVac.map(v => (v.estado === 'En curso' && v.fecha_fin && v.fecha_fin < hoy) ? { ...v, estado: 'Finalizada' } : v)
+    }
+
+    setRows(listaVac)
     setEmpleados(emp || [])
     setPeriodos(pers || [])
     setLoading(false)
@@ -75,11 +86,15 @@ export default function Vacaciones() {
     )
 
     // Saldo considerando únicamente las otras solicitudes (tope disponible para esta solicitud)
-    const saldoOtras = calcularSaldoVacacionesPeriodo({
-      id: form.periodo_id || periodoActivo?.id,
+    const periodosEmp = (periodos || []).filter(p => emp && p.empleado_id === emp.id)
+    const periodoRef = periodoActivo || {
+      id: form.periodo_id || null,
       fecha_ingreso: fechaIngreso,
       fecha_retiro: periodoActivo?.fecha_retiro || null,
-    }, otrasVacs)
+      continuidad_laboral: periodoActivo?.continuidad_laboral || false,
+    }
+
+    const saldoOtras = calcularSaldoVacacionesPeriodo(periodoRef, otrasVacs, periodosEmp)
 
     // 2. Incluir dinámicamente la solicitud actual si su estado es válido (Aprobada, En curso, Finalizada)
     const ESTADOS_VALIDOS = ['Aprobada', 'En curso', 'Finalizada']
@@ -99,11 +114,7 @@ export default function Vacaciones() {
       })
     }
 
-    const saldoActual = calcularSaldoVacacionesPeriodo({
-      id: form.periodo_id || periodoActivo?.id,
-      fecha_ingreso: fechaIngreso,
-      fecha_retiro: periodoActivo?.fecha_retiro || null,
-    }, vacsParaSaldo)
+    const saldoActual = calcularSaldoVacacionesPeriodo(periodoRef, vacsParaSaldo, periodosEmp)
 
     return {
       ...saldoActual,
@@ -188,18 +199,7 @@ export default function Vacaciones() {
     if (form.fecha_inicio && form.fecha_fin && new Date(form.fecha_fin) < new Date(form.fecha_inicio))
       return flash('error', 'La fecha de fin no puede ser anterior a la fecha de inicio.')
 
-    // Validar duplicados: mismo empleado + mismo período
-    const periodoTrim = (form.periodo_vacaciones || '').trim().toLowerCase()
-    if (periodoTrim) {
-      const duplicado = rows.some(r =>
-        r.id !== form.id &&
-        r.nombre_empleado?.trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase() &&
-        (r.periodo_vacaciones || '').trim().toLowerCase() === periodoTrim
-      )
-      if (duplicado) {
-        return flash('error', `Ya existe un registro de vacaciones para ${form.nombre_empleado.trim()} en el período "${form.periodo_vacaciones.trim()}".`)
-      }
-    }
+
 
     // Validar límite estricto de días disponibles según el saldo del periodo
     if (saldoVacacionesForm != null) {
@@ -256,26 +256,45 @@ export default function Vacaciones() {
       ({ error } = await vacacionesApi.crearVacacion(payload, currentCompany))
       if (!error) logAccion('CREAR', 'vacaciones', null, currentCompany, { empleado: payload.nombre_empleado, tipo: payload.tipo_vacacion })
 
-      // Al crear una vacación nueva, se refleja automáticamente en Novedades:
-      // misma fecha de inicio y fecha fin que la vacación (sin el período,
-      // eso ya no se copia).
-      // Si ya existe una novedad de Vacaciones para ese empleado con esa
-      // misma fecha de inicio, se actualiza en vez de duplicarla.
+      // Al crear o actualizar una vacación, sincronizar hacia Novedades:
+      // Conserva desglose de disfrute físico y compensación en dinero en observación y soporte contable.
+      const diasDinero = payload.dias_en_dinero != null && payload.dias_en_dinero !== '' ? Number(payload.dias_en_dinero) : 0
+      const diasFisicos = payload.fecha_inicio && payload.fecha_fin ? diasHabilesEntre(payload.fecha_inicio, payload.fecha_fin) : (payload.dias_disfrutados != null && payload.dias_disfrutados !== '' ? Number(payload.dias_disfrutados) : null)
+      let totalDiasNovedad = payload.total_dias != null && payload.total_dias !== '' ? Number(payload.total_dias) : null
+      if (payload.tipo_vacacion === 'Vacaciones en dinero') {
+        totalDiasNovedad = diasDinero || totalDiasNovedad
+      } else if (diasDinero > 0 && diasFisicos != null) {
+        totalDiasNovedad = diasFisicos + diasDinero
+      } else if (diasFisicos != null) {
+        totalDiasNovedad = diasFisicos
+      }
+
+      const detalleDinero = diasDinero > 0 ? `Compensación: ${diasDinero} días en dinero` : ''
+      const desgloseDias = diasDinero > 0 && diasFisicos != null ? `${diasFisicos} días disfrute + ${diasDinero} en dinero` : ''
+      const obsPartes = [
+        desgloseDias ? `[${desgloseDias}]` : detalleDinero ? `[${detalleDinero}]` : null,
+        payload.observacion_contable,
+        payload.observacion,
+      ].filter(Boolean)
+      const observacionFinal = obsPartes.join(' • ') || null
+      const obsContabilidadFinal = detalleDinero || payload.observacion_contable || null
+
+      const novedadPayload = {
+        nombre_empleado: payload.nombre_empleado,
+        concepto: 'Vacaciones',
+        dependencia: payload.dependencia,
+        periodo: '',
+        fecha_inicio: payload.fecha_inicio,
+        fecha_fin: payload.fecha_fin,
+        total_dias: totalDiasNovedad,
+        observacion: observacionFinal,
+        observacion_contabilidad: obsContabilidadFinal,
+      }
+
       if (!error && payload.fecha_inicio) {
         const { data: existentes, error: errorCheck } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
           payload.nombre_empleado, 'Vacaciones', payload.fecha_inicio, currentCompany
         )
-
-        const novedadPayload = {
-          nombre_empleado: payload.nombre_empleado,
-          concepto: 'Vacaciones',
-          dependencia: payload.dependencia,
-          periodo: '',
-          fecha_inicio: payload.fecha_inicio,
-          fecha_fin: payload.fecha_fin,
-          total_dias: payload.fecha_fin ? diasHabilesEntre(payload.fecha_inicio, payload.fecha_fin) : null,
-          observacion: payload.observacion_contable || null,
-        }
 
         if (errorCheck) {
           errorNovedad = errorCheck
@@ -290,6 +309,49 @@ export default function Vacaciones() {
     } else {
       ({ error } = await vacacionesApi.actualizarVacacion(form.id, payload))
       if (!error) logAccion('ACTUALIZAR', 'vacaciones', form.id, currentCompany, { empleado: payload.nombre_empleado, tipo: payload.tipo_vacacion })
+
+      // Sincronizar actualización hacia Novedades
+      if (!error && (payload.fecha_inicio || form.fecha_inicio)) {
+        const fInicioBusqueda = form.fecha_inicio || payload.fecha_inicio
+        const diasDinero = payload.dias_en_dinero != null && payload.dias_en_dinero !== '' ? Number(payload.dias_en_dinero) : 0
+        const diasFisicos = payload.fecha_inicio && payload.fecha_fin ? diasHabilesEntre(payload.fecha_inicio, payload.fecha_fin) : (payload.dias_disfrutados != null && payload.dias_disfrutados !== '' ? Number(payload.dias_disfrutados) : null)
+        let totalDiasNovedad = payload.total_dias != null && payload.total_dias !== '' ? Number(payload.total_dias) : null
+        if (payload.tipo_vacacion === 'Vacaciones en dinero') {
+          totalDiasNovedad = diasDinero || totalDiasNovedad
+        } else if (diasDinero > 0 && diasFisicos != null) {
+          totalDiasNovedad = diasFisicos + diasDinero
+        } else if (diasFisicos != null) {
+          totalDiasNovedad = diasFisicos
+        }
+
+        const detalleDinero = diasDinero > 0 ? `Compensación: ${diasDinero} días en dinero` : ''
+        const desgloseDias = diasDinero > 0 && diasFisicos != null ? `${diasFisicos} días disfrute + ${diasDinero} en dinero` : ''
+        const obsPartes = [
+          desgloseDias ? `[${desgloseDias}]` : detalleDinero ? `[${detalleDinero}]` : null,
+          payload.observacion_contable,
+          payload.observacion,
+        ].filter(Boolean)
+        const observacionFinal = obsPartes.join(' • ') || null
+        const obsContabilidadFinal = detalleDinero || payload.observacion_contable || null
+
+        const novedadPayload = {
+          nombre_empleado: payload.nombre_empleado,
+          concepto: 'Vacaciones',
+          dependencia: payload.dependencia,
+          fecha_inicio: payload.fecha_inicio,
+          fecha_fin: payload.fecha_fin,
+          total_dias: totalDiasNovedad,
+          observacion: observacionFinal,
+          observacion_contabilidad: obsContabilidadFinal,
+        }
+
+        const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
+          payload.nombre_empleado, 'Vacaciones', fInicioBusqueda, currentCompany
+        )
+        if (existentes && existentes.length > 0) {
+          await novedadesApi.actualizarNovedad(existentes[0].id, novedadPayload)
+        }
+      }
     }
 
     setSaving(false)
@@ -381,17 +443,15 @@ export default function Vacaciones() {
 
   const enrichedViewRow = useMemo(() => {
     if (!viewRow) return null
-    if (viewRow.fecha_ingreso) return viewRow
     const emp = empleados.find(e => e.nombre_completo?.trim().toLowerCase() === viewRow.nombre_empleado?.trim().toLowerCase())
-    const pActivo = periodos.find(p => emp && p.empleado_id === emp.id && p.es_periodo_actual)
-    if (pActivo?.fecha_ingreso || emp?.fecha_ingreso) {
-      return {
-        ...viewRow,
-        fecha_ingreso: pActivo?.fecha_ingreso || emp?.fecha_ingreso,
-        periodo_id: viewRow.periodo_id || pActivo?.id || null,
-      }
+    const periodosEmp = (periodos || []).filter(p => emp && p.empleado_id === emp.id)
+    const pActivo = periodosEmp.find(p => p.es_periodo_actual)
+    return {
+      ...viewRow,
+      fecha_ingreso: viewRow.fecha_ingreso || pActivo?.fecha_ingreso || emp?.fecha_ingreso || null,
+      periodo_id: viewRow.periodo_id || pActivo?.id || null,
+      periodos: periodosEmp,
     }
-    return viewRow
   }, [viewRow, empleados, periodos])
 
   return (
@@ -477,6 +537,7 @@ export default function Vacaciones() {
           diasAcumuladosForm={diasAcumuladosForm} anioActual={anioActual}
           saldoVacacionesForm={saldoVacacionesForm}
           periodos={periodos}
+          rows={rows}
           onClose={() => setModal(null)}
         />
       )}

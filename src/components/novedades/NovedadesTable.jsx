@@ -1,6 +1,7 @@
 import { Eye, Edit2, Trash2 } from 'lucide-react'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { hoyISO } from '../../utils/fecha'
+import { diasHabilesEntre } from '../../utils/diasHabiles'
 import { PAGE_SIZE } from '../../utils/novedadesConstants'
 import { EditablePill, SortIcon, IncompleteIndicator } from './Pills'
 import Paginacion from '../ui/Paginacion'
@@ -79,6 +80,27 @@ export default function NovedadesTable({
                     {row.jornada === 'Medio día' && (
                       <span title="Medio día" style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color: 'var(--warning-text)', background: 'var(--warning-bg)', border: '1px solid color-mix(in srgb, var(--warning) 40%, transparent)', borderRadius: 999, padding: '1px 6px', whiteSpace: 'nowrap' }}>🕐 ½ día</span>
                     )}
+                    {row.dias_en_dinero != null && Number(row.dias_en_dinero) > 0 && (
+                      <span
+                        title={`${row.dias_en_dinero} días solicitados en dinero (compensación económica)`}
+                        style={{
+                          marginLeft: 5,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: '#0369a1',
+                          background: '#e0f2fe',
+                          border: '1px solid #bae6fd',
+                          borderRadius: 999,
+                          padding: '1px 7px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        💰 {row.dias_en_dinero}d dinero
+                      </span>
+                    )}
                     {soloActivas && row.fecha_inicio && row.fecha_fin && (
                       row.fecha_inicio <= hoyISO()
                         ? <span style={{ marginLeft: 5, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--success-text)', background: 'var(--success-bg)', border: '1px solid color-mix(in srgb, var(--success) 35%, transparent)', borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22C55E' }} />En curso</span>
@@ -87,7 +109,35 @@ export default function NovedadesTable({
                   </td>
                   <td style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.fecha_inicio || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.fecha_fin || '—'}</td>
-                  <td style={{ textAlign: 'center', fontWeight: 600 }}>{row.total_dias ?? '—'}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{row.total_dias ?? '—'}</div>
+                    {row.dias_en_dinero != null && Number(row.dias_en_dinero) > 0 && (() => {
+                      const dDisfrute = row.dias_disfrutados != null && row.dias_disfrutados !== ''
+                        ? Number(row.dias_disfrutados)
+                        : (row.fecha_inicio && row.fecha_fin
+                            ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin)
+                            : Math.max(0, Number(row.total_dias || 0) - Number(row.dias_en_dinero)))
+                      return (
+                        <div
+                          title={`Desglose: ${dDisfrute} días disfrute físico + ${row.dias_en_dinero} días en dinero`}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: '#0369a1',
+                            background: '#f0f9ff',
+                            border: '1px solid #e0f2fe',
+                            borderRadius: 4,
+                            padding: '1px 5px',
+                            marginTop: 2,
+                            whiteSpace: 'nowrap',
+                            display: 'inline-block'
+                          }}
+                        >
+                          {dDisfrute > 0 ? `${dDisfrute}d disfrute + ${row.dias_en_dinero}d dinero` : `${row.dias_en_dinero}d dinero`}
+                        </div>
+                      )
+                    })()}
+                  </td>
                   <td style={{ color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.dependencia || '—'}</td>
                   <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.periodo || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>

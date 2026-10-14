@@ -27,17 +27,25 @@ export async function crearNovedad(payload, empresa = 'ameriglobal') {
   const empresaFinal = payload.empresa || empresa
   // Igual que antes se guarda nombre_empleado/dependencia/empresa en texto;
   // además buscamos sus ids relacionales para dejar la novedad conectada.
-  const { empleado_id, departamento_id, empresa_id } = await resolverIdsRelacionales({
+  const rel = await resolverIdsRelacionales({
     nombre_empleado: payload.nombre_empleado,
     empresa: empresaFinal,
     dependencia: payload.dependencia,
   })
+
+  // 'periodo' es NOT NULL en public.novedades. Si no viene especificado, se calcula a partir de fecha_inicio o mes actual.
+  const fInicio = payload.fecha_inicio || payload.fecha_fin || new Date().toISOString().split('T')[0]
+  const periodoCalculado = (payload.periodo != null && String(payload.periodo).trim() !== '')
+    ? String(payload.periodo).trim()
+    : String(fInicio).slice(0, 7)
+
   return supabase.from(TABLA).insert([{
     ...payload,
+    periodo: periodoCalculado,
     empresa: empresaFinal,
-    empleado_id,
-    departamento_id,
-    empresa_id,
+    empleado_id: payload.empleado_id || rel.empleado_id,
+    departamento_id: payload.departamento_id || rel.departamento_id,
+    empresa_id: payload.empresa_id || rel.empresa_id,
   }]).select()
 }
 
@@ -48,7 +56,7 @@ export function buscarNovedadPorEmpleadoConceptoYFecha(nombreEmpleado, concepto,
     .select('id')
     .eq('nombre_empleado', nombreEmpleado)
     .eq('concepto', concepto)
-    .eq('fecha_inicio', fechaInicio)
+  if (fechaInicio) query = query.eq('fecha_inicio', fechaInicio)
   if (empresa) query = query.eq('empresa', empresa)
   return query
 }

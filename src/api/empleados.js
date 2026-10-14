@@ -21,7 +21,7 @@ export function listarEmpleados(empresa) {
 export function listarEmpleadosParaNovedades(empresa) {
   let query = supabase
     .from(TABLA)
-    .select('nombre_completo, activo, fecha_ingreso, fecha_retiro, dependencia, empresa')
+    .select('id, nombre_completo, activo, fecha_ingreso, fecha_retiro, dependencia, empresa, created_at')
     .order('nombre_completo')
   if (empresa) query = query.eq('empresa', empresa)
   return query
@@ -77,15 +77,17 @@ export async function crearEmpleado(payload, empresa = 'ameriglobal') {
   }]).select()
 
   // Si se crea el empleado con éxito, se crea automáticamente su Periodo 1 en empleado_periodos
+  // y su novedad contractual de Ingreso
   if (!res.error && res.data?.[0]?.id) {
     const nuevoEmp = res.data[0]
+    const fechaIngresoFinal = nuevoEmp.fecha_ingreso || new Date().toISOString().split('T')[0]
     await crearPeriodo({
       empleado_id: nuevoEmp.id,
       empresa: empresaFinal,
       empresa_id,
       departamento_id,
       numero_periodo: 1,
-      fecha_ingreso: nuevoEmp.fecha_ingreso || new Date().toISOString().split('T')[0],
+      fecha_ingreso: fechaIngresoFinal,
       fecha_retiro: nuevoEmp.fecha_retiro || null,
       cargo: nuevoEmp.cargo || null,
       dependencia: nuevoEmp.dependencia || null,
@@ -94,6 +96,37 @@ export async function crearEmpleado(payload, empresa = 'ameriglobal') {
     }).catch(err => {
       console.warn('Nota: no se pudo crear periodo inicial (puede requerir migración SQL):', err)
     })
+
+    // Sincronización automática de evento contractual: Ingreso
+    try {
+      const periodoMes = fechaIngresoFinal.slice(0, 7)
+      const { data: novExistente } = await supabase
+        .from('novedades')
+        .select('id')
+        .eq('concepto', 'Ingreso')
+        .eq('empresa', empresaFinal)
+        .or(`empleado_id.eq.${nuevoEmp.id},nombre_empleado.eq.${nuevoEmp.nombre_completo}`)
+        .limit(1)
+
+      if (!novExistente || novExistente.length === 0) {
+        await supabase.from('novedades').insert([{
+          concepto: 'Ingreso',
+          fecha_inicio: fechaIngresoFinal,
+          fecha_fin: fechaIngresoFinal,
+          total_dias: 0,
+          periodo: periodoMes,
+          observacion: 'Registro inicial de ingreso del colaborador',
+          empleado_id: nuevoEmp.id,
+          nombre_empleado: nuevoEmp.nombre_completo,
+          dependencia: nuevoEmp.dependencia || null,
+          empresa: empresaFinal,
+          empresa_id,
+          departamento_id,
+        }])
+      }
+    } catch (novErr) {
+      console.warn('Nota: no se pudo registrar novedad de ingreso inicial:', novErr)
+    }
   }
 
   return res

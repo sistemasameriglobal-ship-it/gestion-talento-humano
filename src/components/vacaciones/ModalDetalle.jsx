@@ -27,7 +27,7 @@ export default function ModalDetalle({ row, onClose, onEdit, allRows = [] }) {
   const saldoResumen = calcularSaldoVacacionesPeriodo({
     fecha_ingreso: row.fecha_ingreso,
     periodo_id: row.periodo_id,
-  }, vacsEmpleado)
+  }, vacsEmpleado, row.periodos || [])
 
   // Comparación: días en dinero calculados (15 - días hábiles) vs guardados
   const habiles = row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin) : null

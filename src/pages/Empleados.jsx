@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as empleadosApi from '../api/empleados'
 import * as novedadesApi from '../api/novedades'
+import * as vacacionesApi from '../api/vacaciones'
 import { hoyISO } from '../utils/fecha'
 import { normalizarConcepto } from '../utils/parseExcel'
 import { exportarExcel } from '../utils/exportarExcel'
@@ -50,6 +51,7 @@ export default function Empleados() {
   const [rows, setRows] = useState([])
   const [novedades, setNovedades] = useState([])
   const [periodos, setPeriodos] = useState([])
+  const [vacaciones, setVacaciones] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -76,14 +78,58 @@ export default function Empleados() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data }, { data: novData }, { data: periodosData }] = await Promise.all([
+    let [{ data }, { data: novData }, { data: periodosData }, { data: vacData }] = await Promise.all([
       empleadosApi.listarEmpleados(currentCompany),
       novedadesApi.listarNovedadesCompleto(currentCompany),
       empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
+      Promise.resolve(vacacionesApi.listarVacaciones(currentCompany)).catch(() => ({ data: [] })),
     ])
+
+    // Detectar y auto-sincronizar colaboradores recientes que no tengan su novedad de Ingreso registrada
+    if (data && data.length > 0) {
+      const ahora = Date.now()
+      const sieteDiasMs = 7 * 24 * 60 * 60 * 1000
+      let huboSincronizacion = false
+
+      for (const emp of data) {
+        const esReciente = emp.created_at && (ahora - new Date(emp.created_at).getTime() < sieteDiasMs)
+        if (esReciente) {
+          const tieneIngreso = (novData || []).some(n =>
+            n.concepto === 'Ingreso' &&
+            ((n.empleado_id && n.empleado_id === emp.id) ||
+             (n.nombre_empleado && n.nombre_empleado.trim().toLowerCase() === emp.nombre_completo?.trim().toLowerCase()))
+          )
+          if (!tieneIngreso) {
+            const fIngreso = emp.fecha_ingreso || (emp.created_at ? emp.created_at.slice(0, 10) : new Date().toISOString().split('T')[0])
+            const { error: errIns } = await novedadesApi.crearNovedad({
+              concepto: 'Ingreso',
+              fecha_inicio: fIngreso,
+              fecha_fin: fIngreso,
+              total_dias: 0,
+              periodo: fIngreso.slice(0, 7),
+              observacion: 'Registro inicial de ingreso del colaborador',
+              empleado_id: emp.id,
+              nombre_empleado: emp.nombre_completo,
+              dependencia: emp.dependencia || null,
+              empresa: currentCompany,
+              empresa_id: emp.empresa_id || null,
+              departamento_id: emp.departamento_id || null,
+            }, currentCompany)
+            if (!errIns) huboSincronizacion = true
+          }
+        }
+      }
+
+      if (huboSincronizacion) {
+        const { data: freshNov } = await novedadesApi.listarNovedadesCompleto(currentCompany)
+        if (freshNov) novData = freshNov
+      }
+    }
+
     setRows(data || [])
     setNovedades(novData || [])
     setPeriodos(periodosData || [])
+    setVacaciones(vacData || [])
     setLoading(false)
   }, [currentCompany])
 
@@ -98,6 +144,22 @@ export default function Empleados() {
     Object.values(acc).forEach(list => list.sort((a, b) => (a.numero_periodo || 0) - (b.numero_periodo || 0)))
     return acc
   }, [periodos])
+
+  const vacacionesPorEmpleado = useMemo(() => {
+    const acc = {}
+    ;(vacaciones || []).forEach(v => {
+      if (v.empleado_id) {
+        if (!acc[v.empleado_id]) acc[v.empleado_id] = []
+        acc[v.empleado_id].push(v)
+      }
+      if (v.nombre_empleado) {
+        const norm = normalizarNombre(v.nombre_empleado)
+        if (!acc[norm]) acc[norm] = []
+        acc[norm].push(v)
+      }
+    })
+    return acc
+  }, [vacaciones])
 
   const novedadesPorEmpleado = useMemo(() => {
     const acc = {}
@@ -206,8 +268,35 @@ export default function Empleados() {
       fecha_retiro: form.activo ? null : (form.fecha_retiro || null),
     }
     if (modal === 'add') {
-      const { error } = await empleadosApi.crearEmpleado(payload, currentCompany)
+      const { data: createdData, error } = await empleadosApi.crearEmpleado(payload, currentCompany)
       err = error
+      // a) Sincronización automática de evento contractual: Nuevo Ingreso
+      if (!error) {
+        const nuevoEmp = createdData?.[0]
+        const fechaIngresoFinal = payload.fecha_ingreso || nuevoEmp?.fecha_ingreso || new Date().toISOString().split('T')[0]
+        const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
+          payload.nombre_completo, 'Ingreso', fechaIngresoFinal, currentCompany
+        )
+        if (!existentes || existentes.length === 0) {
+          const { error: errNov } = await novedadesApi.crearNovedad({
+            concepto: 'Ingreso',
+            fecha_inicio: fechaIngresoFinal,
+            fecha_fin: fechaIngresoFinal,
+            total_dias: 0,
+            periodo: fechaIngresoFinal.slice(0, 7),
+            observacion: 'Registro inicial de ingreso del colaborador',
+            empleado_id: nuevoEmp?.id || null,
+            nombre_empleado: payload.nombre_completo,
+            dependencia: payload.dependencia || null,
+            empresa: currentCompany,
+            empresa_id: nuevoEmp?.empresa_id || null,
+            departamento_id: nuevoEmp?.departamento_id || null,
+          }, currentCompany)
+          if (errNov) {
+            console.warn('Error al sincronizar novedad de ingreso:', errNov)
+          }
+        }
+      }
     } else {
       const { error } = await empleadosApi.actualizarEmpleado(form.id, payload)
       err = error
@@ -244,6 +333,31 @@ export default function Empleados() {
       })
       if (error) throw error
 
+      // b) Sincronización automática de evento contractual: Retiro / Terminación de Contrato
+      const fRetiroFinal = fecha_retiro || new Date().toISOString().split('T')[0]
+      const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
+        retiroEmp.nombre_completo, 'Terminación de Contrato', fRetiroFinal, currentCompany
+      )
+      if (!existentes || existentes.length === 0) {
+        const { error: errNov } = await novedadesApi.crearNovedad({
+          concepto: 'Terminación de Contrato',
+          fecha_inicio: fRetiroFinal,
+          fecha_fin: fRetiroFinal,
+          total_dias: 0,
+          periodo: fRetiroFinal.slice(0, 7),
+          observacion: observaciones || 'Terminación de contrato laboral',
+          empleado_id: retiroEmp.id,
+          nombre_empleado: retiroEmp.nombre_completo,
+          dependencia: retiroEmp.dependencia || null,
+          empresa: currentCompany,
+          empresa_id: retiroEmp.empresa_id || null,
+          departamento_id: retiroEmp.departamento_id || null,
+        }, currentCompany)
+        if (errNov) {
+          console.warn('Error al sincronizar novedad de retiro:', errNov)
+        }
+      }
+
       logAccion('RETIRAR', 'empleados', retiroEmp.id, currentCompany, { fecha_retiro, observaciones })
       setMsg({ type: 'success', text: `Colaborador ${retiroEmp.nombre_completo} retirado exitosamente.` })
       setRetiroEmp(null)
@@ -256,7 +370,14 @@ export default function Empleados() {
     }
   }
 
-  const handleConfirmReintegro = async ({ nueva_fecha_ingreso, cargo, dependencia, observaciones }) => {
+  const handleConfirmReintegro = async ({
+    nueva_fecha_ingreso,
+    cargo,
+    dependencia,
+    observaciones,
+    continuidad_laboral = false,
+    motivo_transicion = 'reintegro',
+  }) => {
     if (!reintegroEmp) return
     setActionSaving(true)
     try {
@@ -265,7 +386,17 @@ export default function Empleados() {
         ? Math.max(...periodosEmp.map(p => p.numero_periodo || 1)) + 1
         : 2
 
-      // 1. Crear nuevo periodo laboral en empleado_periodos
+      // 1. Si el colaborador tenía un periodo activo previo (caso de ascenso mientras sigue activo),
+      // cerramos formalmente ese periodo en la fecha de efectividad del nuevo cargo.
+      const periodoActivoPrevio = periodosEmp.find(p => p.es_periodo_actual)
+      if (periodoActivoPrevio) {
+        await empleadosApi.cerrarPeriodo(periodoActivoPrevio.id, {
+          fecha_retiro: nueva_fecha_ingreso,
+          observaciones: observaciones || `Cierre por ${continuidad_laboral ? (motivo_transicion === 'ascenso' ? 'Ascenso de cargo' : 'Cambio de cargo') : 'Finalización de contrato anterior'}`,
+        })
+      }
+
+      // 2. Crear nuevo periodo laboral en empleado_periodos
       const { error: errorPeriodo } = await empleadosApi.crearPeriodo({
         empleado_id: reintegroEmp.id,
         empresa: currentCompany,
@@ -275,30 +406,81 @@ export default function Empleados() {
         cargo: cargo || reintegroEmp.cargo || null,
         dependencia: dependencia || reintegroEmp.dependencia || null,
         es_periodo_actual: true,
-        observaciones: observaciones || 'Reintegro bajo nuevo contrato laboral',
+        continuidad_laboral: Boolean(continuidad_laboral),
+        motivo_transicion: motivo_transicion || (continuidad_laboral ? 'ascenso' : 'reintegro'),
+        observaciones: observaciones || (continuidad_laboral ? 'Ascenso con continuidad laboral' : 'Reintegro bajo nuevo contrato laboral'),
       })
       if (errorPeriodo) throw errorPeriodo
 
-      // 2. Actualizar tabla empleados con los datos del nuevo contrato
+      // 3. Actualizar tabla empleados:
+      // Si hay continuidad laboral, se conserva la fecha de ingreso histórica de la empresa.
+      // Si es un reintegro tras retiro externo sin continuidad, inicia nuevo ciclo con la nueva fecha de ingreso.
+      const fechaIngresoEmpFinal = continuidad_laboral
+        ? (reintegroEmp.fecha_ingreso || nueva_fecha_ingreso)
+        : nueva_fecha_ingreso
+
       const { error } = await empleadosApi.actualizarEmpleado(reintegroEmp.id, {
         activo: true,
-        fecha_ingreso: nueva_fecha_ingreso,
+        fecha_ingreso: fechaIngresoEmpFinal,
         fecha_retiro: null,
         cargo: cargo || reintegroEmp.cargo || null,
         dependencia: dependencia || reintegroEmp.dependencia || null,
       })
       if (error) throw error
 
-      logAccion('REINTEGRAR', 'empleados', reintegroEmp.id, currentCompany, {
+      // 4. Sincronización automática de evento contractual en public.novedades
+      const fEfectivaFinal = nueva_fecha_ingreso || new Date().toISOString().split('T')[0]
+      const conceptoNovedad = continuidad_laboral
+        ? (motivo_transicion === 'ascenso' ? 'Ascenso' : 'Cambio de Cargo')
+        : 'Ingreso'
+
+      const obsNovedad = observaciones || (
+        continuidad_laboral
+          ? (motivo_transicion === 'ascenso' ? `Ascenso a cargo "${cargo || 'Nuevo Rol'}" con continuidad laboral` : `Cambio de cargo a "${cargo || 'Nuevo Rol'}" con continuidad laboral`)
+          : 'Reintegro bajo nuevo contrato laboral tras retiro externo'
+      )
+
+      const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
+        reintegroEmp.nombre_completo, conceptoNovedad, fEfectivaFinal, currentCompany
+      )
+
+      if (!existentes || existentes.length === 0) {
+        const { error: errNov } = await novedadesApi.crearNovedad({
+          concepto: conceptoNovedad,
+          fecha_inicio: fEfectivaFinal,
+          fecha_fin: fEfectivaFinal,
+          total_dias: 0,
+          periodo: fEfectivaFinal.slice(0, 7),
+          observacion: obsNovedad,
+          empleado_id: reintegroEmp.id,
+          nombre_empleado: reintegroEmp.nombre_completo,
+          dependencia: dependencia || reintegroEmp.dependencia || null,
+          empresa: currentCompany,
+          empresa_id: reintegroEmp.empresa_id || null,
+          departamento_id: reintegroEmp.departamento_id || null,
+        }, currentCompany)
+        if (errNov) {
+          console.warn('Error al sincronizar novedad de movimiento:', errNov)
+        }
+      }
+
+      logAccion(continuidad_laboral ? 'ASCENSO' : 'REINTEGRAR', 'empleados', reintegroEmp.id, currentCompany, {
         nueva_fecha_ingreso,
         numero_periodo: siguienteNumero,
+        continuidad_laboral,
+        motivo_transicion,
       })
-      setMsg({ type: 'success', text: `Colaborador ${reintegroEmp.nombre_completo} reintegrado exitosamente en nuevo ciclo.` })
+
+      const msgExito = continuidad_laboral
+        ? `Colaborador ${reintegroEmp.nombre_completo} actualizado con continuidad laboral (${motivo_transicion === 'ascenso' ? 'Ascenso' : 'Cambio de cargo'}). Antigüedad y vacaciones acumuladas conservadas.`
+        : `Colaborador ${reintegroEmp.nombre_completo} reintegrado exitosamente en nuevo ciclo contractual.`
+
+      setMsg({ type: 'success', text: msgExito })
       setReintegroEmp(null)
       await load()
-      setTimeout(() => setMsg(null), 3500)
+      setTimeout(() => setMsg(null), 4000)
     } catch (e) {
-      setMsg({ type: 'error', text: 'Error al reintegrar colaborador: ' + e.message })
+      setMsg({ type: 'error', text: 'Error al registrar movimiento del colaborador: ' + e.message })
     } finally {
       setActionSaving(false)
     }
@@ -509,6 +691,7 @@ export default function Empleados() {
               paged={paged}
               novedadesPorEmpleado={novedadesPorEmpleado}
               periodosPorEmpleado={periodosPorEmpleado}
+              vacacionesPorEmpleado={vacacionesPorEmpleado}
               onSelect={setSelectedEmp}
               openEdit={openEdit}
               onRetirar={setRetiroEmp}
@@ -523,6 +706,7 @@ export default function Empleados() {
               paged={paged}
               novedadesPorEmpleado={novedadesPorEmpleado}
               periodosPorEmpleado={periodosPorEmpleado}
+              vacacionesPorEmpleado={vacacionesPorEmpleado}
               onSelect={setSelectedEmp}
               openEdit={openEdit}
               onRetirar={setRetiroEmp}
@@ -581,8 +765,10 @@ export default function Empleados() {
           selectedEmp={selectedEmp}
           novedadesPorEmpleado={novedadesPorEmpleado}
           periodos={selectedEmp ? periodosPorEmpleado[selectedEmp.id] || [] : []}
+          vacaciones={selectedEmp ? (vacacionesPorEmpleado[selectedEmp.id] || vacacionesPorEmpleado[normalizarNombre(selectedEmp.nombre_completo)] || []) : []}
           onClose={() => setSelectedEmp(null)}
           onEdit={() => { setSelectedEmp(null); openEdit(selectedEmp) }}
+          onReintegrar={setReintegroEmp}
         />
       )}
     </div>
