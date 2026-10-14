@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import { X, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
-import { calcAntiguedad, calcDias, calcularAniosCumplidos, obtenerFechaIngresoContinua } from '../../utils/vacacionesHelpers'
+import { calcAntiguedad, calcDias, calcularAniosCumplidos, obtenerFechaIngresoContinua, aFechaInputDate } from '../../utils/vacacionesHelpers'
 import { ESTADOS, ESTADO_STYLES, DEPENDENCIAS } from '../../utils/vacacionesConstants'
 import SearchableSelect from '../ui/SearchableSelect'
 
@@ -19,6 +19,7 @@ const TIPO_BGS = { 'Vacaciones': 'var(--success-bg)', 'Vacaciones en dinero': 'v
 
 export default function ModalForm({
   modal, form, setForm, f, save, saving,
+  empleados = [],
   empActivos, empInactivos, diasAcumuladosForm, anioActual,
   saldoVacacionesForm = null,
   periodos = [],
@@ -59,24 +60,75 @@ export default function ModalForm({
   const sinSaldo = topeDisponible <= 0
   const saldoRestante = Math.max(0, topeDisponible - diasSolicitados)
 
-  const onEmpleadoChange = (val) => {
-    const todos = [...(empActivos || []), ...(empInactivos || [])]
-    const emp = todos.find(e => e.nombre_completo?.trim().toLowerCase() === val?.trim().toLowerCase())
-    const periodosEmp = periodos?.filter(p => emp && p.empleado_id === emp.id) || []
+  // Resolver colaborador y sus datos contractuales (antigüedad, periodo vigente, fecha continua)
+  const resolverColaborador = (val) => {
+    if (!val) return null
+    const nom = String(val).trim().toLowerCase()
+    const todos = (empleados && empleados.length > 0)
+      ? empleados
+      : [...(empActivos || []), ...(empInactivos || [])]
+    const emp = todos.find(e =>
+      (typeof e === 'object' ? e.nombre_completo : e)?.trim().toLowerCase() === nom
+    )
+    if (!emp) return null
+
+    const empObj = typeof emp === 'object' ? emp : null
+    const empId = empObj?.id || null
+    const periodosEmp = periodos?.filter(p => empId && p.empleado_id === empId) || []
     const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || null
-    const fIngreso = pActivo
+    const fIngRaw = pActivo
       ? (obtenerFechaIngresoContinua(pActivo, periodosEmp) || pActivo.fecha_ingreso)
-      : (emp?.fecha_ingreso || null)
+      : (empObj?.fecha_ingreso || null)
+    const fIngreso = fIngRaw ? aFechaInputDate(fIngRaw) : ''
+
+    return {
+      emp: empObj,
+      pActivo,
+      fIngreso,
+      cargo: empObj?.cargo || pActivo?.cargo || '',
+      dependencia: empObj?.dependencia || pActivo?.dependencia || '',
+      periodoId: pActivo?.id || null,
+    }
+  }
+
+  // Auto-completar datos si el modal abre con nombre_empleado pero sin fecha_ingreso
+  useEffect(() => {
+    if (!form.nombre_empleado?.trim()) return
+    if (form.fecha_ingreso && form.cargo && form.dependencia) return
+
+    const res = resolverColaborador(form.nombre_empleado)
+    if (!res) return
+
+    setForm(p => {
+      const nextFecha = p.fecha_ingreso || res.fIngreso || ''
+      const nextCargo = p.cargo || res.cargo || ''
+      const nextDep   = p.dependencia || res.dependencia || ''
+      const nextPid   = p.periodo_id || res.periodoId || null
+      if (p.fecha_ingreso === nextFecha && p.cargo === nextCargo && p.dependencia === nextDep && p.periodo_id === nextPid) {
+        return p
+      }
+      return {
+        ...p,
+        cargo: nextCargo,
+        dependencia: nextDep,
+        fecha_ingreso: nextFecha,
+        periodo_id: nextPid,
+      }
+    })
+  }, [form.nombre_empleado, form.fecha_ingreso, form.cargo, form.dependencia, empleados, periodos, setForm])
+
+  const onEmpleadoChange = (val) => {
+    const res = resolverColaborador(val)
 
     let periodoSugerido = ''
-    if (fIngreso && modal === 'add') {
+    if (res?.fIngreso && modal === 'add') {
       const nom = (val || '').trim().toLowerCase()
       const prevVacs = (rows || []).filter(r =>
         (r.nombre_empleado || '').trim().toLowerCase() === nom &&
         ['Pendiente', 'Aprobada', 'En curso', 'Finalizada'].includes(r.estado || 'Pendiente')
       )
       const cicloNum = prevVacs.length + 1
-      const hireYear = new Date(fIngreso + 'T00:00:00').getFullYear()
+      const hireYear = new Date(res.fIngreso + 'T00:00:00').getFullYear()
       if (!isNaN(hireYear)) {
         const y1 = hireYear + (cicloNum - 1)
         const y2 = y1 + 1
@@ -87,10 +139,10 @@ export default function ModalForm({
     setForm(p => ({
       ...p,
       nombre_empleado: val,
-      cargo: emp?.cargo || pActivo?.cargo || p.cargo || '',
-      dependencia: emp?.dependencia || pActivo?.dependencia || p.dependencia || '',
-      fecha_ingreso: fIngreso || emp?.fecha_ingreso || p.fecha_ingreso || '',
-      periodo_id: pActivo?.id || p.periodo_id || null,
+      cargo: res?.cargo || p.cargo || '',
+      dependencia: res?.dependencia || p.dependencia || '',
+      fecha_ingreso: res?.fIngreso || p.fecha_ingreso || '',
+      periodo_id: res?.periodoId || p.periodo_id || null,
       periodo_vacaciones: p.periodo_vacaciones || periodoSugerido || p.periodo_vacaciones,
     }))
   }
@@ -474,15 +526,20 @@ export default function ModalForm({
                 <input
                   className="form-control"
                   type="date"
-                  value={form.fecha_ingreso || ''}
+                  value={aFechaInputDate(form.fecha_ingreso)}
                   readOnly
                   disabled
-                  style={{ background: 'var(--bg, #f3f4f6)', cursor: 'not-allowed', color: 'var(--text)' }}
+                  style={{ background: 'var(--bg, #f3f4f6)', cursor: 'not-allowed', color: 'var(--text)', opacity: 0.9 }}
                   title="Fecha de ingreso contractual vigente del colaborador (bloqueada)"
                 />
                 {form.fecha_ingreso && calcAntiguedad(form.fecha_ingreso) && (
                   <div style={{ fontSize: 10, color: '#7C3AED', marginTop: 4, fontWeight: 600 }}>
                     ⏱ {calcAntiguedad(form.fecha_ingreso)?.texto}
+                  </div>
+                )}
+                {!form.fecha_ingreso && form.nombre_empleado && (
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Sin fecha de ingreso registrada en el perfil
                   </div>
                 )}
               </div>

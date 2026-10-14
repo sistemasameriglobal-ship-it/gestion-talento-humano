@@ -1,6 +1,24 @@
 import { diasHabilesEntre } from './diasHabiles'
 import { hoyISO } from './fecha'
 
+export function aFechaInputDate(val) {
+  if (!val) return ''
+  if (typeof val === 'number') {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000))
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  }
+  const str = String(val).trim()
+  const m = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
+  if (m) {
+    const [, d, mo, y] = m
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  if (str.length >= 10 && str.charAt(4) === '-' && str.charAt(7) === '-') {
+    return str.slice(0, 10)
+  }
+  return str.slice(0, 10)
+}
+
 export function calcDias(inicio, fin) {
   if (!inicio || !fin) return ''
   const d1 = new Date(inicio), d2 = new Date(fin)
