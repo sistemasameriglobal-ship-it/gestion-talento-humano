@@ -1,56 +1,99 @@
 import { exportarExcel } from './exportarExcel'
 import { hoyISO } from './fecha'
 
-// Anchos de las columnas del formato de importación (13 columnas).
-export const ANCHOS_IMPORT_COLS = [26, 22, 13, 13, 10, 16, 11, 11, 14, 26, 18, 16, 15]
+export const COLUMNAS_NOVEDADES_REPORTE = [
+  'Colaborador',
+  'Concepto',
+  'Jornada',
+  'Fecha Inicio',
+  'Fecha Fin',
+  'Total Días',
+  'Días en Tiempo',
+  'Días en Dinero',
+  'Periodo',
+  'Dependencia/Área',
+  'Observación',
+  'Observación Contabilidad',
+  'Validación Incapacidad',
+  'Nómina Electrónica',
+  'Seguridad Social',
+  'Empresa',
+]
 
-// yyyy-mm-dd → dd/mm/yyyy (mismo formato que usa la plantilla de importación)
-function aFechaDDMMYYYY(iso) {
-  if (!iso) return ''
-  const m = iso.toString().match(/^(\d{4})-(\d{2})-(\d{2})/)
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
-}
+export const COLUMNAS_NOVEDADES_IMPORTACION = [
+  'Nombre',
+  'Concepto',
+  'Fecha inicio',
+  'Fecha fin',
+  'Total días',
+  'Días en dinero',
+  'Validación incapacidad',
+  'Dependencia',
+  'Observación',
+  'Observación contabilidad',
+  'Nómina electrónica',
+  'Seguridad social',
+]
 
-// Mapeo a las 13 columnas del formato de importación (compartido entre
-// el export filtrado y el export "para importar" con todo).
+// Mapeo al formato de importación estándar (para editar en bloque y volver a subir)
 export function filaAFormatoImportacion(r) {
   return {
-    'Nombre': r.nombre_empleado,
-    // Si es medio día, se antepone "1/2" para que el importador lo
-    // reconozca de nuevo al mismo concepto base (igual que en el archivo
-    // de origen).
-    'Concepto': r.jornada === 'Medio día' ? `1/2 ${r.concepto}` : r.concepto,
-    'Fecha inicio': aFechaDDMMYYYY(r.fecha_inicio),
-    'Fecha fin': aFechaDDMMYYYY(r.fecha_fin),
-    'Total días': r.total_dias,
+    'Nombre': r.nombre_empleado || '',
+    'Concepto': r.jornada === 'Medio día' ? `1/2 ${r.concepto}` : (r.concepto || ''),
+    'Fecha inicio': r.fecha_inicio ? String(r.fecha_inicio).slice(0, 10) : '',
+    'Fecha fin': r.fecha_fin ? String(r.fecha_fin).slice(0, 10) : '',
+    'Total días': r.total_dias ?? '',
+    'Días en dinero': r.dias_en_dinero ?? '',
     'Validación incapacidad': r.validacion_incapacidad || '',
-    '(sin usar)': '',
-    '(sin usar) ': '',
-    'Dependencia': r.dependencia,
-    'Observación': r.observacion,
+    'Dependencia': r.dependencia || '',
+    'Observación': r.observacion || '',
     'Observación contabilidad': r.observacion_contabilidad || '',
     'Nómina electrónica': r.nomina_electronica || '',
     'Seguridad social': r.seguridad_social || '',
   }
 }
 
-// Exporta un conjunto de novedades en el formato de importación.
-export function exportarNovedadesExcel(filas, label) {
-  exportarExcel(filas.map(filaAFormatoImportacion), {
+// Exporta un conjunto de novedades con diseño profesional y columnas completas
+export function exportarNovedadesExcel(filas, label = '', empresa = 'AmeriGlobal') {
+  const dataToExport = filas || []
+  const filasMapeadas = dataToExport.map(r => {
+    return {
+      'Colaborador': r.nombre_empleado || '—',
+      'Concepto': r.concepto || '—',
+      'Jornada': r.jornada || 'Día completo',
+      'Fecha Inicio': r.fecha_inicio ? String(r.fecha_inicio).slice(0, 10) : '—',
+      'Fecha Fin': r.fecha_fin ? String(r.fecha_fin).slice(0, 10) : '—',
+      'Total Días': r.total_dias != null ? Number(r.total_dias) : '—',
+      'Días en Tiempo': r.dias_disfrutados != null && r.dias_disfrutados !== '' ? Number(r.dias_disfrutados) : '—',
+      'Días en Dinero': r.dias_en_dinero != null && r.dias_en_dinero !== '' ? Number(r.dias_en_dinero) : '—',
+      'Periodo': r.periodo || '—',
+      'Dependencia/Área': r.dependencia || '—',
+      'Observación': r.observacion || '—',
+      'Observación Contabilidad': r.observacion_contabilidad || '—',
+      'Validación Incapacidad': r.validacion_incapacidad || '—',
+      'Nómina Electrónica': r.nomina_electronica || '—',
+      'Seguridad Social': r.seguridad_social || '—',
+      'Empresa': r.empresa || empresa || 'AmeriGlobal',
+    }
+  })
+
+  exportarExcel(filasMapeadas, {
     nombreHoja: 'Novedades',
-    nombreArchivo: `AmeriGlobal_Novedades_${label}.xlsx`,
-    anchosColumnas: ANCHOS_IMPORT_COLS,
-    marca: false, // se puede volver a importar: el encabezado debe quedar en la fila 1
+    nombreArchivo: `Novedades_${empresa}_${label || hoyISO()}.xlsx`,
+    titulo: `Registro de Novedades - ${empresa}`,
+    marca: true,
+    columnasDef: COLUMNAS_NOVEDADES_REPORTE,
   })
 }
 
 // Exporta TODOS los registros (sin importar filtros activos), pensado para
 // editar en bloque en Excel y volver a subirlo con "Importar Excel".
-export function exportarNovedadesParaImportar(filas) {
-  exportarExcel(filas.map(filaAFormatoImportacion), {
+export function exportarNovedadesParaImportar(filas, empresa = 'AmeriGlobal') {
+  const dataToExport = filas || []
+  exportarExcel(dataToExport.map(filaAFormatoImportacion), {
     nombreHoja: 'Novedades',
-    nombreArchivo: `AmeriGlobal_Novedades_ParaImportar_${hoyISO()}.xlsx`,
-    anchosColumnas: ANCHOS_IMPORT_COLS,
+    nombreArchivo: `Novedades_ParaImportar_${empresa}_${hoyISO()}.xlsx`,
     marca: false, // este archivo se vuelve a subir con "Importar Excel": encabezado en fila 1
+    columnasDef: COLUMNAS_NOVEDADES_IMPORTACION,
   })
 }

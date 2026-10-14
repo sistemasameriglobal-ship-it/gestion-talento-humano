@@ -56,29 +56,11 @@ function serialExcelAFecha(serial) {
   return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() }
 }
 
+import { parsearFecha } from './parseExcel'
+
 // Convierte dd/mm/yyyy, fechas de Excel (Date o serial) o yyyy-mm-dd a 'yyyy-mm-dd'
 export function parseFechaImportada(val) {
-  if (val === null || val === undefined || val === '') return null
-  if (val instanceof Date && !isNaN(val)) {
-    const y = val.getFullYear(), m = String(val.getMonth() + 1).padStart(2, '0'), d = String(val.getDate()).padStart(2, '0')
-    return `${y}-${m}-${d}`
-  }
-  if (typeof val === 'number') {
-    try {
-      const d = serialExcelAFecha(val)
-      if (d && !isNaN(d.y)) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
-    } catch { /* sigue abajo */ }
-    return null
-  }
-  const s = val.toString().trim()
-  if (!s) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-  const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
-  if (m) {
-    const [, d, mo, y] = m
-    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
-  }
-  return null
+  return parsearFecha(val)
 }
 
 // Normaliza nombres para compararlos sin importar mayúsculas, tildes o

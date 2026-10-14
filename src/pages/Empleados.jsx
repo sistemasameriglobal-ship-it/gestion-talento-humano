@@ -6,7 +6,8 @@ import * as empleadosApi from '../api/empleados'
 import * as novedadesApi from '../api/novedades'
 import * as vacacionesApi from '../api/vacaciones'
 import { hoyISO } from '../utils/fecha'
-import { normalizarConcepto } from '../utils/parseExcel'
+import { normalizarConcepto, mapearFilaEmpleadoExcel } from '../utils/parseExcel'
+import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo } from '../utils/vacacionesHelpers'
 import { exportarExcel } from '../utils/exportarExcel'
 import { logAccion } from '../utils/auditLogger'
 import { Plus, Search, X, Download, Upload, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
@@ -503,18 +504,52 @@ export default function Empleados() {
   const maxArea = Math.max(1, ...conteoPorArea.map(([, v]) => v))
 
   const exportExcel = () => {
-    exportarExcel(filtered.map(e => ({
-      'Nombre completo': e.nombre_completo,
-      'Correo': e.correo || '',
-      'Dependencia': e.dependencia || '',
-      'Cargo': e.cargo || '',
-      'Fecha ingreso': e.fecha_ingreso || '',
-      'Activo': e.activo === false ? 'No' : 'Sí',
-      'Fecha retiro': e.fecha_retiro || '',
-    })), {
+    const dataToExport = filtered.length > 0 ? filtered : rows
+    if (!dataToExport || dataToExport.length === 0) {
+      setMsg({ type: 'error', text: 'No hay colaboradores para exportar.' })
+      return
+    }
+
+    const COLUMNAS_EMPLEADOS = [
+      'Nombre Completo',
+      'Correo',
+      'Dependencia/Área',
+      'Cargo',
+      'Estado (Activo/Inactivo)',
+      'Fecha Ingreso',
+      'Fecha Retiro',
+      'Antigüedad',
+      'Saldo Vacaciones',
+      'Empresa',
+    ]
+
+    const filasMapeadas = dataToExport.map(e => {
+      const periodosEmp = periodosPorEmpleado[e.id] || []
+      const antig = calcAntiguedadEmpleado(e, periodosEmp)
+      const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1] || { fecha_ingreso: e.fecha_ingreso, es_periodo_actual: true }
+      const vacsEmp = vacacionesPorEmpleado[e.id] || vacacionesPorEmpleado[normalizarNombre(e.nombre_completo)] || []
+      const saldo = calcularSaldoVacacionesPeriodo(pActivo, vacsEmp, periodosEmp)
+
+      return {
+        'Nombre Completo': e.nombre_completo || '—',
+        'Correo': e.correo || '—',
+        'Dependencia/Área': e.dependencia || '—',
+        'Cargo': e.cargo || '—',
+        'Estado (Activo/Inactivo)': e.activo === false ? 'Inactivo' : 'Activo',
+        'Fecha Ingreso': e.fecha_ingreso ? String(e.fecha_ingreso).slice(0, 10) : '—',
+        'Fecha Retiro': (e.activo === false && e.fecha_retiro) ? String(e.fecha_retiro).slice(0, 10) : '—',
+        'Antigüedad': antig?.texto || '—',
+        'Saldo Vacaciones': e.activo === false ? '0 días' : `${saldo.saldoPendiente || 0} días`,
+        'Empresa': e.empresa || companyConfig.nombre || 'AmeriGlobal',
+      }
+    })
+
+    exportarExcel(filasMapeadas, {
       nombreHoja: 'Empleados',
-      nombreArchivo: `Empleados_${hoyISO()}.xlsx`,
-      anchosColumnas: [30, 28, 18, 20, 14, 8, 14],
+      nombreArchivo: `Empleados_${companyConfig.id || 'AmeriGlobal'}_${hoyISO()}.xlsx`,
+      titulo: `Directorio de Colaboradores - ${companyConfig.nombre || 'AmeriGlobal'}`,
+      marca: true,
+      columnasDef: COLUMNAS_EMPLEADOS,
     })
   }
 
@@ -524,32 +559,61 @@ export default function Empleados() {
     setImporting(true)
     setImportResult(null)
     try {
-      // xlsx se carga solo al importar (import dinámico), no en el bundle inicial
       const XLSX = await import('xlsx')
       const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf, { type: 'array' })
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const data = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
-      let creados = 0, omitidos = 0, errores = 0
-      for (const row of data) {
-        const nombre = (row['Nombre completo'] || row['nombre_completo'] || row['Nombre'] || '').toString().trim()
-        if (!nombre) { omitidos++; continue }
-        const dup = checkDuplicado(nombre)
-        if (dup && dup.tipo === 'exacto') { omitidos++; continue }
-        const correo = (row['Correo'] || row['correo'] || '').toString().trim() || null
-        const dependencia = (row['Dependencia'] || row['dependencia'] || '').toString().trim().toUpperCase() || null
-        const cargo = (row['Cargo'] || row['cargo'] || '').toString().trim() || null
-        const activoRaw = (row['Activo'] || row['activo'] || 'Sí').toString().trim().toLowerCase()
-        const activo = !(activoRaw === 'no' || activoRaw === 'false' || activoRaw === '0')
-        const fecha_retiro = activo ? null : ((row['Fecha retiro'] || row['fecha_retiro'] || '').toString().trim() || null)
-        const { error } = await empleadosApi.crearEmpleado({ nombre_completo: nombre, correo, dependencia, cargo, activo, fecha_retiro }, currentCompany)
-        if (error) errores++; else { creados++; rows.push({ nombre_completo: nombre }) }
+      if (!data || data.length === 0) {
+        setImportResult({ error: 'El archivo Excel no contiene filas de datos.' })
+        return
       }
+
+      let creados = 0, omitidos = 0, errores = 0
+      const poolEmpleados = [...rows]
+
+      for (const rawRow of data) {
+        const row = mapearFilaEmpleadoExcel(rawRow)
+        const nombre = (row.nombre_completo || '').trim()
+        if (!nombre) { omitidos++; continue }
+
+        const normNombre = normalizarNombre(nombre)
+        const dupNombre = poolEmpleados.some(r => normalizarNombre(r.nombre_completo) === normNombre)
+        const dupCorreo = row.correo && poolEmpleados.some(r => r.correo && r.correo.trim().toLowerCase() === row.correo.trim().toLowerCase())
+
+        if (dupNombre || dupCorreo) {
+          omitidos++
+          continue
+        }
+
+        const payload = {
+          nombre_completo: nombre,
+          correo: row.correo || null,
+          dependencia: row.dependencia || null,
+          cargo: row.cargo || null,
+          activo: row.activo !== false,
+          fecha_ingreso: row.fecha_ingreso || null,
+          fecha_retiro: row.activo === false ? (row.fecha_retiro || null) : null,
+          empresa: row.empresa || currentCompany,
+        }
+
+        const { data: createdData, error } = await empleadosApi.crearEmpleado(payload, currentCompany)
+        if (error) {
+          errores++
+        } else {
+          creados++
+          poolEmpleados.push({
+            id: createdData?.[0]?.id,
+            ...payload,
+          })
+        }
+      }
+
       setImportResult({ creados, omitidos, errores })
-      load()
+      await load()
     } catch (err) {
-      setImportResult({ error: err.message || 'Error al leer el archivo.' })
+      setImportResult({ error: err.message || 'Error al procesar el archivo Excel.' })
     } finally {
       setImporting(false)
       setFileInputKey(k => k + 1)

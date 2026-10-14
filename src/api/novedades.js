@@ -39,8 +39,12 @@ export async function crearNovedad(payload, empresa = 'ameriglobal') {
     ? String(payload.periodo).trim()
     : String(fInicio).slice(0, 7)
 
+  const cleanPayload = { ...payload }
+  delete cleanPayload.dias_en_dinero
+  delete cleanPayload.dias_disfrutados
+
   return supabase.from(TABLA).insert([{
-    ...payload,
+    ...cleanPayload,
     periodo: periodoCalculado,
     empresa: empresaFinal,
     empleado_id: payload.empleado_id || rel.empleado_id,
@@ -63,6 +67,8 @@ export function buscarNovedadPorEmpleadoConceptoYFecha(nombreEmpleado, concepto,
 
 export async function actualizarNovedad(id, payload) {
   const dataToUpdate = { ...payload }
+  delete dataToUpdate.dias_en_dinero
+  delete dataToUpdate.dias_disfrutados
 
   // Solo recalculamos los ids si el update toca empleado, dependencia o empresa.
   if (payload.nombre_empleado || payload.dependencia || payload.empresa) {

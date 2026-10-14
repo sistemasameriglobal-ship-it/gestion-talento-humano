@@ -389,24 +389,64 @@ export default function Vacaciones() {
   }
 
   const exportarExcelHandler = () => {
-    exportarExcel(filtered.map(r => ({
-      'Nombre Completo':          r.nombre_empleado,
-      'Fecha de Ingreso':         r.fecha_ingreso ? formatFecha(r.fecha_ingreso) : '',
-      'Periodo de Vacaciones':    r.periodo_vacaciones || '',
-      'Inicio Vacaciones':        r.fecha_inicio ? formatFecha(r.fecha_inicio) : '',
-      'Finaliza Vacaciones':      r.fecha_fin    ? formatFecha(r.fecha_fin)    : '',
-      'Total Días':               r.total_dias || '',
-      'Días Disfrutados':         r.dias_disfrutados || '',
-      'Días en Dinero':           r.dias_en_dinero || '',
-      'Dependencia':              r.dependencia || '',
-      'Tipo':                     r.tipo_vacacion || '',
-      'Estado':                   r.estado || '',
-      'Aprobado Por':             r.aprobado_por || '',
-      'Observación Área Contable': r.observacion_contable || '',
-    })), {
+    const dataToExport = filtered.length > 0 ? filtered : rows
+    if (!dataToExport || dataToExport.length === 0) {
+      flash('error', 'No hay solicitudes de vacaciones para exportar.')
+      return
+    }
+
+    const COLUMNAS_VACACIONES = [
+      'Colaborador',
+      'Dependencia/Área',
+      'Fecha Ingreso',
+      'Periodo Vacaciones',
+      'Inicio Vacaciones',
+      'Fin Vacaciones',
+      'Total Días',
+      'Días en Tiempo',
+      'Días en Dinero',
+      'Tipo Solicitud',
+      'Estado',
+      'Aprobado Por',
+      'Observación Contable',
+      'Empresa',
+    ]
+
+    const filasMapeadas = dataToExport.map(r => {
+      const diasDinero = r.dias_en_dinero != null && r.dias_en_dinero !== ''
+        ? Number(r.dias_en_dinero)
+        : (r.tipo_vacacion === 'Vacaciones en dinero' ? (Number(r.total_dias) || 15) : 0)
+
+      const diasTiempo = r.tipo_vacacion === 'Vacaciones en dinero'
+        ? 0
+        : (r.dias_disfrutados != null && r.dias_disfrutados !== ''
+            ? Number(r.dias_disfrutados)
+            : (r.total_dias != null ? Number(r.total_dias) : 0))
+
+      return {
+        'Colaborador': r.nombre_empleado || '—',
+        'Dependencia/Área': r.dependencia || '—',
+        'Fecha Ingreso': r.fecha_ingreso ? String(r.fecha_ingreso).slice(0, 10) : '—',
+        'Periodo Vacaciones': r.periodo_vacaciones || '—',
+        'Inicio Vacaciones': r.fecha_inicio ? String(r.fecha_inicio).slice(0, 10) : '—',
+        'Fin Vacaciones': r.fecha_fin ? String(r.fecha_fin).slice(0, 10) : '—',
+        'Total Días': r.total_dias != null ? Number(r.total_dias) : '—',
+        'Días en Tiempo': diasTiempo,
+        'Días en Dinero': diasDinero,
+        'Tipo Solicitud': r.tipo_vacacion || '—',
+        'Estado': r.estado || '—',
+        'Aprobado Por': r.aprobado_por || '—',
+        'Observación Contable': r.observacion_contable || '—',
+        'Empresa': r.empresa || currentCompany || 'AmeriGlobal',
+      }
+    })
+
+    exportarExcel(filasMapeadas, {
       nombreHoja: 'Vacaciones',
-      nombreArchivo: `Vacaciones_${hoyISO()}.xlsx`,
-      anchosColumnas: [30, 14, 14, 16, 16, 10, 14, 12, 16, 22, 12, 20, 30, 30],
+      nombreArchivo: `Vacaciones_${currentCompany}_${hoyISO()}.xlsx`,
+      titulo: `Registro de Vacaciones - ${currentCompany}`,
+      marca: true,
+      columnasDef: COLUMNAS_VACACIONES,
     })
   }
 

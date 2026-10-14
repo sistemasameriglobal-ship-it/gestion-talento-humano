@@ -92,6 +92,7 @@ export async function crearEmpleado(payload, empresa = 'ameriglobal') {
       cargo: nuevoEmp.cargo || null,
       dependencia: nuevoEmp.dependencia || null,
       es_periodo_actual: nuevoEmp.activo !== false,
+      continuidad_laboral: false,
       observaciones: 'Inicio de contrato inicial',
     }).catch(err => {
       console.warn('Nota: no se pudo crear periodo inicial (puede requerir migración SQL):', err)

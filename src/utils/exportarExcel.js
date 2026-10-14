@@ -67,12 +67,29 @@ function estilizarCelda(cell, banda) {
 // (sin filas extra), solo con estilo de color/bordes. Úsalo para exports que
 // el usuario puede volver a IMPORTAR (el lector de importación asume que los
 // datos empiezan en la fila 1 o 2, así que no se le puede correr la fila).
-export async function crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo, marca = true } = {}) {
+export async function crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo, marca = true, columnasDef } = {}) {
   const ws = wb.addWorksheet(nombreHoja.slice(0, 31))
-  const columnas = datos.length ? Object.keys(datos[0]) : []
+  const columnas = (columnasDef && columnasDef.length)
+    ? columnasDef
+    : (datos.length ? Object.keys(datos[0]) : [])
   const nCols = Math.max(columnas.length, 1)
 
-  ws.columns = columnas.map((_, i) => ({ width: (anchosColumnas && anchosColumnas[i]) || 18 }))
+  // Cálculo automático de anchos de columna (auto-width) para que la información no quede cortada
+  const anchosCalculados = columnas.map((colKey, i) => {
+    let maxLen = String(colKey || '').length
+    for (const fila of datos) {
+      const val = fila[colKey]
+      if (val !== null && val !== undefined) {
+        const s = String(val)
+        if (s.length > maxLen) maxLen = s.length
+      }
+    }
+    const explicitWidth = anchosColumnas && anchosColumnas[i]
+    const dynamicWidth = Math.max(maxLen + 4, 14)
+    return explicitWidth ? Math.max(explicitWidth, dynamicWidth) : Math.min(dynamicWidth, 50)
+  })
+
+  ws.columns = anchosCalculados.map(width => ({ width }))
 
   let filaEncabezado = 1
   if (marca) {
@@ -119,7 +136,8 @@ export async function crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo,
     const row = ws.getRow(filaEncabezado + 1 + idx)
     columnas.forEach((key, i) => {
       const cell = row.getCell(i + 1)
-      cell.value = fila[key] ?? ''
+      const val = fila[key]
+      cell.value = (val === null || val === undefined) ? '—' : val
       estilizarCelda(cell, idx % 2 === 1)
     })
   })
@@ -133,14 +151,26 @@ export async function crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo,
 }
 
 // ─── Descarga ───────────────────────────────────────────────────────────────
-// Genera el archivo en base64 y lo descarga vía data URI en vez de
-// Blob + URL.createObjectURL: algunos navegadores con configuración de
-// privacidad estricta (Brave, Chrome con "Bloquear descargas automáticas"
-// activo) bloquean silenciosamente las descargas por blob: URL. El data URI
-// no tiene ese problema.
+// Descarga el archivo de manera confiable en navegadores modernos mediante Blob URL,
+// con fallback a FileReader para compatibilidad total sin cortes ni bloqueos silenciosos.
 export async function descargarWorkbook(wb, nombreArchivo) {
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+
+  if (typeof window !== 'undefined' && window.URL && window.URL.createObjectURL) {
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    setTimeout(() => {
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    }, 1500)
+    return
+  }
+
   await new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
@@ -159,11 +189,8 @@ export async function descargarWorkbook(wb, nombreArchivo) {
 // ─── Export de una sola hoja ────────────────────────────────────────────────
 // Cubre el caso común: un array de datos → un archivo .xlsx de una sola hoja,
 // con el diseño de marca (logo, colores, bordes) ya aplicado.
-// Para reportes multi-hoja (Dashboard, Informe) arma el libro a mano con
-// crearLibro + crearHoja (una vez por hoja) y llama a descargarWorkbook al
-// final.
-export async function exportarExcel(datos, { nombreHoja = 'Hoja1', nombreArchivo, anchosColumnas, titulo, marca = true } = {}) {
+export async function exportarExcel(datos, { nombreHoja = 'Hoja1', nombreArchivo, anchosColumnas, titulo, marca = true, columnasDef } = {}) {
   const wb = await crearLibro()
-  await crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo, marca })
+  await crearHoja(wb, nombreHoja, datos, { anchosColumnas, titulo, marca, columnasDef })
   await descargarWorkbook(wb, nombreArchivo)
 }

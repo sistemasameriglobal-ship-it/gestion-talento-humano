@@ -409,14 +409,24 @@ export default function Novedades() {
 
   // Exporta lo que está filtrado/visible en pantalla ahora mismo.
   const exportExcel = () => {
+    const dataToExport = filtered.length > 0 ? filtered : rows
+    if (!dataToExport || dataToExport.length === 0) {
+      setMsg({ type: 'error', text: 'No hay novedades para exportar.' })
+      return
+    }
     const label = filterAnio && filterMes ? `${filterAnio}-${filterMes}` : filterAnio || filterPeriodo || 'todos'
-    exportarNovedadesExcel(filtered, label)
+    exportarNovedadesExcel(dataToExport, label, currentCompany)
   }
 
   // Exporta TODOS los registros (sin importar filtros activos en pantalla),
-  // pensado para editar en bloque en Excel y volver a subirlo con "Importar
-  // Excel".
-  const exportExcelParaImportar = () => exportarNovedadesParaImportar(rows)
+  // pensado para editar en bloque en Excel y volver a subirlo con "Importar Excel".
+  const exportExcelParaImportar = () => {
+    if (!rows || rows.length === 0) {
+      setMsg({ type: 'error', text: 'No hay novedades para exportar.' })
+      return
+    }
+    exportarNovedadesParaImportar(rows, currentCompany)
+  }
 
 
   const hasFilter = searchInput || filterConcepto || filterPeriodo || filterAnio || filterMes || filterDep || filterDiagnostico || soloActivas
