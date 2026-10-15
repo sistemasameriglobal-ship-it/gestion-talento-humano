@@ -219,7 +219,16 @@ export default function Empleados() {
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const openAdd = () => { setForm(EMPTY); setDuplicadoWarning(null); setModal('add') }
-  const openEdit = (row) => { setForm({ ...row, fecha_ingreso: row.fecha_ingreso || '', fecha_retiro: row.fecha_retiro || '' }); setDuplicadoWarning(null); setModal('edit') }
+  const openEdit = (row) => {
+    setForm({
+      ...row,
+      fecha_ingreso: row.fecha_ingreso || '',
+      fecha_retiro: row.fecha_retiro || '',
+      dias_vacaciones_tomados_manual: row.dias_vacaciones_tomados_manual ?? 0,
+    })
+    setDuplicadoWarning(null)
+    setModal('edit')
+  }
 
   const checkDuplicado = (nombre, excludeId = null) => {
     const norm = normalizarNombre(nombre)
@@ -264,6 +273,9 @@ export default function Empleados() {
       activo: form.activo ?? true,
       cargo: form.cargo?.trim() || null,
       fecha_ingreso: form.fecha_ingreso || null,
+      dias_vacaciones_tomados_manual: (form.dias_vacaciones_tomados_manual !== '' && form.dias_vacaciones_tomados_manual != null)
+        ? Number(form.dias_vacaciones_tomados_manual)
+        : 0,
       // Si quedó marcado como Activo, no debe arrastrar una fecha de retiro
       // vieja (evita que el dashboard lo siga excluyendo por error).
       fecha_retiro: form.activo ? null : (form.fecha_retiro || null),
@@ -528,7 +540,7 @@ export default function Empleados() {
       const antig = calcAntiguedadEmpleado(e, periodosEmp)
       const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1] || { fecha_ingreso: e.fecha_ingreso, es_periodo_actual: true }
       const vacsEmp = vacacionesPorEmpleado[e.id] || vacacionesPorEmpleado[normalizarNombre(e.nombre_completo)] || []
-      const saldo = calcularSaldoVacacionesPeriodo(pActivo, vacsEmp, periodosEmp)
+      const saldo = calcularSaldoVacacionesPeriodo(pActivo, vacsEmp, periodosEmp, e)
 
       return {
         'Nombre Completo': e.nombre_completo || '—',

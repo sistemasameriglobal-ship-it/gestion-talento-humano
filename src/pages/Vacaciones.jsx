@@ -94,7 +94,7 @@ export default function Vacaciones() {
       continuidad_laboral: periodoActivo?.continuidad_laboral || false,
     }
 
-    const saldoOtras = calcularSaldoVacacionesPeriodo(periodoRef, otrasVacs, periodosEmp)
+    const saldoOtras = calcularSaldoVacacionesPeriodo(periodoRef, otrasVacs, periodosEmp, emp)
 
     // 2. Incluir dinámicamente la solicitud actual si su estado es válido (Aprobada, En curso, Finalizada)
     const ESTADOS_VALIDOS = ['Aprobada', 'En curso', 'Finalizada']
@@ -114,7 +114,7 @@ export default function Vacaciones() {
       })
     }
 
-    const saldoActual = calcularSaldoVacacionesPeriodo(periodoRef, vacsParaSaldo, periodosEmp)
+    const saldoActual = calcularSaldoVacacionesPeriodo(periodoRef, vacsParaSaldo, periodosEmp, emp)
 
     return {
       ...saldoActual,
@@ -505,6 +505,7 @@ export default function Vacaciones() {
       ...viewRow,
       fecha_ingreso: viewRow.fecha_ingreso || pActivo?.fecha_ingreso || emp?.fecha_ingreso || null,
       periodo_id: viewRow.periodo_id || pActivo?.id || null,
+      empleado: emp,
       periodos: periodosEmp,
     }
   }, [viewRow, empleados, periodos])

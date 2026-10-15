@@ -33,7 +33,7 @@ export default function EmpleadoTable({
               const vacsEmp = vacacionesPorEmpleado[emp.id] || vacacionesPorEmpleado[normNombre] || []
               const vacacionActiva = getEstadoVacacionActual(emp, vacsEmp, nov?.novedades)
               const periodoActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || (emp.fecha_ingreso ? { fecha_ingreso: emp.fecha_ingreso, es_periodo_actual: true } : null)
-              const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp)
+              const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp, emp)
               return (
                 <tr key={emp.id} style={{ cursor: 'pointer', opacity: emp.activo === false ? 0.55 : 1 }} onClick={() => onSelect(emp)}>
                   <td style={{ maxWidth: 260 }}>
@@ -123,7 +123,7 @@ export default function EmpleadoTable({
                       </div>
                     ) : (
                       <span
-                        title={`Saldo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d, Disfrutados: ${saldoVac.diasDisfrutados}d, Dinero: ${saldoVac.diasEnDinero}d)`}
+                        title={`Saldo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d${saldoVac.diasManuales ? `, Tomados histórico: ${saldoVac.diasManuales}d` : ''}, Disfrutados: ${saldoVac.diasDisfrutados}d, Dinero: ${saldoVac.diasEnDinero}d)`}
                         style={{
                           fontSize: 11,
                           fontWeight: 600,

@@ -207,6 +207,13 @@ export function mapearFilaEmpleadoExcel(rawRow) {
         res.empresa = emp
       }
     }
+    // Días de vacaciones ya tomados (Histórico / Manual)
+    else if (['dias vacaciones tomados manual', 'dias vacaciones tomados', 'vacaciones tomadas', 'vacaciones historico', 'vacaciones historicas', 'ajuste vacaciones', 'dias tomados'].includes(norm)) {
+      const num = Number(value)
+      if (!isNaN(num) && num >= 0) {
+        res.dias_vacaciones_tomados_manual = num
+      }
+    }
   }
 
   // Si activo es true, la fecha de retiro no debe existir

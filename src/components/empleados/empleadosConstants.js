@@ -32,5 +32,5 @@ export const CONCEPTOS_CON_FECHA = [
 
 export const EMPTY = {
   nombre_completo: '', correo: '', dependencia: '', activo: true,
-  cargo: '', fecha_ingreso: '', fecha_retiro: '',
+  cargo: '', fecha_ingreso: '', fecha_retiro: '', dias_vacaciones_tomados_manual: 0,
 }

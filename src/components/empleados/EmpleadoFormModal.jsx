@@ -228,6 +228,30 @@ export default function EmpleadoFormModal({
             />
           </div>
 
+          {/* ── S4: Vacaciones - Ajuste Histórico ── */}
+          <div className="emp-section">
+            <div className="emp-section-hdr">
+              <div style={{ width: 26, height: 26, borderRadius: 7, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
+                🌴
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text)' }}>
+                Días de vacaciones ya tomados (Histórico)
+              </span>
+            </div>
+            <input
+              className="emp-form-input"
+              type="number"
+              step="0.5"
+              min="0"
+              value={form.dias_vacaciones_tomados_manual ?? ''}
+              onChange={f('dias_vacaciones_tomados_manual')}
+              placeholder="0"
+            />
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, marginBottom: 0 }}>
+              Ingresa los días que el colaborador ya disfrutó o cobró en el pasado para restarlos de su saldo actual.
+            </p>
+          </div>
+
           {/* ── S4: Estado ── */}
           <div className="emp-section" style={{ marginBottom: 4 }}>
             <div className="emp-section-hdr">

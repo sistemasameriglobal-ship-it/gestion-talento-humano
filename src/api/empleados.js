@@ -31,7 +31,7 @@ export function listarEmpleadosParaNovedades(empresa) {
 export function listarEmpleadosParaVacaciones(empresa) {
   let query = supabase
     .from(TABLA)
-    .select('id,nombre_completo,dependencia,cargo,activo,empresa,fecha_ingreso')
+    .select('id,nombre_completo,dependencia,cargo,activo,empresa,fecha_ingreso,dias_vacaciones_tomados_manual')
     .order('nombre_completo')
   if (empresa) query = query.eq('empresa', empresa)
   return query

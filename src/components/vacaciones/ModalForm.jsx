@@ -51,10 +51,10 @@ export default function ModalForm({
     : (diasDisfrute + diasDinero)
 
   const saldoDisponible = saldoVacacionesForm != null
-    ? Math.max(0, Math.round(saldoVacacionesForm.saldoPendiente))
+    ? Math.max(0, saldoVacacionesForm.saldoPendiente)
     : 0
   const topeDisponible = saldoVacacionesForm?.topeDisponible != null
-    ? Math.max(0, Math.round(saldoVacacionesForm.topeDisponible))
+    ? Math.max(0, saldoVacacionesForm.topeDisponible)
     : saldoDisponible
   const excedeSaldo = diasSolicitados > 0 && diasSolicitados > topeDisponible
   const sinSaldo = topeDisponible <= 0
@@ -280,7 +280,7 @@ export default function ModalForm({
             {form.nombre_empleado?.trim() && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span
-                  title={saldoVacacionesForm ? `Años cumplidos: ${aniosCumplidos} | Causados: ${saldoVacacionesForm.diasCausados} días | Tomados/dinero: ${saldoVacacionesForm.diasDisfrutados + saldoVacacionesForm.diasEnDinero} días` : undefined}
+                  title={saldoVacacionesForm ? `Años cumplidos: ${aniosCumplidos} | Causados: ${saldoVacacionesForm.diasCausados} días${saldoVacacionesForm.diasManuales ? ` | Tomados históricos: ${saldoVacacionesForm.diasManuales} días` : ''} | Tomados en app: ${saldoVacacionesForm.diasDisfrutados + saldoVacacionesForm.diasEnDinero} días` : undefined}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                     background: (saldoDisponible > 0) ? 'var(--success-bg)' : 'var(--danger-bg)',

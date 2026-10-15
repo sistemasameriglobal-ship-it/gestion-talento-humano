@@ -28,7 +28,7 @@ export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmplea
       }] : [])
 
   const periodoActivo = listaPeriodos.find(p => p.es_periodo_actual) || listaPeriodos[0] || (selectedEmp.fecha_ingreso ? { id: 'base', fecha_ingreso: selectedEmp.fecha_ingreso, es_periodo_actual: true } : null)
-  const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacaciones, listaPeriodos)
+  const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacaciones, listaPeriodos, selectedEmp)
   const vacacionActiva = getEstadoVacacionActual(selectedEmp, vacaciones, nov?.novedades)
   const antig = calcAntiguedadEmpleado(selectedEmp, listaPeriodos)
 
@@ -184,6 +184,15 @@ export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmplea
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginTop: 2 }}>Días causados</div>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>15d por año cumplido</div>
               </div>
+
+              {/* Días ya tomados / ajuste manual histórico si existen */}
+              {saldoVac.diasManuales > 0 && (
+                <div style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#EA580C' }}>{saldoVac.diasManuales}d</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#C2410C', marginTop: 2 }}>Tomados (histórico)</div>
+                  <div style={{ fontSize: 10, color: '#9A3412' }}>Ajuste en ficha</div>
+                </div>
+              )}
 
               {/* Días disfrutados tomados en tiempo */}
               <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>

@@ -206,9 +206,9 @@ export const ESTADOS_VALIDOS_VACACIONES = ['Aprobada', 'En curso', 'Finalizada']
  * acumulada de la cadena continua y descuenta los días disfrutados/compensados en dichos periodos.
  * Retorna: { aniosCumplidos, diasCausados, diasDisfrutados, diasEnDinero, saldoPendiente, esContinuo, fechaIngresoRaiz, cadenaPeriodos }
  */
-export function calcularSaldoVacacionesPeriodo(periodoActivo, listaVacaciones = [], listaPeriodos = []) {
+export function calcularSaldoVacacionesPeriodo(periodoActivo, listaVacaciones = [], listaPeriodos = [], empleado = null) {
   if (!periodoActivo || (!periodoActivo.fecha_ingreso && typeof periodoActivo !== 'string')) {
-    return { aniosCumplidos: 0, diasCausados: 0, diasDisfrutados: 0, diasEnDinero: 0, saldoPendiente: 0, esContinuo: false }
+    return { aniosCumplidos: 0, diasCausados: 0, diasManuales: 0, diasDisfrutados: 0, diasEnDinero: 0, saldoPendiente: 0, esContinuo: false }
   }
 
   const periodoObj = typeof periodoActivo === 'string'
@@ -225,6 +225,15 @@ export function calcularSaldoVacacionesPeriodo(periodoActivo, listaVacaciones = 
     periodoObj.fecha_retiro || null
   )
   const diasCausados = aniosCumplidos * 15
+
+  // Días tomados manualmente / histórico registrado en la ficha del empleado
+  const diasManuales = Number(
+    empleado?.dias_vacaciones_tomados_manual != null
+      ? empleado.dias_vacaciones_tomados_manual
+      : (periodoObj?.dias_vacaciones_tomados_manual != null
+          ? periodoObj.dias_vacaciones_tomados_manual
+          : (primerPeriodo?.dias_vacaciones_tomados_manual || 0))
+  ) || 0
 
   // Conjunto de IDs de periodos que componen la cadena continua
   const idsCadena = new Set(cadena.map(p => p.id).filter(Boolean))
@@ -269,17 +278,22 @@ export function calcularSaldoVacacionesPeriodo(periodoActivo, listaVacaciones = 
     }
   })
 
-  diasDisfrutados = Math.round(diasDisfrutados)
-  diasEnDinero = Math.round(diasEnDinero)
+  diasDisfrutados = Math.round(diasDisfrutados * 10) / 10
+  diasEnDinero = Math.round(diasEnDinero * 10) / 10
 
-  // Saldo disponible final = días totales ganados habilitados - (días disfrutados + días en dinero)
-  const saldoPendiente = aniosCumplidos < 1
+  // Saldo disponible final = Math.max(0, diasCausados - diasManuales - (diasDisfrutados + diasEnDinero))
+  const diasSolicitudesApp = diasDisfrutados + diasEnDinero
+  const saldoCalculado = aniosCumplidos < 1
     ? 0
-    : Math.max(0, diasCausados - (diasDisfrutados + diasEnDinero))
+    : Math.max(0, diasCausados - diasManuales - diasSolicitudesApp)
+
+  // Formato limpio: entero si no tiene decimales
+  const saldoPendiente = saldoCalculado % 1 === 0 ? Math.round(saldoCalculado) : Math.round(saldoCalculado * 10) / 10
 
   return {
     aniosCumplidos,
     diasCausados,
+    diasManuales,
     diasDisfrutados,
     diasEnDinero,
     saldoPendiente,
