@@ -167,11 +167,15 @@ export default function Novedades() {
       const fichas = {}
       empData.forEach(e => {
         const empPeriodos = (periodosData || []).filter(p => p.empleado_id === e.id)
+        const pActivo = empPeriodos.find(p => p.es_periodo_actual) || empPeriodos[empPeriodos.length - 1]
         fichas[e.nombre_completo] = {
           id: e.id,
+          nombre_completo: e.nombre_completo,
           activo: e.activo !== false,
-          fecha_ingreso: e.fecha_ingreso || null,
-          fecha_retiro: e.fecha_retiro || null,
+          fecha_ingreso: pActivo?.fecha_ingreso || e.fecha_ingreso || null,
+          fecha_retiro: pActivo?.fecha_retiro || e.fecha_retiro || null,
+          dependencia: pActivo?.dependencia || e.dependencia || '',
+          cargo: pActivo?.cargo || e.cargo || '',
           periodos: empPeriodos,
         }
       })

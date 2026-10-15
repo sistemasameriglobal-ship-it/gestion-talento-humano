@@ -39,7 +39,7 @@ export function listarEmpleadosParaVacaciones(empresa) {
 
 /** Empleados con solo los campos usados en Parqueadero / Procesos disciplinarios. */
 export function listarEmpleadosBasico(empresa) {
-  let query = supabase.from(TABLA).select('nombre_completo, activo, empresa').order('nombre_completo')
+  let query = supabase.from(TABLA).select('nombre_completo, activo, empresa, dependencia').order('nombre_completo')
   if (empresa) query = query.eq('empresa', empresa)
   return query
 }

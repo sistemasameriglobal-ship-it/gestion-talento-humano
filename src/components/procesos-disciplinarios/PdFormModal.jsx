@@ -93,7 +93,15 @@ export default function PdFormModal({
                 </div>
                 <SearchableSelect
                   value={form.nombre_empleado}
-                  onChange={nombre => { setFormDirty(true); setForm(p => ({ ...p, nombre_empleado: nombre })) }}
+                  onChange={nombre => {
+                    setFormDirty(true)
+                    const depAuto = empleados.mapa?.[nombre] || ''
+                    setForm(p => ({
+                      ...p,
+                      nombre_empleado: nombre,
+                      departamento: depAuto || p.departamento,
+                    }))
+                  }}
                   activos={empleados.activos}
                   inactivos={empleados.inactivos}
                   placeholder="— Seleccionar empleado —"

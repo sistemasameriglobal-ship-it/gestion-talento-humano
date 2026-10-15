@@ -64,6 +64,10 @@ export default function ProcesosDisciplinarios() {
         setEmpleados({
           activos: data.filter(e => e.activo !== false).map(e => e.nombre_completo),
           inactivos: data.filter(e => e.activo === false).map(e => e.nombre_completo),
+          mapa: data.reduce((acc, e) => {
+            acc[e.nombre_completo] = e.dependencia || ''
+            return acc
+          }, {}),
         })
       })
   }, [loadProcesos, currentCompany])

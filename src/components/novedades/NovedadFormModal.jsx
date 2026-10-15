@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { X, AlertCircle } from 'lucide-react'
 import AnimatedModal from '../ui/AnimatedModal'
 import SearchableSelect from '../ui/SearchableSelect'
@@ -37,6 +38,21 @@ export default function NovedadFormModal({
   sinFechas, minFechaForm, maxFechaForm,
   f, save, closeModal,
 }) {
+  // Auto-completar dependencia / área si se selecciona un empleado y el campo está vacío
+  useEffect(() => {
+    if (!modal || !form.nombre_empleado) return
+    if (form.dependencia) return
+    const ficha = fichasEmpleados?.[form.nombre_empleado] ||
+      Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
+    const depFicha = ficha?.dependencia
+    const depRow = (rows || []).find(r => (r.nombre_empleado || '').trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase() && r.dependencia)?.dependencia
+    const depFinal = depFicha || depRow || ''
+    if (depFinal) {
+      const depMatch = (dependencias || []).find(d => d.trim().toLowerCase() === depFinal.trim().toLowerCase()) || depFinal
+      setForm(p => ({ ...p, dependencia: depMatch }))
+    }
+  }, [modal, form.nombre_empleado, form.dependencia, fichasEmpleados, rows, dependencias, setForm])
+
   return (
     <AnimatedModal open={!!modal} onRequestClose={closeModal}>
       {modal && (() => {
@@ -166,7 +182,20 @@ export default function NovedadFormModal({
                 </div>
                 <SearchableSelect
                   value={form.nombre_empleado}
-                  onChange={val => { setForm(p => ({ ...p, nombre_empleado: val })); setFormDirty(true) }}
+                  onChange={val => {
+                    const ficha = fichasEmpleados?.[val] ||
+                      Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === (val || '').trim().toLowerCase())
+                    const depFicha = ficha?.dependencia
+                    const depRow = (rows || []).find(r => (r.nombre_empleado || '').trim().toLowerCase() === (val || '').trim().toLowerCase() && r.dependencia)?.dependencia
+                    const depFinal = depFicha || depRow || ''
+                    const depMatch = depFinal ? ((dependencias || []).find(d => d.trim().toLowerCase() === depFinal.trim().toLowerCase()) || depFinal) : ''
+                    setForm(p => ({
+                      ...p,
+                      nombre_empleado: val,
+                      dependencia: depMatch || p.dependencia,
+                    }))
+                    setFormDirty(true)
+                  }}
                   activos={empleados.activos} inactivos={empleados.inactivos}
                   placeholder="— Seleccionar empleado —"
                 />
@@ -341,6 +370,9 @@ export default function NovedadFormModal({
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Dependencia / Área</label>
                     <select className="form-control" value={form.dependencia || ''} onChange={f('dependencia')}>
                       <option value="">— Seleccionar área —</option>
+                      {form.dependencia && !dependencias.includes(form.dependencia) && (
+                        <option value={form.dependencia}>{form.dependencia}</option>
+                      )}
                       {dependencias.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
