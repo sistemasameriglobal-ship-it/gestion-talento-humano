@@ -328,37 +328,42 @@ export default function Empleados() {
     else setMsg({ type: 'error', text: error.message })
   }
 
-  const handleConfirmRetiro = async ({ fecha_retiro, observaciones }) => {
+  const handleConfirmRetiro = async ({ fecha_retiro, concepto = 'Terminación de Contrato', observaciones }) => {
     if (!retiroEmp) return
     setActionSaving(true)
     try {
+      const fRetiroFinal = fecha_retiro || new Date().toISOString().split('T')[0]
+      const conceptoRetiro = concepto || 'Terminación de Contrato'
+
       // 1. Buscar periodo activo si existe y cerrarlo
       const periodosEmp = periodosPorEmpleado[retiroEmp.id] || []
       const periodoActivo = periodosEmp.find(p => p.es_periodo_actual)
       if (periodoActivo) {
-        await empleadosApi.cerrarPeriodo(periodoActivo.id, { fecha_retiro, observaciones })
+        await empleadosApi.cerrarPeriodo(periodoActivo.id, {
+          fecha_retiro: fRetiroFinal,
+          observaciones: observaciones || `${conceptoRetiro} laboral`,
+        })
       }
 
       // 2. Actualizar registro principal en empleados (espejo del periodo vigente)
       const { error } = await empleadosApi.actualizarEmpleado(retiroEmp.id, {
         activo: false,
-        fecha_retiro,
+        fecha_retiro: fRetiroFinal,
       })
       if (error) throw error
 
-      // b) Sincronización automática de evento contractual: Retiro / Terminación de Contrato
-      const fRetiroFinal = fecha_retiro || new Date().toISOString().split('T')[0]
+      // 3. Sincronización automática de evento contractual en public.novedades con el concepto elegido
       const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
-        retiroEmp.nombre_completo, 'Terminación de Contrato', fRetiroFinal, currentCompany
+        retiroEmp.nombre_completo, conceptoRetiro, fRetiroFinal, currentCompany
       )
       if (!existentes || existentes.length === 0) {
         const { error: errNov } = await novedadesApi.crearNovedad({
-          concepto: 'Terminación de Contrato',
+          concepto: conceptoRetiro,
           fecha_inicio: fRetiroFinal,
           fecha_fin: fRetiroFinal,
           total_dias: 0,
           periodo: fRetiroFinal.slice(0, 7),
-          observacion: observaciones || 'Terminación de contrato laboral',
+          observacion: observaciones || `${conceptoRetiro} laboral`,
           empleado_id: retiroEmp.id,
           nombre_empleado: retiroEmp.nombre_completo,
           dependencia: retiroEmp.dependencia || null,
@@ -371,8 +376,8 @@ export default function Empleados() {
         }
       }
 
-      logAccion('RETIRAR', 'empleados', retiroEmp.id, currentCompany, { fecha_retiro, observaciones })
-      setMsg({ type: 'success', text: `Colaborador ${retiroEmp.nombre_completo} retirado exitosamente.` })
+      logAccion('RETIRAR', 'empleados', retiroEmp.id, currentCompany, { fecha_retiro: fRetiroFinal, concepto: conceptoRetiro, observaciones })
+      setMsg({ type: 'success', text: `Colaborador ${retiroEmp.nombre_completo} retirado exitosamente con novedad de "${conceptoRetiro}".` })
       setRetiroEmp(null)
       await load()
       setTimeout(() => setMsg(null), 3500)
