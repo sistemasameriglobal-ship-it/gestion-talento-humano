@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Calendar, UserCheck, Briefcase, Building2, Info, Award, RefreshCw } from 'lucide-react'
+import { X, Calendar, UserCheck, Briefcase, Building2, Info, Award } from 'lucide-react'
 import { hoyISO } from '../../utils/fecha'
 import { DEPENDENCIAS } from './empleadosConstants'
 

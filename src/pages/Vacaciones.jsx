@@ -13,7 +13,7 @@ import { Plus, X, Download, AlertCircle, Sun } from 'lucide-react'
 import {
   PAGE_SIZE, MESES, ANIOS, EMPTY,
 } from '../utils/vacacionesConstants'
-import { formatFecha, diasAcumuladosAnio, calcularSaldoVacacionesPeriodo, calcularAniosCumplidos, obtenerFechaIngresoContinua, aFechaInputDate } from '../utils/vacacionesHelpers'
+import { diasAcumuladosAnio, calcularSaldoVacacionesPeriodo, obtenerFechaIngresoContinua, aFechaInputDate } from '../utils/vacacionesHelpers'
 import ModalDetalle from '../components/vacaciones/ModalDetalle'
 import ModalForm from '../components/vacaciones/ModalForm'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'

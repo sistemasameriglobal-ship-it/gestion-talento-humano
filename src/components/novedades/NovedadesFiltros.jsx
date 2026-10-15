@@ -1,5 +1,27 @@
 import { Search, X, Calendar } from 'lucide-react'
 
+const formatPeriodo = (p, meses) => {
+  if (!p) return ''
+  const parts = String(p).trim().split('-')
+  if (parts.length === 2) {
+    const m = parts[1]
+    const mesObj = (meses || []).find(x => x.val === m || parseInt(x.val, 10) === parseInt(m, 10))
+    if (mesObj) return `${p} · ${mesObj.label}`
+  }
+  return p
+}
+
+const agruparPeriodos = (items) => {
+  const grupos = {}
+  for (const p of items) {
+    if (!p) continue
+    const y = p.includes('-') ? p.split('-')[0] : 'Otros'
+    if (!grupos[y]) grupos[y] = []
+    grupos[y].push(p)
+  }
+  return grupos
+}
+
 // Barra de filtros de la página de Novedades. Vive aparte porque es un
 // bloque grande y con mucha lógica de reset combinado (año limpia mes y
 // periodo, etc.).
@@ -15,6 +37,12 @@ export default function NovedadesFiltros({
   rangoMes, hasFilter, clearFilters,
   conceptos, meses, aniosDisponibles, setPage,
 }) {
+  const periodosVisibles = filterAnio
+    ? periodos.filter(p => p.startsWith(filterAnio))
+    : periodos
+
+  const gruposPeriodos = agruparPeriodos(periodosVisibles)
+
   return (
     <div className="filters-row" style={{ flexWrap: 'wrap', gap: 8 }}>
       {/* Búsqueda */}
@@ -58,12 +86,37 @@ export default function NovedadesFiltros({
         {meses.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
       </select>
 
-      {/* Periodo */}
+      {/* Periodo contable agrupado con nombre de mes */}
       {periodos.length > 0 && (
-        <select className="form-control" style={{ flex: '0 0 130px' }} value={filterPeriodo}
-          onChange={e => { setFilterPeriodo(e.target.value); setFilterAnio(''); setFilterMes(''); setPage(1) }}>
-          <option value="">Periodo</option>
-          {periodos.map(p => <option key={p} value={p}>{p}</option>)}
+        <select
+          className="form-control"
+          style={{
+            flex: '0 0 180px',
+            minWidth: 160,
+            borderColor: filterPeriodo ? 'var(--primary)' : undefined,
+            fontWeight: filterPeriodo ? 600 : 400,
+          }}
+          value={filterPeriodo}
+          onChange={e => {
+            const val = e.target.value
+            setFilterPeriodo(val)
+            if (val) {
+              setFilterAnio('')
+              setFilterMes('')
+            }
+            setPage(1)
+          }}
+        >
+          <option value="">📅 Periodo contable...</option>
+          {Object.entries(gruposPeriodos).map(([anio, items]) => (
+            <optgroup key={anio} label={`Año ${anio}`}>
+              {items.map(p => (
+                <option key={p} value={p}>
+                  {formatPeriodo(p, meses)}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </select>
       )}
 

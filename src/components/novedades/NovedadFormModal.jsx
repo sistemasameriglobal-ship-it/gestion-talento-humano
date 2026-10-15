@@ -6,6 +6,29 @@ import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { hoyISO, formatDuracion } from '../../utils/fecha'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
 import { CONCEPTOS_LIST, ICONOS } from '../../utils/novedadesConstants'
+import { MESES_OPCIONES } from '../../constants'
+
+const formatPeriodoLabel = (p) => {
+  if (!p) return ''
+  const parts = String(p).trim().split('-')
+  if (parts.length === 2) {
+    const m = parts[1]
+    const mesObj = MESES_OPCIONES.find(x => x.val === m || parseInt(x.val, 10) === parseInt(m, 10))
+    if (mesObj) return `${p} · ${mesObj.label}`
+  }
+  return p
+}
+
+const agruparPeriodos = (items) => {
+  const grupos = {}
+  for (const p of items) {
+    if (!p) continue
+    const y = p.includes('-') ? p.split('-')[0] : 'Otros'
+    if (!grupos[y]) grupos[y] = []
+    grupos[y].push(p)
+  }
+  return grupos
+}
 
 export default function NovedadFormModal({
   modal, form, setForm, setFormDirty, formError, saving,
@@ -296,7 +319,15 @@ export default function NovedadFormModal({
                         setFormDirty(true)
                       }}>
                       <option value="">— Sin periodo —</option>
-                      {periodosForm.map(p => <option key={p} value={p}>{p}</option>)}
+                      {Object.entries(agruparPeriodos(periodosForm)).map(([anio, items]) => (
+                        <optgroup key={anio} label={`Año ${anio}`}>
+                          {items.map(p => (
+                            <option key={p} value={p}>
+                              {formatPeriodoLabel(p)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
                       <option value="__nuevo__">+ Ingresar nuevo…</option>
                     </select>
                     {nuevoPeriodoMode && (

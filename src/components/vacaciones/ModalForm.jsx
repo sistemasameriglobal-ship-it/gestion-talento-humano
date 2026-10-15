@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { X, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
@@ -61,7 +61,7 @@ export default function ModalForm({
   const saldoRestante = Math.max(0, topeDisponible - diasSolicitados)
 
   // Resolver colaborador y sus datos contractuales (antigüedad, periodo vigente, fecha continua)
-  const resolverColaborador = (val) => {
+  const resolverColaborador = useCallback((val) => {
     if (!val) return null
     const nom = String(val).trim().toLowerCase()
     const todos = (empleados && empleados.length > 0)
@@ -89,7 +89,7 @@ export default function ModalForm({
       dependencia: empObj?.dependencia || pActivo?.dependencia || '',
       periodoId: pActivo?.id || null,
     }
-  }
+  }, [empleados, empActivos, empInactivos, periodos])
 
   // Auto-completar datos si el modal abre con nombre_empleado pero sin fecha_ingreso
   useEffect(() => {
@@ -115,7 +115,7 @@ export default function ModalForm({
         periodo_id: nextPid,
       }
     })
-  }, [form.nombre_empleado, form.fecha_ingreso, form.cargo, form.dependencia, empleados, periodos, setForm])
+  }, [form.nombre_empleado, form.fecha_ingreso, form.cargo, form.dependencia, resolverColaborador, setForm])
 
   const onEmpleadoChange = (val) => {
     const res = resolverColaborador(val)
@@ -280,7 +280,7 @@ export default function ModalForm({
             {form.nombre_empleado?.trim() && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span
-                  title={saldoVacacionesForm ? `Años cumplidos: ${saldoVacacionesForm.aniosCumplidos ?? 0} | Causados: ${saldoVacacionesForm.diasCausados} días | Tomados/dinero: ${saldoVacacionesForm.diasDisfrutados + saldoVacacionesForm.diasEnDinero} días` : undefined}
+                  title={saldoVacacionesForm ? `Años cumplidos: ${aniosCumplidos} | Causados: ${saldoVacacionesForm.diasCausados} días | Tomados/dinero: ${saldoVacacionesForm.diasDisfrutados + saldoVacacionesForm.diasEnDinero} días` : undefined}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                     background: (saldoDisponible > 0) ? 'var(--success-bg)' : 'var(--danger-bg)',

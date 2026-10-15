@@ -46,15 +46,6 @@ export function normalizarConceptoImportado(raw) {
   return { concepto: 'Otros', medioDia: false, observacionExtra: `Concepto original: ${original}` }
 }
 
-// Convierte el serial numérico de fecha de Excel (días desde 1899-12-30) a
-// { y, m, d }. 25569 = días entre la "época" de Excel y el epoch Unix.
-// Sustituye a XLSX.SSF.parse_date_code para no cargar la librería xlsx
-// completa solo por este cálculo.
-function serialExcelAFecha(serial) {
-  const ms = Math.round((serial - 25569) * 86400000)
-  const d = new Date(ms)
-  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() }
-}
 
 import { parsearFecha } from './parseExcel'
 
