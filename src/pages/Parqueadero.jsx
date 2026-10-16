@@ -22,7 +22,8 @@ import ParqueaderoCards from '../components/parqueadero/ParqueaderoCards'
 import '../components/parqueadero/parqueadero.css'
 
 export default function Parqueadero() {
-  const { currentCompany } = useCompany()
+  const { currentCompany, canWrite } = useCompany()
+  const puedeEditar = canWrite ? canWrite('parqueadero') : true
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
@@ -239,22 +240,26 @@ export default function Parqueadero() {
           <button className="btn btn-ghost" onClick={()=>exportarExcel(filtered,filterMes,filterAnio)} style={{display:'flex',alignItems:'center',gap:6}}>
             <Download size={14}/> Exportar
           </button>
-          <button className="btn btn-ghost"
-            disabled={!filterMes||!filterAnio}
-            title={!filterMes||!filterAnio?'Filtra por mes y año para habilitar':`Copiar ${filterMes} ${filterAnio} → siguiente mes`}
-            style={{background:'var(--success-bg)',color:'var(--success-text)',border:'1px solid color-mix(in srgb, var(--success) 35%, transparent)'}}
-            onClick={abrirModalCopiar}>
-            📋 Copiar al siguiente mes
-          </button>
-          <button className="btn btn-ghost" disabled={sendingReport||filtered.length===0}
-            style={{background:'var(--info-bg)',color:'var(--info-text)',border:'1px solid color-mix(in srgb, var(--info) 35%, transparent)'}}
-            onClick={async()=>{
-              setSendingReport(true)
-              await enviarReporte(filtered, filterMes, filterAnio, () => { load(); setSendingReport(false) })
-            }}>
-            {sendingReport?'⏳ Generando...':'📤 Envío de reporte'}
-          </button>
-          <button className="btn btn-primary" onClick={openAdd}><Plus size={15}/>Nuevo registro</button>
+          {puedeEditar && (
+            <>
+              <button className="btn btn-ghost"
+                disabled={!filterMes||!filterAnio}
+                title={!filterMes||!filterAnio?'Filtra por mes y año para habilitar':`Copiar ${filterMes} ${filterAnio} → siguiente mes`}
+                style={{background:'var(--success-bg)',color:'var(--success-text)',border:'1px solid color-mix(in srgb, var(--success) 35%, transparent)'}}
+                onClick={abrirModalCopiar}>
+                📋 Copiar al siguiente mes
+              </button>
+              <button className="btn btn-ghost" disabled={sendingReport||filtered.length===0}
+                style={{background:'var(--info-bg)',color:'var(--info-text)',border:'1px solid color-mix(in srgb, var(--info) 35%, transparent)'}}
+                onClick={async()=>{
+                  setSendingReport(true)
+                  await enviarReporte(filtered, filterMes, filterAnio, () => { load(); setSendingReport(false) })
+                }}>
+                {sendingReport?'⏳ Generando...':'📤 Envío de reporte'}
+              </button>
+              <button className="btn btn-primary" onClick={openAdd}><Plus size={15}/>Nuevo registro</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -325,12 +330,12 @@ export default function Parqueadero() {
         ) : vista==='cards' ? (
           <ParqueaderoCards
             paged={paged} filtered={filtered} page={page} totalPages={totalPages} setPage={setPage}
-            setViewRow={setViewRow} openEdit={openEdit} setDeleteId={setDeleteId} setHistorial={setHistorial}
+            setViewRow={setViewRow} openEdit={puedeEditar ? openEdit : null} setDeleteId={puedeEditar ? setDeleteId : null} setHistorial={setHistorial}
           />
         ) : (
           <ParqueaderoTabla
             paged={paged} filtered={filtered} page={page} totalPages={totalPages} setPage={setPage}
-            setViewRow={setViewRow} setHistorial={setHistorial} openEdit={openEdit} setDeleteId={setDeleteId}
+            setViewRow={setViewRow} setHistorial={setHistorial} openEdit={puedeEditar ? openEdit : null} setDeleteId={puedeEditar ? setDeleteId : null}
           />
         )}
       </div>

@@ -24,7 +24,8 @@ import VacacionesCards from '../components/vacaciones/VacacionesCards'
 import '../components/vacaciones/vacaciones.css'
 
 export default function Vacaciones() {
-  const { currentCompany } = useCompany()
+  const { currentCompany, canWrite } = useCompany()
+  const puedeEditar = canWrite ? canWrite('vacaciones') : true
   const [rows, setRows]           = useState([])
   const [empleados, setEmpleados] = useState([])
   const [periodos, setPeriodos]   = useState([])
@@ -521,9 +522,11 @@ export default function Vacaciones() {
           <button className="btn btn-ghost" onClick={exportarExcelHandler} style={{display:'flex',alignItems:'center',gap:6}}>
             <Download size={15}/> Exportar
           </button>
-          <button className="btn btn-primary" onClick={openAdd}>
-            <Plus size={15}/> Nueva solicitud
-          </button>
+          {puedeEditar && (
+            <button className="btn btn-primary" onClick={openAdd}>
+              <Plus size={15}/> Nueva solicitud
+            </button>
+          )}
         </div>
       </div>
 
@@ -575,12 +578,12 @@ export default function Vacaciones() {
           <VacacionesTabla
             paged={paged} filtered={filtered} page={page} totalPages={totalPages} setPage={setPage}
             sortField={sortField} sortAsc={sortAsc} toggleSort={toggleSort}
-            quickSaveEstado={quickSaveEstado} openEdit={openEdit} setViewRow={setViewRow} setDeleteId={setDeleteId}
+            quickSaveEstado={puedeEditar ? quickSaveEstado : null} openEdit={puedeEditar ? openEdit : null} setViewRow={setViewRow} setDeleteId={puedeEditar ? setDeleteId : null}
           />
         ) : (
           <VacacionesCards
             paged={paged} filtered={filtered} page={page} totalPages={totalPages} setPage={setPage}
-            quickSaveEstado={quickSaveEstado} openEdit={openEdit} setViewRow={setViewRow} setDeleteId={setDeleteId}
+            quickSaveEstado={puedeEditar ? quickSaveEstado : null} openEdit={puedeEditar ? openEdit : null} setViewRow={setViewRow} setDeleteId={puedeEditar ? setDeleteId : null}
           />
         )}
       </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useCompany } from '../context/CompanyContext'
 import * as perfilesApi from '../api/perfiles'
-import { Menu } from 'lucide-react'
+import { Menu, Eye } from 'lucide-react'
 
 // ── Carga diferida de páginas (code-splitting) ─────────────────────────────
 const Dashboard = lazy(() => import('../pages/Dashboard'))
@@ -36,7 +36,7 @@ const PAGE_COMPONENTS = {
 
 export default function AppShell() {
   const { isAdmin } = useAuth()
-  const { currentCompany, companyConfig, hasPermission } = useCompany()
+  const { currentCompany, companyConfig, hasPermission, getSectionAccess } = useCompany()
   const [page, setPage] = useState(() => window.location.hash.replace('#/', '') || 'dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === '1')
@@ -198,6 +198,24 @@ export default function AppShell() {
         </header>
 
         <div className="page-wrapper">
+          {getSectionAccess && getSectionAccess(page) === 'lectura' && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 14px',
+              background: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              borderRadius: 10,
+              marginBottom: 16,
+              color: '#92400E',
+              fontSize: 12.5,
+              fontWeight: 500,
+            }}>
+              <Eye size={16} style={{ flexShrink: 0, color: '#D97706' }} />
+              <span><strong>Modo Solo Lectura:</strong> Tienes permisos para consultar y descargar la información de este módulo. Las funciones de registro, edición o eliminación no están habilitadas para tu usuario.</span>
+            </div>
+          )}
           <Suspense fallback={<div className="empty-state"><p>Cargando...</p></div>}>
             <PageComponent onNavigate={navigate} />
           </Suspense>

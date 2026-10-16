@@ -24,7 +24,8 @@ import { useCompany } from '../context/CompanyContext'
 import { useAuth } from '../context/AuthContext'
 
 export default function Productividad() {
-  const { currentCompany, departamentos } = useCompany()
+  const { currentCompany, departamentos, canWrite } = useCompany()
+  const puedeEditar = canWrite ? canWrite('productividad') : true
   const { isAdmin } = useAuth()
   const [showGestionDep, setShowGestionDep] = useState(false)
 
@@ -352,8 +353,8 @@ export default function Productividad() {
         filtroCargo={filtroCargo} setFiltroCargo={setFiltroCargo} cargosUnicos={cargosUnicos}
         mesFiltro={mesFiltro} setMesFiltro={setMesFiltro}
         ordenCol={ordenCol} ordenDir={ordenDir} toggleOrden={toggleOrden}
-        eliminandoNombre={eliminandoNombre} importarFilas={importarFilas}
-        abrirVer={abrirVer} abrirEditar={abrirEditar} eliminarPersona={eliminarPersona} setVerProcesos={setVerProcesos}
+        eliminandoNombre={eliminandoNombre} importarFilas={puedeEditar ? importarFilas : null}
+        abrirVer={abrirVer} abrirEditar={puedeEditar ? abrirEditar : null} eliminarPersona={puedeEditar ? eliminarPersona : null} setVerProcesos={setVerProcesos}
       />
       </>
       )}

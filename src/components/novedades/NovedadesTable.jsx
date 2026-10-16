@@ -169,8 +169,8 @@ export default function NovedadesTable({
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="icon-btn" title="Ver detalle" onClick={() => onView(row)}><Eye size={13} /></button>
-                      <button className="icon-btn" title="Editar" onClick={() => onEdit(row)}><Edit2 size={13} /></button>
-                      <button className="icon-btn icon-btn--danger" title="Eliminar" onClick={() => onDelete(row.id)}><Trash2 size={13} /></button>
+                      {onEdit && <button className="icon-btn" title="Editar" onClick={() => onEdit(row)}><Edit2 size={13} /></button>}
+                      {onDelete && <button className="icon-btn icon-btn--danger" title="Eliminar" onClick={() => onDelete(row.id)}><Trash2 size={13} /></button>}
                     </div>
                   </td>
                 </tr>

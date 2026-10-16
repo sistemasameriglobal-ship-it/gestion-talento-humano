@@ -68,8 +68,8 @@ export default function VacacionesTabla({
                 <td>
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button className="icon-btn" title="Ver detalle" onClick={() => setViewRow(row)}><Eye size={13} /></button>
-                    <button className="icon-btn" title="Editar" onClick={() => openEdit(row)}><Edit2 size={13} /></button>
-                    <button className="icon-btn icon-btn--danger" title="Eliminar" onClick={() => setDeleteId(row.id)}><Trash2 size={13} /></button>
+                    {openEdit && <button className="icon-btn" title="Editar" onClick={() => openEdit(row)}><Edit2 size={13} /></button>}
+                    {setDeleteId && <button className="icon-btn icon-btn--danger" title="Eliminar" onClick={() => setDeleteId(row.id)}><Trash2 size={13} /></button>}
                   </div>
                 </td>
               </tr>

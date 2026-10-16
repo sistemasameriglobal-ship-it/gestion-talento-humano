@@ -76,25 +76,60 @@ export function CompanyProvider({ children }) {
     Promise.resolve().then(() => cargarDepartamentos())
   }, [cargarDepartamentos])
 
-  // Verificador de permisos por sección para la empresa actual
-  const hasPermission = useCallback((sectionId) => {
-    if (!perfil) return false
-    if (isAdmin) return true // Los administradores tienen acceso total
-    if ((sectionId === 'usuarios' || sectionId === 'sistema') && !isAdmin) return false
+  // Obtiene el nivel de acceso para una sección en la empresa actual:
+  // Retorna 'total' (ver y modificar), 'lectura' (solo ver información), o 'none' (sin acceso)
+  const getSectionAccess = useCallback((sectionId) => {
+    if (!perfil) return 'none'
+    if (isAdmin) return 'total' // Los administradores siempre tienen acceso total
+    if ((sectionId === 'usuarios' || sectionId === 'sistema') && !isAdmin) return 'none'
 
     const permisosUser = perfil.permisos || {}
     const permisosEmpresa = permisosUser[currentCompany]
 
+    // Si no tiene configuración específica de permisos, pero tiene acceso a la empresa
     if (!permisosEmpresa) {
-      return Array.isArray(perfil.empresas) && perfil.empresas.includes(currentCompany)
+      const tieneEmpresa = Array.isArray(perfil.empresas) && perfil.empresas.includes(currentCompany)
+      return tieneEmpresa ? 'total' : 'none'
     }
 
+    // Formato 1: Objeto con niveles por módulo { novedades: 'total', empleados: 'lectura', vacaciones: 'none' }
+    if (typeof permisosEmpresa === 'object' && !Array.isArray(permisosEmpresa)) {
+      if (permisosEmpresa[sectionId] !== undefined) {
+        const val = permisosEmpresa[sectionId]
+        if (val === 'total' || val === 'write' || val === true) return 'total'
+        if (val === 'lectura' || val === 'read') return 'lectura'
+        if (val === 'none' || val === false) return 'none'
+      }
+      if (permisosEmpresa.all === 'total' || permisosEmpresa.all === true) return 'total'
+      if (permisosEmpresa.all === 'lectura' || permisosEmpresa.all === 'read') return 'lectura'
+      return 'none'
+    }
+
+    // Formato 2: Array retrocompatible tipo ['all'], ['novedades'], ['novedades:lectura'], etc.
     if (Array.isArray(permisosEmpresa)) {
-      return permisosEmpresa.includes('all') || permisosEmpresa.includes(sectionId)
+      if (permisosEmpresa.includes('all')) return 'total'
+      if (permisosEmpresa.includes(`${sectionId}:lectura`) || permisosEmpresa.includes(`${sectionId}:read`)) {
+        return 'lectura'
+      }
+      if (permisosEmpresa.includes(`${sectionId}:total`) || permisosEmpresa.includes(`${sectionId}:write`) || permisosEmpresa.includes(sectionId)) {
+        return 'total'
+      }
+      return 'none'
     }
 
-    return false
+    return 'none'
   }, [perfil, isAdmin, currentCompany])
+
+  // Verificador de si puede entrar/ver la sección
+  const hasPermission = useCallback((sectionId) => {
+    const access = getSectionAccess(sectionId)
+    return access === 'total' || access === 'lectura'
+  }, [getSectionAccess])
+
+  // Verificador de si puede modificar/crear/eliminar en la sección (Acceso Total)
+  const canWrite = useCallback((sectionId) => {
+    return getSectionAccess(sectionId) === 'total'
+  }, [getSectionAccess])
 
   const value = {
     currentCompany,
@@ -102,6 +137,8 @@ export function CompanyProvider({ children }) {
     setCompany,
     empresasPermitidas,
     hasPermission,
+    canWrite,
+    getSectionAccess,
     departamentos,
     reloadDepartamentos: cargarDepartamentos,
   }

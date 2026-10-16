@@ -26,7 +26,8 @@ import '../components/colaboradores/colaboradores.css'
 import Paginacion from '../components/ui/Paginacion'
 
 export default function Colaboradores() {
-  const { currentCompany } = useCompany()
+  const { currentCompany, canWrite } = useCompany()
+  const puedeEditar = canWrite ? canWrite('colaboradores') : true
   const [rows, setRows] = useState([])
   const [empleadosTodos, setEmpleadosTodos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -397,7 +398,7 @@ export default function Colaboradores() {
         <ColaboradorDetalleModal
           selected={selected}
           onClose={() => setSelected(null)}
-          onDelete={setDeleteId}
+          onDelete={puedeEditar ? setDeleteId : null}
         />
       )}
     </div>

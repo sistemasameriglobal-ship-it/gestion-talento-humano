@@ -50,7 +50,8 @@ function levenshtein(a, b) {
 }
 
 export default function Empleados() {
-  const { currentCompany, companyConfig } = useCompany()
+  const { currentCompany, companyConfig, canWrite } = useCompany()
+  const puedeEditar = canWrite ? canWrite('empleados') : true
   const [rows, setRows] = useState([])
   const [novedades, setNovedades] = useState([])
   const [periodos, setPeriodos] = useState([])
@@ -805,11 +806,15 @@ export default function Empleados() {
           <button className="btn btn-ghost" onClick={exportExcel} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Download size={14} /> Exportar
           </button>
-          <label className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0 }}>
-            <Upload size={14} /> {importing ? 'Importando...' : 'Importar Excel'}
-            <input key={fileInputKey} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} disabled={importing} style={{ display: 'none' }} />
-          </label>
-          <button className="btn btn-primary" onClick={openAdd}><Plus size={15} /> Nuevo empleado</button>
+          {puedeEditar && (
+            <>
+              <label className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0 }}>
+                <Upload size={14} /> {importing ? 'Importando...' : 'Importar Excel'}
+                <input key={fileInputKey} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} disabled={importing} style={{ display: 'none' }} />
+              </label>
+              <button className="btn btn-primary" onClick={openAdd}><Plus size={15} /> Nuevo empleado</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -912,11 +917,11 @@ export default function Empleados() {
               vacacionesPorEmpleado={vacacionesPorEmpleado}
               procesosPorEmpleado={procesosPorEmpleado}
               onSelect={handleSelectEmp}
-              openEdit={openEdit}
-              onRetirar={setRetiroEmp}
-              onReintegrar={setReintegroEmp}
-              onLiquidar={setLiquidarEmp}
-              setDeleteId={setDeleteId}
+              openEdit={puedeEditar ? openEdit : null}
+              onRetirar={puedeEditar ? setRetiroEmp : null}
+              onReintegrar={puedeEditar ? setReintegroEmp : null}
+              onLiquidar={puedeEditar ? setLiquidarEmp : null}
+              setDeleteId={puedeEditar ? setDeleteId : null}
             />
             {pagination}
           </>
@@ -929,11 +934,11 @@ export default function Empleados() {
               vacacionesPorEmpleado={vacacionesPorEmpleado}
               procesosPorEmpleado={procesosPorEmpleado}
               onSelect={handleSelectEmp}
-              openEdit={openEdit}
-              onRetirar={setRetiroEmp}
-              onReintegrar={setReintegroEmp}
-              onLiquidar={setLiquidarEmp}
-              setDeleteId={setDeleteId}
+              openEdit={puedeEditar ? openEdit : null}
+              onRetirar={puedeEditar ? setRetiroEmp : null}
+              onReintegrar={puedeEditar ? setReintegroEmp : null}
+              onLiquidar={puedeEditar ? setLiquidarEmp : null}
+              setDeleteId={puedeEditar ? setDeleteId : null}
             />
             {pagination}
           </>

@@ -5,7 +5,7 @@ import {
   X, Check, Shield, CheckCircle2,
   AlertCircle, Loader2, LayoutDashboard, FileText,
   ShieldAlert, Sun, UserCog, Users, ParkingCircle, TrendingUp,
-  Eye, EyeOff, UserCheck, UserX, Mail, KeyRound,
+  Eye, EyeOff, UserCheck, UserX, Mail, KeyRound, CheckSquare,
 } from 'lucide-react'
 
 const SECCIONES_APP = [
@@ -40,11 +40,37 @@ export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
     return ['ameriglobal']
   })
 
+  // Normalización de permisos granulares por sección: 'total' | 'lectura' | 'none'
   const [permisos, setPermisos] = useState(() => {
     const p = user.permisos || {}
+    const normalizar = (val) => {
+      const res = {}
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        SECCIONES_APP.forEach(s => {
+          res[s.id] = val[s.id] || (val.all ? val.all : 'total')
+        })
+        return res
+      }
+      if (Array.isArray(val)) {
+        const hasAll = val.includes('all')
+        SECCIONES_APP.forEach(s => {
+          if (hasAll || val.includes(`${s.id}:total`) || val.includes(`${s.id}:write`) || val.includes(s.id)) {
+            res[s.id] = 'total'
+          } else if (val.includes(`${s.id}:lectura`) || val.includes(`${s.id}:read`)) {
+            res[s.id] = 'lectura'
+          } else {
+            res[s.id] = 'none'
+          }
+        })
+        return res
+      }
+      SECCIONES_APP.forEach(s => { res[s.id] = 'total' })
+      return res
+    }
+
     return {
-      ameriglobal: Array.isArray(p.ameriglobal) ? p.ameriglobal : ['all'],
-      global_link: Array.isArray(p.global_link) ? p.global_link : ['all'],
+      ameriglobal: normalizar(p.ameriglobal),
+      global_link: normalizar(p.global_link),
     }
   })
 
@@ -63,38 +89,25 @@ export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
     })
   }
 
-  const togglePermiso = (empresa, seccionId) => {
-    setPermisos(prev => {
-      const currentList = prev[empresa] || []
-      const isAll = currentList.includes('all')
-
-      let nextList
-      if (isAll) {
-        // Estaba en 'all', ahora pasa a tener todos excepto el desmarcado
-        nextList = SECCIONES_APP.map(s => s.id).filter(s => s !== seccionId)
-      } else if (currentList.includes(seccionId)) {
-        nextList = currentList.filter(s => s !== seccionId)
-      } else {
-        nextList = [...currentList, seccionId]
-        if (nextList.length === SECCIONES_APP.length) {
-          nextList = ['all']
-        }
-      }
-
-      return {
-        ...prev,
-        [empresa]: nextList,
-      }
-    })
+  const handleNivelChange = (empresa, seccionId, nivel) => {
+    setPermisos(prev => ({
+      ...prev,
+      [empresa]: {
+        ...(prev[empresa] || {}),
+        [seccionId]: nivel,
+      },
+    }))
   }
 
-  const toggleAccesoTotal = (empresa) => {
+  const handleSetAll = (empresa, nivel) => {
     setPermisos(prev => {
-      const currentList = prev[empresa] || []
-      const isAll = currentList.includes('all') || currentList.length === SECCIONES_APP.length
+      const actual = {}
+      SECCIONES_APP.forEach(s => {
+        actual[s.id] = nivel
+      })
       return {
         ...prev,
-        [empresa]: isAll ? [] : ['all'],
+        [empresa]: actual,
       }
     })
   }
@@ -155,11 +168,11 @@ export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
 
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && !loading && onClose()}>
-      <div className="modal" style={{ maxWidth: 640, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="modal" style={{ maxWidth: 680, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-header" style={{ flexShrink: 0 }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
             <UserCog size={18} style={{ color: 'var(--primary)' }} />
-            Editar Perfil de Usuario — {user.nombre_completo || user.correo}
+            Editar Perfil y Permisos — {user.nombre_completo || user.correo}
           </h2>
           <button className="modal-close" onClick={onClose} disabled={loading}><X size={18} /></button>
         </div>
@@ -251,8 +264,8 @@ export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
                   {[
-                    { id: 'operativo', label: 'Operativo', desc: 'Acceso estándar a módulos autorizados', color: '#2563EB' },
-                    { id: 'supervisor', label: 'Supervisor', desc: 'Visualización y seguimiento general', color: '#0D9488' },
+                    { id: 'operativo', label: 'Operativo', desc: 'Acceso según los permisos asignados abajo', color: '#2563EB' },
+                    { id: 'supervisor', label: 'Supervisor', desc: 'Visualización, auditoría y seguimiento', color: '#0D9488' },
                     { id: 'administrador', label: 'Administrador', desc: 'Acceso total y gestión de usuarios', color: '#7C3AED' },
                   ].map(r => (
                     <button
@@ -376,50 +389,127 @@ export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
 
               {/* ── 4. Permisos por Secciones (AmeriGlobal) ── */}
               {empresas.includes('ameriglobal') && (
-                <div style={{ marginBottom: 16, padding: '12px 14px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--info-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      🏢 Secciones permitidas en AmeriGlobal
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => toggleAccesoTotal('ameriglobal')}
-                      style={{ fontSize: 11, padding: '2px 8px' }}
-                    >
-                      {permisos.ameriglobal?.includes('all') ? 'Desmarcar todo' : 'Acceso total (Todo)'}
-                    </button>
+                <div style={{ marginBottom: 16, padding: '14px 16px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--info-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        🏢 Secciones en AmeriGlobal
+                      </span>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        Configura si el usuario puede modificar o solo ver la información de cada módulo.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleSetAll('ameriglobal', 'total')}
+                        style={{ fontSize: 11, padding: '3px 8px', color: '#15803D' }}
+                      >
+                        <CheckSquare size={12} style={{ marginRight: 3 }} /> Todo Acceso Total
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleSetAll('ameriglobal', 'lectura')}
+                        style={{ fontSize: 11, padding: '3px 8px', color: '#B45309' }}
+                      >
+                        <Eye size={12} style={{ marginRight: 3 }} /> Todo Solo Ver
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleSetAll('ameriglobal', 'none')}
+                        style={{ fontSize: 11, padding: '3px 8px', color: '#6B7280' }}
+                      >
+                        <X size={12} style={{ marginRight: 3 }} /> Bloquear Todo
+                      </button>
+                    </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {SECCIONES_APP.map(sec => {
-                      const isAllowed = permisos.ameriglobal?.includes('all') || permisos.ameriglobal?.includes(sec.id)
+                      const nivel = permisos.ameriglobal?.[sec.id] || 'none'
                       return (
-                        <label
+                        <div
                           key={`ag-${sec.id}`}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 8,
-                            padding: '6px 9px',
+                            justifyContent: 'space-between',
+                            padding: '6px 12px',
                             borderRadius: 8,
-                            background: isAllowed ? 'var(--info-bg)' : '#FFF',
-                            border: isAllowed ? '1px solid color-mix(in srgb, var(--info) 30%, transparent)' : '1px solid #E2E8F0',
-                            fontSize: 12,
-                            fontWeight: isAllowed ? 600 : 400,
-                            cursor: 'pointer',
-                            color: isAllowed ? 'var(--info-text)' : 'var(--text)',
+                            background: '#FFFFFF',
+                            border: nivel === 'total'
+                              ? '1px solid #86EFAC'
+                              : nivel === 'lectura'
+                                ? '1px solid #FCD34D'
+                                : '1px solid #E5E7EB',
+                            gap: 10,
                           }}
                         >
-                          <input
-                            type="checkbox"
-                            checked={!!isAllowed}
-                            onChange={() => togglePermiso('ameriglobal', sec.id)}
-                            style={{ accentColor: '#2563EB' }}
-                          />
-                          <span>{sec.emoji}</span>
-                          <span>{sec.label}</span>
-                        </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: nivel !== 'none' ? 600 : 400, color: nivel !== 'none' ? 'var(--text)' : 'var(--text-muted)' }}>
+                            <span>{sec.emoji}</span>
+                            <span>{sec.label}</span>
+                          </div>
+
+                          <div style={{ display: 'inline-flex', background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleNivelChange('ameriglobal', sec.id, 'total')}
+                              style={{
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                fontWeight: nivel === 'total' ? 700 : 500,
+                                borderRadius: 5,
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: nivel === 'total' ? '#DCFCE7' : 'transparent',
+                                color: nivel === 'total' ? '#15803D' : 'var(--text-muted)',
+                                transition: 'all 0.12s',
+                              }}
+                              title="Acceso total: puede ver, crear, editar y eliminar"
+                            >
+                              🟢 Acceso Total
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleNivelChange('ameriglobal', sec.id, 'lectura')}
+                              style={{
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                fontWeight: nivel === 'lectura' ? 700 : 500,
+                                borderRadius: 5,
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: nivel === 'lectura' ? '#FEF3C7' : 'transparent',
+                                color: nivel === 'lectura' ? '#B45309' : 'var(--text-muted)',
+                                transition: 'all 0.12s',
+                              }}
+                              title="Solo lectura: únicamente consultar información"
+                            >
+                              👁️ Solo Ver
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleNivelChange('ameriglobal', sec.id, 'none')}
+                              style={{
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                fontWeight: nivel === 'none' ? 700 : 500,
+                                borderRadius: 5,
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: nivel === 'none' ? '#F3F4F6' : 'transparent',
+                                color: nivel === 'none' ? '#4B5563' : 'var(--text-muted)',
+                                transition: 'all 0.12s',
+                              }}
+                              title="Sin acceso: oculta el módulo del menú"
+                            >
+                              🚫 Sin Acceso
+                            </button>
+                          </div>
+                        </div>
                       )
                     })}
                   </div>
@@ -428,50 +518,127 @@ export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
 
               {/* ── 5. Permisos por Secciones (Global Link) ── */}
               {empresas.includes('global_link') && (
-                <div style={{ marginBottom: 16, padding: '12px 14px', background: '#F0FDFA', borderRadius: 12, border: '1px solid #CCFBF1' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: 12.5, color: '#0F766E', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      🌐 Secciones permitidas en Global Link
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => toggleAccesoTotal('global_link')}
-                      style={{ fontSize: 11, padding: '2px 8px' }}
-                    >
-                      {permisos.global_link?.includes('all') ? 'Desmarcar todo' : 'Acceso total (Todo)'}
-                    </button>
+                <div style={{ marginBottom: 16, padding: '14px 16px', background: '#F0FDFA', borderRadius: 12, border: '1px solid #CCFBF1' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: '#0F766E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        🌐 Secciones en Global Link
+                      </span>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        Configura los privilegios de visualización o modificación para Global Link.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleSetAll('global_link', 'total')}
+                        style={{ fontSize: 11, padding: '3px 8px', color: '#0F766E' }}
+                      >
+                        <CheckSquare size={12} style={{ marginRight: 3 }} /> Todo Acceso Total
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleSetAll('global_link', 'lectura')}
+                        style={{ fontSize: 11, padding: '3px 8px', color: '#B45309' }}
+                      >
+                        <Eye size={12} style={{ marginRight: 3 }} /> Todo Solo Ver
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleSetAll('global_link', 'none')}
+                        style={{ fontSize: 11, padding: '3px 8px', color: '#6B7280' }}
+                      >
+                        <X size={12} style={{ marginRight: 3 }} /> Bloquear Todo
+                      </button>
+                    </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {SECCIONES_APP.map(sec => {
-                      const isAllowed = permisos.global_link?.includes('all') || permisos.global_link?.includes(sec.id)
+                      const nivel = permisos.global_link?.[sec.id] || 'none'
                       return (
-                        <label
+                        <div
                           key={`gl-${sec.id}`}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 8,
-                            padding: '6px 9px',
+                            justifyContent: 'space-between',
+                            padding: '6px 12px',
                             borderRadius: 8,
-                            background: isAllowed ? '#CCFBF1' : '#FFF',
-                            border: isAllowed ? '1px solid #99F6E4' : '1px solid #E2E8F0',
-                            fontSize: 12,
-                            fontWeight: isAllowed ? 600 : 400,
-                            cursor: 'pointer',
-                            color: isAllowed ? '#0F766E' : 'var(--text)',
+                            background: '#FFFFFF',
+                            border: nivel === 'total'
+                              ? '1px solid #99F6E4'
+                              : nivel === 'lectura'
+                                ? '1px solid #FCD34D'
+                                : '1px solid #E5E7EB',
+                            gap: 10,
                           }}
                         >
-                          <input
-                            type="checkbox"
-                            checked={!!isAllowed}
-                            onChange={() => togglePermiso('global_link', sec.id)}
-                            style={{ accentColor: '#0D9488' }}
-                          />
-                          <span>{sec.emoji}</span>
-                          <span>{sec.label}</span>
-                        </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: nivel !== 'none' ? 600 : 400, color: nivel !== 'none' ? 'var(--text)' : 'var(--text-muted)' }}>
+                            <span>{sec.emoji}</span>
+                            <span>{sec.label}</span>
+                          </div>
+
+                          <div style={{ display: 'inline-flex', background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleNivelChange('global_link', sec.id, 'total')}
+                              style={{
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                fontWeight: nivel === 'total' ? 700 : 500,
+                                borderRadius: 5,
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: nivel === 'total' ? '#CCFBF1' : 'transparent',
+                                color: nivel === 'total' ? '#0F766E' : 'var(--text-muted)',
+                                transition: 'all 0.12s',
+                              }}
+                              title="Acceso total: puede ver, crear, editar y eliminar"
+                            >
+                              🟢 Acceso Total
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleNivelChange('global_link', sec.id, 'lectura')}
+                              style={{
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                fontWeight: nivel === 'lectura' ? 700 : 500,
+                                borderRadius: 5,
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: nivel === 'lectura' ? '#FEF3C7' : 'transparent',
+                                color: nivel === 'lectura' ? '#B45309' : 'var(--text-muted)',
+                                transition: 'all 0.12s',
+                              }}
+                              title="Solo lectura: únicamente consultar información"
+                            >
+                              👁️ Solo Ver
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleNivelChange('global_link', sec.id, 'none')}
+                              style={{
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                fontWeight: nivel === 'none' ? 700 : 500,
+                                borderRadius: 5,
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: nivel === 'none' ? '#F3F4F6' : 'transparent',
+                                color: nivel === 'none' ? '#4B5563' : 'var(--text-muted)',
+                                transition: 'all 0.12s',
+                              }}
+                              title="Sin acceso: oculta el módulo del menú"
+                            >
+                              🚫 Sin Acceso
+                            </button>
+                          </div>
+                        </div>
                       )
                     })}
                   </div>

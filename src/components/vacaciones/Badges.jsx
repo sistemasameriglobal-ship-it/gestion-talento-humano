@@ -29,9 +29,9 @@ export function EditableEstadoBadge({ estado, rowId, onSave }) {
   }
   return (
     <span
-      onClick={handleClick}
-      title="Clic para cambiar el estado"
-      style={{ cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1, display: 'inline-flex' }}
+      onClick={onSave ? handleClick : undefined}
+      title={onSave ? "Clic para cambiar el estado" : undefined}
+      style={{ cursor: onSave ? (saving ? 'wait' : 'pointer') : 'default', opacity: saving ? 0.6 : 1, display: 'inline-flex' }}
     >
       <EstadoBadge estado={current} />
     </span>

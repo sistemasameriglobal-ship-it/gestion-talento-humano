@@ -34,7 +34,8 @@ import '../components/novedades/novedades-anim.css'
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Novedades() {
-  const { currentCompany, departamentos } = useCompany()
+  const { currentCompany, departamentos, canWrite } = useCompany()
+  const puedeEditar = canWrite ? canWrite('novedades') : true
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchInput, setSearchInput] = useState('') // valor crudo del input (instantáneo)
@@ -461,28 +462,34 @@ export default function Novedades() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <LiveIndicator lastUpdated={lastUpdated} refreshing={refreshing} onRefreshNow={() => load(true)} />
-          <button
-            className="btn btn-ghost"
-            onClick={recalcularDiasVacaciones}
-            disabled={recalculando}
-            title="Recalcula los días de las Vacaciones ya guardadas para que cuenten días hábiles"
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            🔄 {recalculando ? 'Recalculando…' : 'Recalcular días hábiles'}
-          </button>
+          {puedeEditar && (
+            <button
+              className="btn btn-ghost"
+              onClick={recalcularDiasVacaciones}
+              disabled={recalculando}
+              title="Recalcula los días de las Vacaciones ya guardadas para que cuenten días hábiles"
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              🔄 {recalculando ? 'Recalculando…' : 'Recalcular días hábiles'}
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={exportExcel} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Download size={15} /> Exportar Excel
           </button>
-          <button className="btn btn-ghost" onClick={exportExcelParaImportar}
-            title="Exporta TODOS los registros (sin importar filtros) en el mismo formato que usa 'Importar Excel', listo para editar en bloque y volver a subir."
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Download size={15} /> Exportar para importar
-          </button>
-          <label className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0 }}>
-            <Upload size={15} /> {importing ? 'Analizando…' : 'Importar Excel'}
-            <input key={fileInputKey} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} disabled={importing} style={{ display: 'none' }} />
-          </label>
-          <button className="btn btn-primary" onClick={openAdd}><Plus size={15} />Nueva novedad</button>
+          {puedeEditar && (
+            <>
+              <button className="btn btn-ghost" onClick={exportExcelParaImportar}
+                title="Exporta TODOS los registros (sin importar filtros) en el mismo formato que usa 'Importar Excel', listo para editar en bloque y volver a subir."
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Download size={15} /> Exportar para importar
+              </button>
+              <label className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0 }}>
+                <Upload size={15} /> {importing ? 'Analizando…' : 'Importar Excel'}
+                <input key={fileInputKey} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} disabled={importing} style={{ display: 'none' }} />
+              </label>
+              <button className="btn btn-primary" onClick={openAdd}><Plus size={15} />Nueva novedad</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -532,14 +539,17 @@ export default function Novedades() {
                 </span>
               )}
           </span>
-          <span style={{ fontSize: 11, opacity: 0.6 }}>Clic en encabezado para ordenar · Clic en pill para editar</span>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>
+            Clic en encabezado para ordenar {puedeEditar ? '· Clic en pill para editar' : '· Solo lectura'}
+          </span>
         </div>
 
         <NovedadesTable
           loading={loading} filtered={filtered} paged={paged} page={page} totalPages={totalPages}
           sortField={sortField} sortDir={sortDir} onSort={handleSort}
           highlightId={highlightId} soloActivas={soloActivas}
-          quickSave={quickSave} onView={setViewRow} onEdit={openEdit} onDelete={setDeleteId}
+          quickSave={puedeEditar ? quickSave : null} onView={setViewRow}
+          onEdit={puedeEditar ? openEdit : null} onDelete={puedeEditar ? setDeleteId : null}
           setPage={setPage}
         />
       </div>

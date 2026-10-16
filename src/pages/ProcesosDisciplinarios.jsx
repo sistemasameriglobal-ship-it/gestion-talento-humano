@@ -22,7 +22,8 @@ import PdEmpleadoDetalleModal from '../components/procesos-disciplinarios/PdEmpl
 import PdViewModal from '../components/procesos-disciplinarios/PdViewModal'
 
 export default function ProcesosDisciplinarios() {
-  const { currentCompany } = useCompany()
+  const { currentCompany, canWrite } = useCompany()
+  const puedeEditar = canWrite ? canWrite('disciplinarios') : true
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [empleados, setEmpleados] = useState({ activos: [], inactivos: [] })
@@ -347,7 +348,9 @@ export default function ProcesosDisciplinarios() {
           <button className="btn btn-ghost" onClick={exportExcel} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Download size={15} /> Exportar Excel
           </button>
-          <button className="btn btn-primary" onClick={openAdd}><Plus size={15} />Nuevo proceso</button>
+          {puedeEditar && (
+            <button className="btn btn-primary" onClick={openAdd}><Plus size={15} />Nuevo proceso</button>
+          )}
         </div>
       </div>
 
@@ -467,9 +470,9 @@ export default function ProcesosDisciplinarios() {
           empleadoDetalle={empleadoDetalle}
           onClose={() => setDetalleKey(null)}
           onVer={(p) => { setDetalleKey(null); setViewRow(p) }}
-          onEditar={(p) => { setDetalleKey(null); openEdit(p) }}
-          onEliminar={(p) => { setDetalleKey(null); setDeleteRow(p) }}
-          onNuevoProceso={() => openAddForEmployee(empleadoDetalle.nombre)}
+          onEditar={puedeEditar ? ((p) => { setDetalleKey(null); openEdit(p) }) : null}
+          onEliminar={puedeEditar ? ((p) => { setDetalleKey(null); setDeleteRow(p) }) : null}
+          onNuevoProceso={puedeEditar ? (() => openAddForEmployee(empleadoDetalle.nombre)) : null}
         />
       )}
 

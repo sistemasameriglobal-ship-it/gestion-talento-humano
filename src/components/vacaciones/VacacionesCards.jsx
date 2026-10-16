@@ -39,8 +39,8 @@ export default function VacacionesCards({
                 </div>
                 <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
                   <button className="btn btn-ghost btn-sm" title="Ver detalle" onClick={() => setViewRow(row)}><Eye size={12} /></button>
-                  <button className="icon-btn" title="Editar" onClick={() => openEdit(row)}><Edit2 size={12} /></button>
-                  <button className="icon-btn icon-btn--danger" title="Eliminar" onClick={() => setDeleteId(row.id)}><Trash2 size={12} /></button>
+                  {openEdit && <button className="icon-btn" title="Editar" onClick={() => openEdit(row)}><Edit2 size={12} /></button>}
+                  {setDeleteId && <button className="icon-btn icon-btn--danger" title="Eliminar" onClick={() => setDeleteId(row.id)}><Trash2 size={12} /></button>}
                 </div>
               </div>
 

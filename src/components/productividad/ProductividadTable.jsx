@@ -111,7 +111,7 @@ export default function ProductividadTable({
           {exportando ? <Loader2 size={13} className="pr-refresh--spin" /> : <FileSpreadsheet size={13} />}
           {exportando ? 'Exportando…' : 'Exportar Excel'}
         </button>
-        {cfg.usaClientes && (
+        {cfg.usaClientes && importarFilas && (
           <ImportExportProductividad
             modo="clientes"
             etiqueta={cfg.tabLabel}
@@ -228,10 +228,12 @@ export default function ProductividadTable({
                       <button className="pr-icon-btn" title="Ver detalle" onClick={() => abrirVer(v)}>
                         <Eye size={13} />
                       </button>
-                      <button className="pr-icon-btn" title="Editar" onClick={() => abrirEditar(v)}>
-                        <Pencil size={13} />
-                      </button>
-                      {cfg.id !== 'ventas' && (
+                      {abrirEditar && (
+                        <button className="pr-icon-btn" title="Editar" onClick={() => abrirEditar(v)}>
+                          <Pencil size={13} />
+                        </button>
+                      )}
+                      {eliminarPersona && cfg.id !== 'ventas' && (
                         <button
                           className="pr-icon-btn pr-icon-btn--danger"
                           title="Reiniciar historial a 0"
