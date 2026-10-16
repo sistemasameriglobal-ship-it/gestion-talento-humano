@@ -5,10 +5,11 @@
 // las tablas de Productividad. Se usa en la primera columna de las
 // tablas de empleados / novedades / vacaciones / etc.
 // =============================================================
+import { memo } from 'react'
 import './ui.css'
 import { iniciales } from '../../utils/productividadHelpers'
 
-export default function PersonCell({ nombre, sub, children, muted = false, color }) {
+function PersonCell({ nombre, sub, children, muted = false, color }) {
   return (
     <div className="person-cell" style={muted ? { opacity: .85 } : undefined}>
       <div className="person-avatar" style={color ? { background: color } : undefined}>{iniciales(nombre || '?')}</div>
@@ -20,3 +21,6 @@ export default function PersonCell({ nombre, sub, children, muted = false, color
     </div>
   )
 }
+
+export default memo(PersonCell)
+

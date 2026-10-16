@@ -20,4 +20,8 @@ export * as procesosDisciplinarios from './procesosDisciplinarios'
 export * as productividad from './productividad'
 export * as perfiles from './perfiles'
 export * as departamentos from './departamentos'
+export * as empresas from './empresas'
+export * as auditLogs from './auditLogs'
+export * as sistema from './sistema'
 export * as auth from './auth'
+

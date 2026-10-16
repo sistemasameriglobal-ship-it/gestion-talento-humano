@@ -1,10 +1,9 @@
 import PageTitle from '../components/ui/PageTitle'
-import { ParkingSquare as TitleIcon } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as parqueaderoApi from '../api/parqueadero'
 import * as empleadosApi from '../api/empleados'
-import { Plus, X, Car, Download } from 'lucide-react'
+import { ParkingSquare, Plus, X, Car, Download } from 'lucide-react'
 import { PAGE_SIZE, MESES, ANIOS, EMPTY } from '../utils/parqueaderoConstants'
 import { omit } from '../utils/omit'
 import { exportarExcelParqueadero as exportarExcel, enviarReporte } from '../utils/parqueaderoHelpers'
@@ -233,7 +232,7 @@ export default function Parqueadero() {
       {/* ── Header ── */}
       <div className="page-header" style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
         <div>
-          <PageTitle icon={TitleIcon}>Parqueadero</PageTitle>
+          <PageTitle icon={ParkingSquare}>Parqueadero</PageTitle>
           <p>Registro de vehículos y control de parqueadero</p>
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>

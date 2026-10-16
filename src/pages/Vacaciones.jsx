@@ -1,5 +1,4 @@
 import PageTitle from '../components/ui/PageTitle'
-import { Sun as TitleIcon } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as vacacionesApi from '../api/vacaciones'
@@ -9,7 +8,7 @@ import { hoyISO } from '../utils/fecha'
 import { diasHabilesEntre } from '../utils/diasHabiles'
 import { exportarExcel } from '../utils/exportarExcel'
 import { logAccion } from '../utils/auditLogger'
-import { Plus, X, Download, AlertCircle, Sun } from 'lucide-react'
+import { Sun, Plus, X, Download, AlertCircle } from 'lucide-react'
 import {
   PAGE_SIZE, MESES, ANIOS, EMPTY,
 } from '../utils/vacacionesConstants'
@@ -516,7 +515,7 @@ export default function Vacaciones() {
     <div>
       <div className="page-header" style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
         <div>
-          <PageTitle icon={TitleIcon}>Vacaciones</PageTitle>
+          <PageTitle icon={Sun}>Vacaciones</PageTitle>
           <p>Gestión y seguimiento de solicitudes de vacaciones</p>
         </div>
         <div style={{display:'flex',gap:8}}>

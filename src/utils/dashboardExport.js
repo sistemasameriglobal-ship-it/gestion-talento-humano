@@ -2,7 +2,7 @@ import { crearLibro, crearHoja, descargarWorkbook } from './exportarExcel'
 
 // Exporta el Dashboard a un workbook de 5 hojas: datos completos filtrados,
 // resumen por concepto, novedades por área, tendencia mensual y resumen general.
-export async function exportarDashboardExcel({ data, stats, hasFilter, filterAnio, filterMeses, filterPeriodo, filterConcepto }) {
+export async function exportarDashboardExcel({ data, stats, hasFilter, filterAnio, filterMeses, filterPeriodo, filterConcepto, empresaNombre = 'AmeriGlobal' }) {
   const wb = await crearLibro()
 
   // Hoja 1: Datos completos filtrados
@@ -59,5 +59,6 @@ export async function exportarDashboardExcel({ data, stats, hasFilter, filterAni
   await crearHoja(wb, 'Resumen General', resumen, { anchosColumnas: [36, 20], titulo: 'Resumen general' })
 
   const label = filterAnio && filterMeses.length ? `${filterAnio}-${filterMeses.join('_')}` : filterAnio || filterPeriodo || 'todos'
-  await descargarWorkbook(wb, `AmeriGlobal_Dashboard_${label}.xlsx`)
+  const cleanName = empresaNombre.replace(/[^a-zA-Z0-9_-]/g, '_')
+  await descargarWorkbook(wb, `${cleanName}_Dashboard_${label}.xlsx`)
 }

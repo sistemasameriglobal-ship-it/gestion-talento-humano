@@ -1,5 +1,4 @@
 import PageTitle from '../components/ui/PageTitle'
-import { ClipboardList as TitleIcon } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as novedadesApi from '../api/novedades'
@@ -21,7 +20,7 @@ import { useImportacionExcel } from '../hooks/useImportacionExcel'
 import { useNovedadesFiltros } from '../hooks/useNovedadesFiltros'
 import NovedadesFiltros from '../components/novedades/NovedadesFiltros'
 import {
-  Plus, Download, Upload, AlertCircle
+  ClipboardList, Plus, Download, Upload, AlertCircle
 } from 'lucide-react'
 import AnimatedNumber from '../components/ui/AnimatedNumber'
 import LiveIndicator from '../components/ui/LiveIndicator'
@@ -457,7 +456,7 @@ export default function Novedades() {
     <div>
       <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <PageTitle icon={TitleIcon}>Novedades</PageTitle>
+          <PageTitle icon={ClipboardList}>Novedades</PageTitle>
           <p>Consulta, agrega y edita los registros de novedades</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

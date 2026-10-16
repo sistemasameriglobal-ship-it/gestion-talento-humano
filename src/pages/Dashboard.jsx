@@ -1,5 +1,4 @@
 import PageTitle from '../components/ui/PageTitle'
-import { LayoutDashboard as TitleIcon } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as novedadesApi from '../api/novedades'
@@ -8,7 +7,7 @@ import { hoyISO } from '../utils/fecha'
 import { MESES_DASHBOARD as MESES } from '../utils/dashboardConstants'
 import { filtrarNovedades, calcularDiasPeriodo, calcularStats } from '../utils/dashboardStats'
 import { exportarDashboardExcel } from '../utils/dashboardExport'
-import { AlertCircle, Download, Activity, Users, Percent } from 'lucide-react'
+import { LayoutDashboard, AlertCircle, Download, Activity, Users, Percent } from 'lucide-react'
 import BarChart from '../components/dashboard/BarChart'
 import ConceptoDonut from '../components/dashboard/ConceptoDonut'
 import TendenciaChart from '../components/dashboard/TendenciaChart'
@@ -235,6 +234,7 @@ export default function Dashboard({ onNavigate }) {
   // La construcción del workbook vive en utils/dashboardExport.js.
   const exportExcel = () => exportarDashboardExcel({
     data, stats, hasFilter, filterAnio, filterMeses, filterPeriodo, filterConcepto,
+    empresaNombre: companyConfig?.nombre || 'AmeriGlobal',
   })
 
   if (loading) return <div className="empty-state"><p>Cargando datos...</p></div>
@@ -254,7 +254,7 @@ export default function Dashboard({ onNavigate }) {
       {/* Header */}
       <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <PageTitle icon={TitleIcon}>Panel General</PageTitle>
+          <PageTitle icon={LayoutDashboard}>Panel General</PageTitle>
           <p>Resumen de novedades · {companyConfig.nombre}
             {labelFiltro && <strong style={{ marginLeft: 6, color: 'var(--primary)' }}>— {labelFiltro}</strong>}
           </p>

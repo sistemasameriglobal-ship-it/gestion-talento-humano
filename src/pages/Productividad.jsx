@@ -31,7 +31,7 @@ export default function Productividad() {
 
   // Configuración de departamentos dinámicos sincronizados con la empresa
   const deptosConfig = useMemo(() => {
-    if (currentCompany === 'global_link') {
+    if (currentCompany !== 'ameriglobal') {
       const res = {}
       const listaDeps = departamentos && departamentos.length > 0 ? departamentos : ['COBRANZA']
       listaDeps.forEach(depName => {
@@ -311,7 +311,7 @@ export default function Productividad() {
                 {d.tabLabel}
               </button>
             ))}
-            {currentCompany !== 'global_link' && (
+            {currentCompany === 'ameriglobal' && (
               <button
                 className={`pr-tab ${deptoActivo === 'cierre' ? 'pr-tab--active' : ''}`}
                 onClick={() => cambiarDepto('cierre')}

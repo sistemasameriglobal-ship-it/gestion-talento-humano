@@ -8,6 +8,7 @@
 // utils/productividadImport.js; cada sección solo aporta cómo guardar.
 // =============================================================
 import { useMemo, useState, useEffect } from 'react'
+import { useCompany } from '../../context/CompanyContext'
 import { Download, Upload, Loader2, X, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { calcPct } from '../../utils/productividadHelpers'
 import {
@@ -32,6 +33,7 @@ export default function ImportExportProductividad({
   existentes,      // (nombre, anio, mes) => valores guardados | null | undefined
   onImportar,      // async (payloads[]) => guardar (lanza error si falla)
 }) {
+  const { companyConfig } = useCompany()
   const [exportando, setExportando] = useState(false)
   const [leyendo, setLeyendo] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
@@ -60,7 +62,8 @@ export default function ImportExportProductividad({
       await crearHoja(wb, 'Datos', filasExport(), { anchosColumnas: esCierre ? ANCHOS_CIERRE : ANCHOS_CLIENTES, marca: false })
       await crearHoja(wb, 'Instrucciones', filasInstrucciones(modo), { anchosColumnas: [26, 95], marca: false })
       const seccion = etiqueta.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')
-      await descargarWorkbook(wb, `AmeriGlobal_Productividad_${seccion}_${anio}_ParaImportar_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      const empNombre = (companyConfig?.nombre || 'AmeriGlobal').replace(/[^a-zA-Z0-9_-]/g, '_')
+      await descargarWorkbook(wb, `${empNombre}_Productividad_${seccion}_${anio}_ParaImportar_${new Date().toISOString().slice(0, 10)}.xlsx`)
     } catch (err) {
       console.error(err)
       setAviso({ tipo: 'error', texto: err.message || 'No se pudo exportar el archivo.' })

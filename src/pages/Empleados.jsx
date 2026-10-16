@@ -1,5 +1,4 @@
 import PageTitle from '../components/ui/PageTitle'
-import { Contact as TitleIcon } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as empleadosApi from '../api/empleados'
@@ -11,7 +10,7 @@ import { normalizarConcepto, mapearFilaEmpleadoExcel } from '../utils/parseExcel
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo } from '../utils/vacacionesHelpers'
 import { exportarExcel } from '../utils/exportarExcel'
 import { logAccion } from '../utils/auditLogger'
-import { Plus, Search, X, Download, Upload, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
+import { Contact, Plus, Search, X, Download, Upload, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
 import { PAGE_SIZE, EMPTY } from '../components/empleados/empleadosConstants'
 import EmpleadoKpis from '../components/empleados/EmpleadoKpis'
 import AreaDistribution from '../components/empleados/AreaDistribution'
@@ -831,7 +830,7 @@ export default function Empleados() {
     <div>
       <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <PageTitle icon={TitleIcon}>Empleados</PageTitle>
+          <PageTitle icon={Contact}>Empleados</PageTitle>
           <p>Gestiona el directorio de colaboradores de {companyConfig.nombre}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

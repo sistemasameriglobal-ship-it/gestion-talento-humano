@@ -1,5 +1,4 @@
 import PageTitle from '../components/ui/PageTitle'
-import { Users as TitleIcon } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as novedadesApi from '../api/novedades'
@@ -9,7 +8,7 @@ import * as productividadApi from '../api/productividad'
 import { hoyISO } from '../utils/fecha'
 import { normalizarConcepto } from '../utils/parseExcel'
 import { exportarExcel } from '../utils/exportarExcel'
-import { Search, X, User, Download, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
+import { Users, Search, X, User, Download, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
 import {
   PAGE_SIZE, labelMes, CONCEPTOS_LIST, CONCEPTOS_AUSENTISMO,
   construirProductividad, anioProductividadEfectivo, productividadPorEmpleado,
@@ -250,7 +249,7 @@ export default function Colaboradores() {
       'Periodo Productividad': c.productividadPeriodo || '—',
     })), {
       nombreHoja: 'Colaboradores',
-      nombreArchivo: `Colaboradores_${hoyISO()}.xlsx`,
+      nombreArchivo: `Colaboradores_${currentCompany || 'empresa'}_${hoyISO()}.xlsx`,
       anchosColumnas: [32, 20, 14, 16, 16, 16, 16, 12, 14, 18, 16],
     })
   }
@@ -261,7 +260,7 @@ export default function Colaboradores() {
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <PageTitle icon={TitleIcon}>Colaboradores</PageTitle>
+          <PageTitle icon={Users}>Colaboradores</PageTitle>
           <p>Historial de novedades por colaborador</p>
         </div>
         <button className="btn btn-ghost" onClick={exportExcel} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

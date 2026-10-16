@@ -74,8 +74,8 @@ export default function EmpleadoHistorialModal({
   onLiquidar,
   onSustitucion,
 }) {
-  const { currentCompany } = useCompany()
-  const nombreEmpresaActiva = currentCompany === 'global_link' ? 'Global Link' : 'AmeriGlobal'
+  const { companyConfig } = useCompany()
+  const nombreEmpresaActiva = companyConfig?.nombre || 'Empresa'
   const nov = novedadesPorEmpleado[selectedEmp.nombre_completo]
   const procesosRef = useRef(null)
 

@@ -12,6 +12,7 @@
 //
 // tone: 'default' | 'success' | 'danger' | 'warning' | 'info' | 'purple'
 // =============================================================
+import { memo } from 'react'
 import './ui.css'
 
 const TONOS = {
@@ -30,7 +31,7 @@ export function KpiGrid({ children, min = 170, style }) {
   )
 }
 
-export default function KpiCard({ label, value, sub, icon: Icon, tone = 'default', onClick, active = false, title }) {
+function KpiCard({ label, value, sub, icon: Icon, tone = 'default', onClick, active = false, title }) {
   const color = TONOS[tone]
   return (
     <div
@@ -51,3 +52,5 @@ export default function KpiCard({ label, value, sub, icon: Icon, tone = 'default
     </div>
   )
 }
+
+export default memo(KpiCard)

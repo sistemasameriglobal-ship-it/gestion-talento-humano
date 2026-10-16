@@ -5,9 +5,10 @@
 // (antes había 8 copias con el mismo markup y la misma lógica
 // de ventana de 5 páginas).
 // =============================================================
+import { memo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-export default function Paginacion({ total, page, totalPages, onChange, info, style }) {
+function Paginacion({ total, page, totalPages, onChange, info, style }) {
   const infoText = info ?? `${total} registros · Página ${page} de ${totalPages}`
   return (
     <div className="pagination" style={style}>
@@ -23,3 +24,5 @@ export default function Paginacion({ total, page, totalPages, onChange, info, st
     </div>
   )
 }
+
+export default memo(Paginacion)

@@ -182,9 +182,9 @@ export default function AppShell() {
                 borderRadius: 8,
                 fontSize: 12,
                 fontWeight: 600,
-                background: currentCompany === 'global_link' ? '#F0FDFA' : '#EFF6FF',
-                color: currentCompany === 'global_link' ? '#0F766E' : '#1D4ED8',
-                border: currentCompany === 'global_link' ? '1px solid #99F6E4' : '1px solid #BFDBFE'
+                background: companyConfig?.colorFondoTag || '#EFF6FF',
+                color: companyConfig?.colorPrincipal || '#1D4ED8',
+                border: `1px solid ${companyConfig?.colorPrincipal ? companyConfig.colorPrincipal + '33' : '#BFDBFE'}`
               }}
             >
               <span>{companyConfig.icono}</span>

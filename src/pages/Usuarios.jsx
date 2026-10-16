@@ -1,5 +1,4 @@
 import PageTitle from '../components/ui/PageTitle'
-import { ShieldCheck as TitleIcon } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import * as authApi from '../api/auth'
 import * as perfilesApi from '../api/perfiles'
@@ -321,7 +320,7 @@ export default function Usuarios() {
     <div>
       <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <PageTitle icon={TitleIcon}>Gestión de Usuarios y Roles</PageTitle>
+          <PageTitle icon={ShieldCheck}>Gestión de Usuarios y Roles</PageTitle>
           <p>Administra accesos, asigna permisos por empresa (AmeriGlobal / Global Link) y crea departamentos.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

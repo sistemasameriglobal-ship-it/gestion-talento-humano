@@ -1,5 +1,4 @@
 import PageTitle from '../components/ui/PageTitle'
-import { Scale as TitleIcon } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as procesosApi from '../api/procesosDisciplinarios'
@@ -8,7 +7,7 @@ import { hoyISO } from '../utils/fecha'
 import { omit } from '../utils/omit'
 import { logAccion } from '../utils/auditLogger'
 import { exportarExcel } from '../utils/exportarExcel'
-import { Plus, Search, X, Download, AlertTriangle } from 'lucide-react'
+import { Scale, Plus, Search, X, Download, AlertTriangle } from 'lucide-react'
 import {
   PAGE_SIZE, UMBRAL_ALERTA, CONCEPTOS, CONCEPTO_MAP, DEPARTAMENTOS,
   BUCKET_ADJUNTOS, MAX_ADJUNTO_MB, EMPTY, normalizeNombre, ALERT,
@@ -329,7 +328,7 @@ export default function ProcesosDisciplinarios() {
       'Total procesos del empleado': conteoPorEmpleado[normalizeNombre(r.nombre_empleado)] || 0,
     })), {
       nombreHoja: 'Procesos Disciplinarios',
-      nombreArchivo: `Procesos_Disciplinarios_${hoyISO()}.xlsx`,
+      nombreArchivo: `Procesos_Disciplinarios_${currentCompany || 'empresa'}_${hoyISO()}.xlsx`,
       anchosColumnas: [30, 24, 16, 12, 12, 12, 34, 14],
     })
   }
@@ -341,7 +340,7 @@ export default function ProcesosDisciplinarios() {
     <div>
       <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <PageTitle icon={TitleIcon}>Procesos Disciplinarios</PageTitle>
+          <PageTitle icon={Scale}>Procesos Disciplinarios</PageTitle>
           <p>Registro y seguimiento de faltas, disciplina y citaciones</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

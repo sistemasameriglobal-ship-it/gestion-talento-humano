@@ -10,14 +10,20 @@ export const UMBRAL_ALERTA_PD = 3 // mismo umbral que usa la pestaña de Proceso
 
 import { DEPTOS, METRICA, METRICA_RESUELTOS } from './productividadConstants'
 
-export const CONCEPTOS_CON_FECHA = ['Incapacidad','Vacaciones','LNR','LR','Maternidad','Paternidad','Calamidad/Luto','Día Familia','Hospitalización','Embargo','Otro']
+export const CONCEPTOS_CON_FECHA = [
+  'Incapacidad','Vacaciones','LNR','LR','1/2 LR y 1/2 LNR','Maternidad','Paternidad',
+  'Calamidad/Luto','Día Familia','Hospitalización','Embargo','Suspensión','Ausente','Sustitución Patronal','Otro'
+]
 
 // Para la tasa de ausentismo: todos los conceptos con fecha EXCEPTO Vacaciones
-// (tiempo libre ganado, no una ausencia) y Embargo (es un descuento salarial,
-// no una ausencia física del colaborador).
-export const CONCEPTOS_AUSENTISMO = CONCEPTOS_CON_FECHA.filter(c => c !== 'Vacaciones' && c !== 'Embargo')
+// (tiempo libre ganado, no una ausencia), Embargo (descuento salarial) y Sustitución Patronal (traslado de empresa).
+export const CONCEPTOS_AUSENTISMO = CONCEPTOS_CON_FECHA.filter(c => c !== 'Vacaciones' && c !== 'Embargo' && c !== 'Sustitución Patronal')
 
-export const CONCEPTOS_LIST = ['Incapacidad','Vacaciones','LNR','LR','Maternidad','Paternidad','Calamidad/Luto','Renuncia/Retiro','Ingreso','Terminación','Día Familia','Hospitalización','Embargo','Otro']
+export const CONCEPTOS_LIST = [
+  'Incapacidad','Vacaciones','LNR','LR','1/2 LR y 1/2 LNR','Maternidad','Paternidad',
+  'Calamidad/Luto','Renuncia/Retiro','Ingreso','Terminación','Día Familia','Hospitalización',
+  'Embargo','Suspensión','Ausente','Sustitución Patronal','Otro'
+]
 
 // ── Productividad (leída directamente de Supabase — mismas tablas que usa la
 // página Productividad: "productividad" para Ventas/UW-BS y "cierre_meses"

@@ -87,8 +87,8 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
   const CONCEPTOS_AUSENCIA_ACTIVA = [...CONCEPTOS_AUSENTISMO, 'Vacaciones']
 
   // Se excluyen por completo del dashboard (tarjetas, donut y export): Día
-  // Familia, Embargo y Renuncia (decisión explícita).
-  const CONCEPTOS_EXCLUIDOS_DASHBOARD = ['Día Familia', 'Embargo', 'Renuncia', 'Renuncia/Retiro']
+  // Familia, Embargo, Renuncia y Sustitución Patronal (decisión explícita: no son ausencias operativas).
+  const CONCEPTOS_EXCLUIDOS_DASHBOARD = ['Día Familia', 'Embargo', 'Renuncia', 'Renuncia/Retiro', 'Sustitución Patronal']
 
   const enriquecerRegistro = (r) => {
     const cNorm = normalizarConcepto(r.concepto) || (r.concepto || '').trim() || 'Sin concepto'
