@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   Search, Mail, UserCheck, UserX, ShieldCheck, ShieldAlert, Shield,
   Users as UsersIcon, AlertCircle, CheckCircle2, UserPlus, X, Loader2,
-  Eye, EyeOff, Layers, Key,
+  Eye, EyeOff, Layers, UserCog,
 } from 'lucide-react'
 import ModalEditarPermisos from '../components/usuarios/ModalEditarPermisos'
 import ModalGestionDepartamentos from '../components/usuarios/ModalGestionDepartamentos'
@@ -78,9 +78,9 @@ function ModalCrearUsuario({ onClose, onCreated }) {
       const { data: { session: adminSession } } = await authApi.obtenerSesion()
       if (!adminSession) { setError('Tu sesión expiró, vuelve a iniciar sesión.'); setLoading(false); return }
 
-      // 2) Crear el usuario nuevo
+      // 2) Crear el usuario nuevo (con flag de creación por admin)
       const { data, error: signUpError } = await authApi.registrarUsuario(
-        correo.trim().toLowerCase(), password, nombreCompleto.trim()
+        correo.trim().toLowerCase(), password, nombreCompleto.trim(), { creado_por_admin: true }
       )
 
       if (signUpError) {
@@ -102,12 +102,16 @@ function ModalCrearUsuario({ onClose, onCreated }) {
         return
       }
 
-      // 4) Activar el perfil del nuevo usuario y asignarle empresas
+      // 4) Confirmar y activar inmediatamente el perfil del nuevo usuario
       if (newUserId) {
         const permisosIniciales = {
           ameriglobal: ['all'],
           global_link: ['all'],
         }
+
+        // Auto-confirmar el correo para que no quede pendiente de verificación
+        await perfilesApi.confirmarYActivarUsuario(newUserId)
+
         const { error: updateError } = await perfilesApi.activarPerfil(
           newUserId, true, esAdmin, empresas, permisosIniciales, esAdmin ? 'administrador' : 'operativo'
         )
@@ -199,7 +203,7 @@ function ModalCrearUsuario({ onClose, onCreated }) {
                 {loading ? 'Creando...' : 'Crear usuario'}
               </button>
               <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 12, textAlign: 'center' }}>
-                El usuario queda activo de inmediato con acceso a las empresas elegidas.
+                El usuario queda activo y con cuenta confirmada de inmediato con acceso a las empresas elegidas.
               </p>
             </form>
           )}
@@ -317,7 +321,7 @@ export default function Usuarios() {
         <ModalEditarPermisos
           user={modalPermisosUser}
           onClose={() => setModalPermisosUser(null)}
-          onUpdated={() => { setModalPermisosUser(null); flash('success', 'Permisos actualizados correctamente.'); load() }}
+          onUpdated={() => { setModalPermisosUser(null); flash('success', 'Perfil y permisos actualizados correctamente.'); load() }}
         />
       )}
 
@@ -453,12 +457,12 @@ export default function Usuarios() {
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                           <button
                             className="btn btn-ghost btn-sm"
-                            title="Configurar permisos por empresa y sección"
+                            title="Editar perfil, credenciales, empresas y permisos"
                             onClick={() => setModalPermisosUser(row)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5 }}
                           >
-                            <Key size={13} style={{ color: 'var(--primary)' }} />
-                            <span style={{ fontSize: 11.5 }}>Permisos</span>
+                            <UserCog size={13} style={{ color: 'var(--primary)' }} />
+                            <span style={{ fontSize: 11.5 }}>Editar Perfil</span>
                           </button>
 
                           <button

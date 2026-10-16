@@ -16,11 +16,16 @@ export function iniciarSesion(email, password) {
   return supabase.auth.signInWithPassword({ email, password })
 }
 
-export function registrarUsuario(email, password, nombreCompleto) {
+export function registrarUsuario(email, password, nombreCompleto, extraMetadata = {}) {
   return supabase.auth.signUp({
     email,
     password,
-    options: { data: { nombre_completo: nombreCompleto } },
+    options: {
+      data: {
+        nombre_completo: nombreCompleto,
+        ...extraMetadata,
+      },
+    },
   })
 }
 
