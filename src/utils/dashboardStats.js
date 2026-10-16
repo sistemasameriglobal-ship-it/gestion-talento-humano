@@ -69,35 +69,67 @@ export function calcularDiasPeriodo({ rangoMes, filterAnio, filterMeses, filterP
 // ── Estadísticas derivadas del Dashboard ─────────────────────────────────────
 export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo) {
   const total = data.length
-  const empleadosUnicos = new Set(data.map(r => r.nombre_empleado)).size
+  const empleadosUnicos = new Set(data.map(r => (r.nombre_empleado || '').trim()).filter(Boolean)).size
   // Denominador de la tasa de ausentismo: colaboradores realmente activos en
   // el período (tabla `empleados`, cruzando fecha_ingreso/fecha_retiro), no
   // solo quienes tienen novedades registradas. No cambia según filterConcepto.
   const empleadosUnicosBase = empleadosActivosPeriodo.length
 
-  const CONCEPTOS_DASHBOARD = ['Incapacidad', 'LNR', 'LR']
+  const CONCEPTOS_PRIORITARIOS = ['Incapacidad', 'LNR', 'LR', 'Ausente', 'Vacaciones']
 
   // Conceptos que representan una ausencia real del puesto de trabajo — se
-  // usan para la tasa de ausentismo global. Quedan fuera: Vacaciones (tiempo
-  // libre ganado), Ingreso/Terminación/Renuncia/Retiro/Cambio de Área (eventos
-  // administrativos, no ausencias), Recargo Dominical o Festivos (es trabajo
-  // extra, no una ausencia), y Día Familia/Embargo (por decisión explícita).
+  // usan para la tasa de ausentismo global.
   const CONCEPTOS_AUSENTISMO = [
     'Incapacidad', 'LNR', 'LR', '1/2 LR y 1/2 LNR', 'Maternidad', 'Paternidad',
     'Calamidad/Luto', 'Hospitalización', 'Ausente', 'Suspensión',
   ]
 
-  // ── Por concepto: métricas para CADA tipo presente ──────────────────────
-  const conceptosPresentes = [...new Set(data.map(r => normalizarConcepto(r.concepto)))]
-    .filter(c => CONCEPTOS_DASHBOARD.includes(c))
-    .sort((a, b) => CONCEPTOS_DASHBOARD.indexOf(a) - CONCEPTOS_DASHBOARD.indexOf(b))
+  const CONCEPTOS_AUSENCIA_ACTIVA = [...CONCEPTOS_AUSENTISMO, 'Vacaciones']
 
-  // Para cada concepto calculamos sus métricas propias
+  // Se excluyen por completo del dashboard (tarjetas, donut y export): Día
+  // Familia, Embargo y Renuncia (decisión explícita).
+  const CONCEPTOS_EXCLUIDOS_DASHBOARD = ['Día Familia', 'Embargo', 'Renuncia', 'Renuncia/Retiro']
+
+  const enriquecerRegistro = (r) => {
+    const cNorm = normalizarConcepto(r.concepto) || (r.concepto || '').trim() || 'Sin concepto'
+    const finEfectiva = r.fecha_fin || r.fecha_inicio || null
+    return {
+      ...r,
+      conceptoNorm: cNorm,
+      color: CONCEPTO_COLORS[cNorm] || '#6366F1',
+      fecha_regreso: finEfectiva ? obtenerFechaRegresoLaboral(finEfectiva) : null,
+    }
+  }
+
+  // ── Resumen global por concepto ─────────────────────────────────────────
+  const porConcepto = {}
+  data.forEach(r => {
+    const c = normalizarConcepto(r.concepto) || (r.concepto || '').trim() || 'Sin concepto'
+    if (CONCEPTOS_EXCLUIDOS_DASHBOARD.includes(c)) return
+    porConcepto[c] = (porConcepto[c] || 0) + 1
+  })
+  const conceptosOrdenados = Object.entries(porConcepto).sort((a, b) => b[1] - a[1])
+
+  // ── Por concepto: métricas detalladas para CADA concepto presente ───────
+  const conceptosPresentes = Object.keys(porConcepto).sort((a, b) => {
+    const ia = CONCEPTOS_PRIORITARIOS.indexOf(a)
+    const ib = CONCEPTOS_PRIORITARIOS.indexOf(b)
+    if (ia !== -1 && ib !== -1) return ia - ib
+    if (ia !== -1) return -1
+    if (ib !== -1) return 1
+    return (porConcepto[b] || 0) - (porConcepto[a] || 0)
+  })
+
+  const hoy = hoyISO()
+  const hasta7 = sumarDiasISO(hoy, 7)
+
   const porConceptoDetalle = {}
   conceptosPresentes.forEach(concepto => {
-    const filas = data.filter(r => normalizarConcepto(r.concepto) === concepto)
+    const filas = data
+      .filter(r => (normalizarConcepto(r.concepto) || (r.concepto || '').trim() || 'Sin concepto') === concepto)
+      .map(enriquecerRegistro)
     const totalDias = filas.reduce((s, r) => s + (parseFloat(r.total_dias) || 0), 0)
-    const empUnicos = new Set(filas.map(r => r.nombre_empleado)).size
+    const empUnicos = new Set(filas.map(r => (r.nombre_empleado || '').trim()).filter(Boolean)).size || (filas.length > 0 ? 1 : 0)
 
     // Reincidentes del concepto (2+ registros mismo empleado)
     const reincMap = {}
@@ -109,7 +141,7 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
     })
     const reincidentes = Object.values(reincMap).filter(e => e.episodios >= 2).sort((a, b) => b.episodios - a.episodios)
 
-    // Top empleados por días
+    // Top empleados por días (o por episodios si días es 0)
     const empMap = {}
     filas.forEach(r => {
       const k = r.nombre_empleado || '—'
@@ -121,7 +153,9 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
       if (v === 'sí' || v === 'si') empMap[k].prorroga++
       empMap[k].registros.push(r)
     })
-    const topEmpleados = Object.values(empMap).sort((a, b) => b.dias - a.dias).slice(0, 10)
+    const topEmpleados = Object.values(empMap)
+      .sort((a, b) => (b.dias - a.dias) || (b.episodios - a.episodios))
+      .slice(0, 10)
 
     // Por área
     const porDep = {}
@@ -131,7 +165,7 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
     })
     const depOrdenadas = Object.entries(porDep).sort((a, b) => b[1] - a[1])
 
-    // Alertas (campos de gestión vacíos — aplica a todos los conceptos con fecha)
+    // Alertas (campos de gestión vacíos)
     const sinRadicacion = allData.filter(r => normalizarConcepto(r.concepto) === concepto && !(r.radicacion_incapacidad || '').trim())
     const sinNomina     = allData.filter(r => normalizarConcepto(r.concepto) === concepto && !(r.nomina_electronica || '').trim())
     const sinSegSocial  = allData.filter(r => normalizarConcepto(r.concepto) === concepto && !(r.seguridad_social || '').trim())
@@ -140,23 +174,21 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
       return normalizarConcepto(r.concepto) === concepto && (v === '' || v === 'validar')
     })
 
-    // Próximos vencimientos (7 días) — datos globales (basado en fecha real de regreso laboral)
-    const hoy = hoyISO()
-    const hasta7 = sumarDiasISO(hoy, 7)
+    // Próximos vencimientos (7 días)
     const proxVencimientos = allData
-      .filter(r => normalizarConcepto(r.concepto) === concepto && r.fecha_fin)
-      .map(r => ({
-        ...r,
-        fecha_regreso: obtenerFechaRegresoLaboral(r.fecha_fin),
-      }))
-      .filter(r => r.fecha_regreso >= hoy && (r.fecha_regreso <= hasta7 || r.fecha_fin <= hasta7))
-      .sort((a, b) => (a.fecha_regreso || a.fecha_fin).localeCompare(b.fecha_regreso || b.fecha_fin))
+      .filter(r => normalizarConcepto(r.concepto) === concepto && (r.fecha_fin || r.fecha_inicio))
+      .map(enriquecerRegistro)
+      .filter(r => r.fecha_regreso && r.fecha_regreso >= hoy && (r.fecha_regreso <= hasta7 || (r.fecha_fin || r.fecha_inicio) <= hasta7))
+      .sort((a, b) => (a.fecha_regreso || a.fecha_fin || a.fecha_inicio).localeCompare(b.fecha_regreso || b.fecha_fin || b.fecha_inicio))
 
     // Activos hoy
-    const activasHoy = allData.filter(r =>
-      normalizarConcepto(r.concepto) === concepto && r.fecha_inicio && r.fecha_fin &&
-      r.fecha_inicio <= hoy && r.fecha_fin >= hoy
-    )
+    const activasHoy = allData
+      .filter(r => {
+        if (normalizarConcepto(r.concepto) !== concepto || !r.fecha_inicio) return false
+        const fin = r.fecha_fin || r.fecha_inicio
+        return r.fecha_inicio <= hoy && fin >= hoy
+      })
+      .map(enriquecerRegistro)
 
     const conProrroga = filas.filter(r => {
       const v = (r.prorroga || '').toLowerCase().trim()
@@ -170,6 +202,7 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
 
     porConceptoDetalle[concepto] = {
       count: filas.length,
+      filas,
       totalDias,
       empUnicos,
       promDias: filas.length ? totalDias / filas.length : 0,
@@ -185,30 +218,55 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
       proxVencimientos,
       activasHoy,
       tasaAusentismo: empleadosUnicosBase > 0 ? (totalDias / (empleadosUnicosBase * diasPeriodoBase) * 100) : 0,
-      color: CONCEPTO_COLORS[concepto] || '#374151',
+      color: CONCEPTO_COLORS[concepto] || '#6366F1',
     }
   })
 
-  // ── Resumen global (para gráficas generales) ────────────────────────────
-  // Si normalizarConcepto no reconoce el valor, usamos el texto original del
-  // concepto (ej. "Suspensión") en lugar de agruparlo genéricamente como "Otro".
-  // Se excluyen por completo del dashboard (tarjetas, donut y export): Día
-  // Familia, Embargo y Renuncia (decisión explícita).
-  const CONCEPTOS_EXCLUIDOS_DASHBOARD = ['Día Familia', 'Embargo', 'Renuncia']
-  const porConcepto = {}
-  data.forEach(r => {
-    const c = normalizarConcepto(r.concepto) || (r.concepto || '').trim() || 'Sin concepto'
-    if (CONCEPTOS_EXCLUIDOS_DASHBOARD.includes(c)) return
-    porConcepto[c] = (porConcepto[c] || 0) + 1
-  })
-  const conceptosOrdenados = Object.entries(porConcepto).sort((a, b) => b[1] - a[1])
-
+  // ── Agrupación por Área / Dependencia (con detalle de filas) ────────────
   const porDepTodos = {}
+  const porDepDetalle = {}
   data.forEach(r => {
     const d = r.dependencia || 'Sin área'
     porDepTodos[d] = (porDepTodos[d] || 0) + 1
+    if (!porDepDetalle[d]) porDepDetalle[d] = []
+    porDepDetalle[d].push(enriquecerRegistro(r))
   })
   const depTodosOrdenadas = Object.entries(porDepTodos).sort((a, b) => b[1] - a[1])
+
+  // ── Colaboradores Ausentes Hoy (activos en fecha actual hoyISO) ─────────
+  const ausentesHoy = allData
+    .filter(r => {
+      const c = normalizarConcepto(r.concepto)
+      if (!CONCEPTOS_AUSENCIA_ACTIVA.includes(c) || !r.fecha_inicio) return false
+      const fin = r.fecha_fin || r.fecha_inicio
+      return r.fecha_inicio <= hoy && fin >= hoy
+    })
+    .map(enriquecerRegistro)
+    .sort((a, b) => (a.fecha_regreso || '').localeCompare(b.fecha_regreso || ''))
+
+  // ── Ausencias registradas en el periodo filtrado ────────────────────────
+  const ausenciasPeriodo = data
+    .filter(r => CONCEPTOS_AUSENCIA_ACTIVA.includes(normalizarConcepto(r.concepto)))
+    .map(enriquecerRegistro)
+    .sort((a, b) => (b.fecha_inicio || '').localeCompare(a.fecha_inicio || ''))
+
+  // ── Últimas 5 novedades registradas del periodo filtrado ────────────────
+  const ultimasNovedades = [...data]
+    .sort((a, b) => {
+      const cmpFecha = (b.fecha_inicio || '').localeCompare(a.fecha_inicio || '')
+      if (cmpFecha !== 0) return cmpFecha
+      return (b.created_at || '').localeCompare(a.created_at || '')
+    })
+    .slice(0, 5)
+    .map(enriquecerRegistro)
+
+  // ── Pendientes por validar en el periodo filtrado ───────────────────────
+  const pendientesValidarTotal = data.filter(r => {
+    const c = normalizarConcepto(r.concepto)
+    if (c !== 'Incapacidad') return false
+    const v = (r.validacion_incapacidad || '').toLowerCase().trim()
+    return v === '' || v === 'validar'
+  }).length
 
   // Tendencia mensual (todos los conceptos filtrados)
   const porMes = {}
@@ -238,7 +296,8 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
   return {
     total, empleadosUnicos, empleadosUnicosBase,
     conceptosPresentes, porConceptoDetalle,
-    conceptosOrdenados, depTodosOrdenadas, tendencia,
+    conceptosOrdenados, depTodosOrdenadas, porDepDetalle, tendencia,
+    ausentesHoy, ausenciasPeriodo, ultimasNovedades, pendientesValidarTotal,
     mesActual, mesAnterior, mismoMesAnioPassado,
     cntMesActual, cntMesAnterior, cntMismoMesAnio,
     varMesAnterior, varAnioAnterior,

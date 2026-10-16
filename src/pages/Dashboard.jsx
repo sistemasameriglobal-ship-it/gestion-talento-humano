@@ -19,6 +19,11 @@ import DashboardFiltros from '../components/dashboard/DashboardFiltros'
 import ConceptoSeccion from '../components/dashboard/ConceptoSeccion'
 import PersonaDetalleModal from '../components/dashboard/PersonaDetalleModal'
 import ColaboradoresBaseModal from '../components/dashboard/ColaboradoresBaseModal'
+import AusentesHoyWidget from '../components/dashboard/AusentesHoyWidget'
+import DrillDownModal from '../components/dashboard/DrillDownModal'
+import UltimasNovedadesTabla from '../components/dashboard/UltimasNovedadesTabla'
+import EmpleadoHistorialModal from '../components/empleados/EmpleadoHistorialModal'
+import { normalizarConcepto } from '../utils/parseExcel'
 import '../components/dashboard/dashboard.css'
 
 export default function Dashboard({ onNavigate }) {
@@ -46,6 +51,8 @@ export default function Dashboard({ onNavigate }) {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [personaDetalle, setPersonaDetalle] = useState(null) // { nombre, concepto, color, registros }
+  const [drillDown, setDrillDown] = useState(null) // { tipo, titulo, color, registros }
+  const [selectedEmpForExpediente, setSelectedEmpForExpediente] = useState(null)
 
   const fetchData = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true)
@@ -171,6 +178,50 @@ export default function Dashboard({ onNavigate }) {
     })
   }, [empleados, periodosLaborales, filterDependencia, periodoIni, periodoFin])
 
+  const novedadesPorEmpleado = useMemo(() => {
+    const acc = {}
+    allData.forEach(r => {
+      const k = r.nombre_empleado
+      if (!k) return
+      if (!acc[k]) acc[k] = { novedades: [], diasInc: 0, episodiosInc: 0, porConcepto: {} }
+      acc[k].novedades.push(r)
+      const tipo = normalizarConcepto(r.concepto)
+      if (tipo === 'Incapacidad') {
+        acc[k].episodiosInc++
+        acc[k].diasInc += parseFloat(r.total_dias) || 0
+      }
+      if (!acc[k].porConcepto[tipo]) acc[k].porConcepto[tipo] = { episodios: 0, dias: 0 }
+      acc[k].porConcepto[tipo].episodios++
+      acc[k].porConcepto[tipo].dias += parseFloat(r.total_dias) || 0
+    })
+    return acc
+  }, [allData])
+
+  const periodosPorEmpMap = useMemo(() => {
+    const acc = {}
+    periodosLaborales.forEach(p => {
+      if (!acc[p.empleado_id]) acc[p.empleado_id] = []
+      acc[p.empleado_id].push(p)
+    })
+    Object.values(acc).forEach(list => list.sort((a, b) => (a.numero_periodo || 0) - (b.numero_periodo || 0)))
+    return acc
+  }, [periodosLaborales])
+
+  const handleOpenExpediente = useCallback((nombreOId) => {
+    if (!nombreOId) return
+    const norm = String(nombreOId).trim().toLowerCase()
+    let emp = empleados.find(e => e.id === nombreOId || (e.nombre_completo && e.nombre_completo.trim().toLowerCase() === norm))
+    if (!emp) {
+      emp = {
+        id: `virtual-${Date.now()}`,
+        nombre_completo: nombreOId,
+        dependencia: 'Sin área',
+        activo: true,
+      }
+    }
+    setSelectedEmpForExpediente(emp)
+  }, [empleados])
+
   const clearFilters = () => { setFilterAnio(''); setFilterMeses([]); setFilterPeriodo(''); setFilterConcepto('Incapacidad'); setFilterDependencia('') }
 
   // ── Estadísticas derivadas ──────────────────────────────────────────────────
@@ -274,7 +325,7 @@ export default function Dashboard({ onNavigate }) {
                   key={concepto}
                   label={concepto}
                   value={cnt}
-                  sub={d.totalDias > 0 ? `${Math.round(d.totalDias)} días en total` : `${d.empUnicos || 0} colaboradores`}
+                  sub={d.totalDias > 0 ? `${Math.round(d.totalDias)} días en total` : `${d.empUnicos || 1} colaborador${(d.empUnicos || 1) !== 1 ? 'es' : ''}`}
                   color={d.color}
                   active={filterConcepto === concepto}
                   onClick={() => setFilterConcepto(filterConcepto === concepto ? '' : concepto)}
@@ -284,13 +335,20 @@ export default function Dashboard({ onNavigate }) {
             })}
           </div>
 
+          {/* ── Widget: Colaboradores Ausentes Hoy ──────────────────────────── */}
+          <AusentesHoyWidget
+            ausentesHoy={stats.ausentesHoy}
+            ausenciasPeriodo={stats.ausenciasPeriodo}
+            onOpenExpediente={handleOpenExpediente}
+          />
+
           {/* ── Comparativo mensual ──────────────────────────────────────────── */}
           <div className="card" style={{ marginBottom: 16 }}>
             <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Comparativo mensual (datos globales)</h3>
             <div style={{ display: 'grid', gridTemplateColumns: stats.cntMismoMesAnio > 0 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: 12 }}>
               {[
-                { label: `Mes actual (${stats.mesActual})`, val: stats.cntMesActual, varVal: null, varLabel: '' },
-                { label: `Mes anterior (${stats.mesAnterior})`, val: stats.cntMesAnterior, varVal: stats.varMesAnterior, varLabel: 'vs mes ant.' },
+                { label: `Mes actual (${stats.mesActual})`, val: stats.cntMesActual, varVal: stats.varMesAnterior, varLabel: 'vs mes ant.' },
+                { label: `Mes anterior (${stats.mesAnterior})`, val: stats.cntMesAnterior, varVal: null, varLabel: '' },
                 stats.cntMismoMesAnio > 0 ? { label: 'Mismo mes año pasado', val: stats.cntMismoMesAnio, varVal: stats.varAnioAnterior, varLabel: 'vs año ant.' } : null,
               ].filter(Boolean).map((c, i) => (
                 <div key={i} style={{ background: 'var(--bg)', borderRadius: 8, padding: '12px 14px', border: '1px solid var(--border)' }}>
@@ -298,7 +356,7 @@ export default function Dashboard({ onNavigate }) {
                   <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)' }}>{c.val}</div>
                   {c.varVal !== null && c.varVal !== undefined && (
                     <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600, color: c.varVal > 0 ? '#DC2626' : c.varVal < 0 ? '#16A34A' : '#374151' }}>
-                      {c.varVal > 0 ? '▲' : c.varVal < 0 ? '▼' : '='} {Math.abs(c.varVal)}% {c.varLabel}
+                      {c.varVal > 0 ? '▲ +' : c.varVal < 0 ? '▼ ' : '='}{Math.abs(c.varVal)}% {c.varLabel}
                     </div>
                   )}
                 </div>
@@ -309,22 +367,45 @@ export default function Dashboard({ onNavigate }) {
           {/* ── Distribución por concepto (donut) + Novedades por área (clic = drill-down) ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 12, marginBottom: 16 }}>
             <div className="card">
-              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Distribución por concepto</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>Distribución por concepto</h3>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Clic para desglose</span>
+              </div>
               <ConceptoDonut
                 data={stats.conceptosOrdenados}
                 colors={stats.porConceptoDetalle}
                 activeConcepto={filterConcepto}
-                onSliceClick={(concepto) => setFilterConcepto(filterConcepto === concepto ? '' : concepto)}
+                onSliceClick={(concepto) => {
+                  const d = stats.porConceptoDetalle[concepto]
+                  setDrillDown({
+                    tipo: 'concepto',
+                    titulo: concepto,
+                    color: d?.color,
+                    registros: d?.filas || [],
+                  })
+                }}
               />
             </div>
             <div className="card">
-              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Novedades por área</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>Novedades por área</h3>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Clic para desglose</span>
+              </div>
               <BarChart
                 items={stats.depTodosOrdenadas}
+                detallesPorItem={stats.porDepDetalle}
                 color="#7C3AED"
                 maxItems={10}
                 activeLabel={filterDependencia}
-                onBarClick={(area) => setFilterDependencia(filterDependencia === area ? '' : area)}
+                onBarClick={(area) => {
+                  const filas = stats.porDepDetalle[area] || []
+                  setDrillDown({
+                    tipo: 'area',
+                    titulo: area,
+                    color: '#7C3AED',
+                    registros: filas,
+                  })
+                }}
               />
             </div>
           </div>
@@ -354,12 +435,33 @@ export default function Dashboard({ onNavigate }) {
               />
             )
           })}
+
+          {/* ── Tabla Resumen: Últimas novedades registradas ────────────────── */}
+          <UltimasNovedadesTabla
+            novedades={stats.ultimasNovedades}
+            onVerDetalle={(item) => setPersonaDetalle(item)}
+            onOpenExpediente={handleOpenExpediente}
+          />
         </>
         </FadeSwitch>
       )}
 
       {/* ── Modal detalle de persona ─────────────────────────────────────── */}
       <PersonaDetalleModal personaDetalle={personaDetalle} onCerrar={() => setPersonaDetalle(null)} />
+
+      {/* ── Modal Drill-Down (desglose al hacer clic en dona o barras) ────── */}
+      <DrillDownModal
+        drillDown={drillDown}
+        onCerrar={() => setDrillDown(null)}
+        onVerExpediente={handleOpenExpediente}
+        onFiltrar={(tipo, val) => {
+          if (tipo === 'concepto') {
+            setFilterConcepto(filterConcepto === val ? '' : val)
+          } else {
+            setFilterDependencia(filterDependencia === val ? '' : val)
+          }
+        }}
+      />
 
       {/* ── Modal: detalle de colaboradores contados en el denominador de la tasa ── */}
       <ColaboradoresBaseModal
@@ -369,6 +471,18 @@ export default function Dashboard({ onNavigate }) {
         filterDependencia={filterDependencia}
         empleadosActivosPeriodo={empleadosActivosPeriodo}
       />
+
+      {/* ── Modal: Expediente Integral del Colaborador ────────────────────── */}
+      {selectedEmpForExpediente && (
+        <EmpleadoHistorialModal
+          selectedEmp={selectedEmpForExpediente}
+          novedadesPorEmpleado={novedadesPorEmpleado}
+          periodos={periodosPorEmpMap[selectedEmpForExpediente.id] || []}
+          vacaciones={[]}
+          procesos={[]}
+          onClose={() => setSelectedEmpForExpediente(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,8 +1,8 @@
 // Valores canónicos que usa el select de Novedades — deben coincidir exactamente
 export const CONCEPTOS_CANONICOS = [
-  'Incapacidad','Vacaciones','LNR','LR','Maternidad','Paternidad',
+  'Incapacidad','Vacaciones','LNR','LR','1/2 LR y 1/2 LNR','Maternidad','Paternidad',
   'Calamidad/Luto','Renuncia/Retiro','Ingreso','Terminación',
-  'Día Familia','Hospitalización','Embargo','Suspensión','Otro'
+  'Día Familia','Hospitalización','Embargo','Suspensión','Ausente','Sustitución Patronal','Otro'
 ]
 
 export function normalizarConcepto(concepto) {
@@ -12,6 +12,7 @@ export function normalizarConcepto(concepto) {
   const c = raw.toLowerCase()
   if (c.includes('incapacidad') || c === 'inc') return 'Incapacidad'
   if (c.includes('vacacion')) return 'Vacaciones'
+  if (c.includes('1/2 lr') && c.includes('lnr')) return '1/2 LR y 1/2 LNR'
   if (c.includes('lnr') || c.includes('licencia no remunerada')) return 'LNR'
   if (c.includes('licencia remunerada') || c === 'lr' || c === 'lrn' || c === '1/2 lr') return 'LR'
   if (c.includes('maternidad')) return 'Maternidad'
@@ -24,6 +25,8 @@ export function normalizarConcepto(concepto) {
   if (c.includes('hospitaliz')) return 'Hospitalización'
   if (c.includes('embargo')) return 'Embargo'
   if (c.includes('suspension') || c.includes('suspensión')) return 'Suspensión'
+  if (c.includes('ausen')) return 'Ausente'
+  if (c.includes('sustitucion') || c.includes('sustitución')) return 'Sustitución Patronal'
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
@@ -273,20 +276,22 @@ export function detectarIndicesEncabezadoNovedades(headerRow) {
 }
 
 export const CONCEPTO_COLORS = {
-  'Incapacidad':     '#DC2626',
-  'Vacaciones':      '#2563EB',
-  'LNR':             '#D97706',
-  'LR':              '#059669',
-  'Maternidad':      '#7C3AED',
-  'Paternidad':      '#0891B2',
-  'Calamidad/Luto':  '#6B7280',
-  'Renuncia/Retiro': '#9F1239',
-  'Ingreso':         '#15803D',
-  'Terminación':     '#92400E',
-  'Día Familia':     '#0E7490',
-  'Hospitalización': '#BE123C',
-  'Embargo':         '#854D0E',
-  'Suspensión':          '#B45309',
+  'Incapacidad':          '#DC2626',
+  'Vacaciones':           '#2563EB',
+  'LNR':                  '#D97706',
+  'LR':                   '#059669',
+  '1/2 LR y 1/2 LNR':     '#0D9488',
+  'Maternidad':           '#7C3AED',
+  'Paternidad':           '#0891B2',
+  'Calamidad/Luto':       '#6B7280',
+  'Renuncia/Retiro':      '#9F1239',
+  'Ingreso':              '#15803D',
+  'Terminación':          '#92400E',
+  'Día Familia':          '#0E7490',
+  'Hospitalización':      '#BE123C',
+  'Embargo':              '#854D0E',
+  'Suspensión':           '#B45309',
+  'Ausente':              '#EA580C',
   'Sustitución Patronal': '#4338CA',
-  'Otro':                '#374151',
+  'Otro':                 '#6366F1',
 }

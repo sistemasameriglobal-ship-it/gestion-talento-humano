@@ -27,3 +27,163 @@
   box-shadow: 0 10px 24px -6px color-mix(in srgb, var(--glow, var(--secondary)) 30%, transparent),
               0 0 0 1px color-mix(in srgb, var(--glow, var(--secondary)) 13%, transparent);
 }
+
+/* ── Widget: Colaboradores Ausentes Hoy ─────────────────────────── */
+.db-ausente-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.db-ausente-row:hover {
+  border-color: var(--secondary);
+  background: color-mix(in srgb, var(--secondary) 6%, var(--bg));
+  transform: translateX(2px);
+}
+
+:root[data-theme="dark"] .db-ausente-row {
+  background: rgba(30, 41, 59, 0.55);
+  border-color: rgba(51, 65, 85, 0.7);
+}
+
+:root[data-theme="dark"] .db-ausente-row:hover {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: var(--secondary);
+}
+
+.db-avatar-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: rgba(var(--secondary-rgb), 0.15);
+  color: var(--secondary-dark, var(--secondary));
+  border: 1.5px solid rgba(var(--secondary-rgb), 0.35);
+}
+
+:root[data-theme="dark"] .db-avatar-circle {
+  background: rgba(var(--secondary-rgb), 0.2);
+  color: var(--secondary);
+  border-color: rgba(var(--secondary-rgb), 0.45);
+}
+
+.db-regreso-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-regreso-pill {
+  background: rgba(30, 58, 138, 0.4);
+  color: #93C5FD;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.db-empty-ausentes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px 16px;
+  border-radius: 12px;
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  color: #065F46;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .db-empty-ausentes {
+  background: rgba(6, 78, 59, 0.3);
+  border-color: rgba(4, 120, 87, 0.5);
+  color: #6EE7B7;
+}
+
+/* ── Tabla Últimas Novedades Registradas ────────────────────────── */
+.db-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+:root[data-theme="dark"] .db-table-wrap {
+  background: rgba(15, 23, 42, 0.65);
+  border-color: rgba(51, 65, 85, 0.65);
+}
+
+.db-ultimas-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.db-ultimas-table thead th {
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-ultimas-table thead th {
+  background: rgba(30, 41, 59, 0.65);
+  color: #94A3B8;
+  border-bottom-color: rgba(51, 65, 85, 0.65);
+}
+
+.db-ultimas-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.14s ease;
+  cursor: pointer;
+}
+
+.db-ultimas-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.db-ultimas-table tbody tr:hover {
+  background: rgba(var(--secondary-rgb), 0.06);
+}
+
+:root[data-theme="dark"] .db-ultimas-table tbody tr {
+  border-bottom-color: rgba(30, 41, 59, 0.75);
+}
+
+:root[data-theme="dark"] .db-ultimas-table tbody tr:hover {
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.db-ultimas-table tbody td {
+  padding: 10px 14px;
+  vertical-align: middle;
+}
+

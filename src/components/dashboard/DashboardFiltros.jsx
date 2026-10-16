@@ -270,19 +270,57 @@ export default function DashboardFiltros({
             onClick={() => setFilterConcepto(filterConcepto === 'LR' ? '' : 'LR')}
             style={{
               ...basePill,
-              background: filterConcepto === 'LR' ? '#3b82f6' : 'var(--bg)',
+              background: filterConcepto === 'LR' ? '#059669' : 'var(--bg)',
               color: filterConcepto === 'LR' ? '#fff' : 'var(--text-muted)',
               outline: filterConcepto === 'LR' ? 'none' : '1px solid var(--border)',
               fontWeight: filterConcepto === 'LR' ? 600 : 400,
-              boxShadow: filterConcepto === 'LR' ? '0 2px 8px rgba(59,130,246,0.35)' : 'none',
+              boxShadow: filterConcepto === 'LR' ? '0 2px 8px rgba(5,150,105,0.35)' : 'none',
             }}
           >
             <span style={{
               width: 6, height: 6, borderRadius: '50%',
-              background: filterConcepto === 'LR' ? '#fff' : '#3b82f6',
+              background: filterConcepto === 'LR' ? '#fff' : '#059669',
             }} />
             LR
           </button>
+
+          {/* Ausente */}
+          <button
+            type="button"
+            onClick={() => setFilterConcepto(filterConcepto === 'Ausente' ? '' : 'Ausente')}
+            style={{
+              ...basePill,
+              background: filterConcepto === 'Ausente' ? '#ea580c' : 'var(--bg)',
+              color: filterConcepto === 'Ausente' ? '#fff' : 'var(--text-muted)',
+              outline: filterConcepto === 'Ausente' ? 'none' : '1px solid var(--border)',
+              fontWeight: filterConcepto === 'Ausente' ? 600 : 400,
+              boxShadow: filterConcepto === 'Ausente' ? '0 2px 8px rgba(234,88,12,0.35)' : 'none',
+            }}
+          >
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: filterConcepto === 'Ausente' ? '#fff' : '#ea580c',
+            }} />
+            Ausente
+          </button>
+
+          {/* Cualquier otro concepto seleccionado desde las gráficas */}
+          {filterConcepto && !['Incapacidad', 'LNR', 'LR', 'Ausente'].includes(filterConcepto) && (
+            <button
+              type="button"
+              onClick={() => setFilterConcepto('')}
+              style={{
+                ...basePill,
+                background: 'var(--primary)',
+                color: '#fff',
+                fontWeight: 600,
+              }}
+              title="Quitar filtro de concepto"
+            >
+              {filterConcepto}
+              <X size={13} />
+            </button>
+          )}
         </div>
       </div>
 
