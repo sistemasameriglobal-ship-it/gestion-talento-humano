@@ -42,6 +42,25 @@
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55) !important;
 }
 
+/* Scrollbar fino y elegante en el cuerpo de los modales */
+.emp-modal-box .modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.emp-modal-box .modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+.emp-modal-box .modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.emp-modal-box .modal-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+.emp-modal-box .modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
 /* ── Cabecera de modal ────────────────────────────────────── */
 .emp-modal-hdr {
   padding: 20px 24px 16px;
@@ -338,6 +357,10 @@
   align-items: center;
   gap: 10px;
   border-radius: 0 0 16px 16px;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
 }
 
 :root[data-theme="dark"] .emp-modal-footer {

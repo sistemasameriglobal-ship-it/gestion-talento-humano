@@ -3,7 +3,7 @@
 // -------------------------------------------------------------
 // Vista de tarjetas de empleados con acciones rápidas.
 // =============================================================
-import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale, CheckCircle2 } from 'lucide-react'
+import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale } from 'lucide-react'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 
 function iniciales(nombre) {
@@ -88,11 +88,13 @@ export default function EmpleadoCards({
                     </div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
-                    <span style={{
-                      fontSize: 10, borderRadius: 4, padding: '1px 6px', fontWeight: 600,
-                      background: emp.activo === false ? 'var(--danger-bg)' : 'var(--success-bg)',
-                      color: emp.activo === false ? 'var(--danger-text)' : 'var(--success-text)',
-                    }}>{emp.activo === false ? 'Inactivo' : 'Activo'}</span>
+                    <span className={
+                      emp.activo === false
+                        ? "text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/60 dark:text-rose-300"
+                        : "text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300"
+                    }>
+                      {emp.activo === false ? 'Inactivo' : 'Activo'}
+                    </span>
                     {esReintegrado && (
                       periodoActivo?.continuidad_laboral ? (
                         <span
@@ -269,68 +271,21 @@ export default function EmpleadoCards({
                         if (onLiquidar) onLiquidar(emp)
                       }}
                       title={obsLiq ? `Liquidado el ${fechaLiq || '—'}\nObservaciones: ${obsLiq}\n(Clic para editar detalle)` : `Liquidado el ${fechaLiq || '—'} (Clic para ver/editar)`}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        background: '#ECFDF5',
-                        color: '#047857',
-                        border: '1px solid #6EE7B7',
-                        cursor: 'pointer',
-                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-700/60 dark:text-emerald-300 cursor-pointer"
                     >
                       ✓ Liquidado: {fechaLiq ? String(fechaLiq).slice(0, 10) : 'Sí'}
                     </span>
                   ) : (
-                    <div
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                      onClick={e => e.stopPropagation()}
+                    <span
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (onLiquidar) onLiquidar(emp)
+                      }}
+                      title="Este excolaborador aún figura como pendiente por liquidar en contabilidad. Clic para registrar liquidación."
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/40 dark:border-amber-700/60 dark:text-amber-300 cursor-pointer"
                     >
-                      <span
-                        title="Este excolaborador aún figura como pendiente por liquidar en contabilidad."
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '2px 8px',
-                          borderRadius: 999,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          background: '#FEF3C7',
-                          color: '#B45309',
-                          border: '1px solid #F59E0B',
-                        }}
-                      >
-                        ⚠️ Pendiente por liquidar
-                      </span>
-                      {onLiquidar && (
-                        <button
-                          type="button"
-                          onClick={() => onLiquidar(emp)}
-                          title="Registrar fecha y comprobante de liquidación"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3,
-                            padding: '2px 8px',
-                            borderRadius: 999,
-                            fontSize: 10,
-                            fontWeight: 700,
-                            background: '#059669',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            cursor: 'pointer',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
-                          }}
-                        >
-                          <CheckCircle2 size={10} /> Liquidar
-                        </button>
-                      )}
-                    </div>
+                      ⚠️ Pendiente por liquidar {onLiquidar && <span className="text-amber-900 dark:text-amber-200 underline hover:text-amber-950 dark:hover:text-amber-100 font-bold ml-1">• Liquidar</span>}
+                    </span>
                   )
                 ) : (
                   <span

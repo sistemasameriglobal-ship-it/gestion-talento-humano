@@ -126,7 +126,7 @@ export default function EmpleadoFormModal({
   return (
     <div className="modal-backdrop emp-modal-wrap" onClick={e => e.target === e.currentTarget && onClose()}>
       <div
-        className="modal emp-modal-box"
+        className="modal emp-modal-box max-h-[90vh] flex flex-col overflow-hidden rounded-2xl"
         style={{
           maxWidth: 780,
           width: '96vw',
@@ -134,7 +134,7 @@ export default function EmpleadoFormModal({
       >
 
         {/* ── Header adaptativo ── */}
-        <div className="emp-modal-hdr">
+        <div className="emp-modal-hdr flex-shrink-0">
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
             {/* Avatar con iniciales y acento dinámico */}
             <div className="emp-avatar-accent" style={{ fontSize: iniciales === '?' ? 22 : 19 }}>
@@ -193,7 +193,7 @@ export default function EmpleadoFormModal({
         </div>
 
         {/* ── Pestañas de navegación rápida adaptativas ── */}
-        <div className="emp-tabs-bar">
+        <div className="emp-tabs-bar flex-shrink-0">
           {TABS.map(t => {
             const active = activeTab === t.id
             return (
@@ -210,7 +210,7 @@ export default function EmpleadoFormModal({
         </div>
 
         {/* ── Body ── */}
-        <div className="modal-body" style={{ maxHeight: '66vh', overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <div className="modal-body flex-1 overflow-y-auto min-h-0 pr-1" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 0 }}>
           {/* Alerta duplicado */}
           {duplicadoWarning && (
             <div style={{
