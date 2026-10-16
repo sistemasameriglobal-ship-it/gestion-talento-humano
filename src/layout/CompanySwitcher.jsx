@@ -38,9 +38,11 @@ export default function CompanySwitcher({ collapsed }) {
         <div
           className="company-logo-avatar"
           style={{
-            background: currentCompany === 'global_link'
-              ? 'linear-gradient(135deg, #0D9488 0%, #047857 100%)'
-              : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)'
+            background: companyConfig.colorPrincipal
+              ? `linear-gradient(135deg, ${companyConfig.colorPrincipal} 0%, ${companyConfig.colorSecundario || companyConfig.colorPrincipal} 100%)`
+              : (currentCompany === 'global_link'
+                ? 'linear-gradient(135deg, #0D9488 0%, #047857 100%)'
+                : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)')
           }}
         >
           {companyConfig.icono}
@@ -76,9 +78,11 @@ export default function CompanySwitcher({ collapsed }) {
                 <div
                   className="company-item-icon"
                   style={{
-                    background: emp.id === 'global_link'
-                      ? 'linear-gradient(135deg, #0D9488 0%, #047857 100%)'
-                      : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)'
+                    background: emp.colorPrincipal
+                      ? `linear-gradient(135deg, ${emp.colorPrincipal} 0%, ${emp.colorSecundario || emp.colorPrincipal} 100%)`
+                      : (emp.id === 'global_link'
+                        ? 'linear-gradient(135deg, #0D9488 0%, #047857 100%)'
+                        : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)')
                   }}
                 >
                   {emp.icono}

@@ -286,6 +286,7 @@ export const CONCEPTO_COLORS = {
   'Día Familia':     '#0E7490',
   'Hospitalización': '#BE123C',
   'Embargo':         '#854D0E',
-  'Suspensión':      '#B45309',
-  'Otro':            '#374151',
+  'Suspensión':          '#B45309',
+  'Sustitución Patronal': '#4338CA',
+  'Otro':                '#374151',
 }

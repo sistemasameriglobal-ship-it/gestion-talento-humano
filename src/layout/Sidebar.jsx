@@ -29,18 +29,22 @@ export default function Sidebar({
             <div
               className="brand-logo"
               style={{
-                background: currentCompany === 'global_link'
-                  ? 'linear-gradient(135deg, #0D9488 0%, #047857 100%)'
-                  : 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)'
+                background: companyConfig.colorPrincipal
+                  ? `linear-gradient(135deg, ${companyConfig.colorPrincipal} 0%, ${companyConfig.colorSecundario || companyConfig.colorPrincipal} 100%)`
+                  : (currentCompany === 'global_link'
+                    ? 'linear-gradient(135deg, #0D9488 0%, #047857 100%)'
+                    : 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)')
               }}
             >
-              {companyConfig.logoLetra}
+              {companyConfig.logoLetra || (companyConfig.nombre ? companyConfig.nombre.slice(0, 2).toUpperCase() : 'A')}
             </div>
             <span className="brand-text">
               {currentCompany === 'global_link' ? (
                 <>Global<em>Link</em></>
-              ) : (
+              ) : currentCompany === 'ameriglobal' ? (
                 <>Ameri<em>Global</em></>
+              ) : (
+                <>{companyConfig.nombre}</>
               )}
             </span>
           </div>

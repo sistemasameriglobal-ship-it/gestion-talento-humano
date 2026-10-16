@@ -22,6 +22,7 @@ import EmpleadoHistorialModal from '../components/empleados/EmpleadoHistorialMod
 import ModalRetiroEmpleado from '../components/empleados/ModalRetiroEmpleado'
 import ModalReintegroEmpleado from '../components/empleados/ModalReintegroEmpleado'
 import ModalLiquidarEmpleado from '../components/empleados/ModalLiquidarEmpleado'
+import ModalSustitucionPatronal from '../components/empleados/ModalSustitucionPatronal'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
 import Paginacion from '../components/ui/Paginacion'
 
@@ -77,10 +78,11 @@ export default function Empleados() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
 
-  // Estados para modales dedicados de Retiro, Reintegro y Liquidación
+  // Estados para modales dedicados de Retiro, Reintegro, Liquidación y Sustitución Patronal
   const [retiroEmp, setRetiroEmp] = useState(null)
   const [reintegroEmp, setReintegroEmp] = useState(null)
   const [liquidarEmp, setLiquidarEmp] = useState(null)
+  const [sustitucionEmp, setSustitucionEmp] = useState(null)
   const [actionSaving, setActionSaving] = useState(false)
 
   const handleSelectEmp = useCallback((emp, section = null) => {
@@ -634,6 +636,36 @@ export default function Empleados() {
     }
   }
 
+  const handleConfirmSustitucion = async (payload) => {
+    if (!sustitucionEmp) return
+    setActionSaving(true)
+    try {
+      const { error } = await empleadosApi.ejecutarSustitucionPatronal(sustitucionEmp, payload)
+      if (error) throw error
+
+      logAccion('SUSTITUCION_PATRONAL', 'empleados', sustitucionEmp.id, currentCompany, {
+        empresa_origen: sustitucionEmp.empresa || currentCompany,
+        empresa_destino: payload.empresa_destino,
+        fecha_sustitucion: payload.fecha_sustitucion,
+        cargo: payload.cargo,
+        dependencia: payload.dependencia,
+      })
+
+      const nomDest = payload.empresa_destino === 'global_link' ? 'Global Link' : 'AmeriGlobal'
+      setMsg({
+        type: 'success',
+        text: `Sustitución patronal de ${sustitucionEmp.nombre_completo} hacia ${nomDest} realizada con éxito. Se preservaron la antigüedad, novedades, procesos disciplinarios y vacaciones.`,
+      })
+      setSustitucionEmp(null)
+      await load()
+      setTimeout(() => setMsg(null), 5000)
+    } catch (e) {
+      setMsg({ type: 'error', text: 'Error al realizar la sustitución patronal: ' + e.message })
+    } finally {
+      setActionSaving(false)
+    }
+  }
+
   const f = (k) => (e) => {
     const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value
     setForm(p => ({ ...p, [k]: val }))
@@ -921,6 +953,7 @@ export default function Empleados() {
               onRetirar={puedeEditar ? setRetiroEmp : null}
               onReintegrar={puedeEditar ? setReintegroEmp : null}
               onLiquidar={puedeEditar ? setLiquidarEmp : null}
+              onSustitucion={puedeEditar ? setSustitucionEmp : null}
               setDeleteId={puedeEditar ? setDeleteId : null}
             />
             {pagination}
@@ -938,6 +971,7 @@ export default function Empleados() {
               onRetirar={puedeEditar ? setRetiroEmp : null}
               onReintegrar={puedeEditar ? setReintegroEmp : null}
               onLiquidar={puedeEditar ? setLiquidarEmp : null}
+              onSustitucion={puedeEditar ? setSustitucionEmp : null}
               setDeleteId={puedeEditar ? setDeleteId : null}
             />
             {pagination}
@@ -988,6 +1022,15 @@ export default function Empleados() {
         />
       )}
 
+      {sustitucionEmp && (
+        <ModalSustitucionPatronal
+          emp={sustitucionEmp}
+          onClose={() => setSustitucionEmp(null)}
+          onConfirm={handleConfirmSustitucion}
+          saving={actionSaving}
+        />
+      )}
+
       <DeleteConfirmModal
         deleteId={deleteId}
         onClose={() => setDeleteId(null)}
@@ -1008,6 +1051,7 @@ export default function Empleados() {
           onEdit={() => { const e = selectedEmp; setSelectedEmp(null); setHistorialSection(null); openEdit(e) }}
           onReintegrar={setReintegroEmp}
           onLiquidar={setLiquidarEmp}
+          onSustitucion={puedeEditar ? setSustitucionEmp : null}
         />
       )}
     </div>

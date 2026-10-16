@@ -408,3 +408,166 @@ export async function marcarLiquidado(
   return resEmp
 }
 
+/**
+ * Ejecuta la Sustitución Patronal (cambio de razón social) de un empleado:
+ * 1. Conserva la fecha de ingreso original y toda la antigüedad laboral.
+ * 2. Actualiza la empresa en `empleados`.
+ * 3. Cierra el periodo actual y abre el nuevo periodo en la empresa destino (continuidad_laboral = true).
+ * 4. Migra todas las `novedades` del empleado a la empresa destino e inserta la novedad 'Sustitución Patronal'.
+ * 5. Migra el historial de `procesos_disciplinarios` a la empresa destino.
+ * 6. Migra los registros de `productividad` a la empresa destino.
+ * 7. Migra las solicitudes y saldos de `vacaciones` a la empresa destino.
+ * 8. Migra los registros de `parqueadero` si existen.
+ */
+export async function ejecutarSustitucionPatronal(empleado, {
+  empresa_destino,
+  fecha_sustitucion,
+  dependencia,
+  cargo,
+  observaciones,
+}) {
+  const empresaOrigen = empleado.empresa || 'ameriglobal'
+  const empresaDestino = empresa_destino
+  const fechaEfectiva = fecha_sustitucion || new Date().toISOString().split('T')[0]
+  const depFinal = dependencia || empleado.dependencia || null
+  const cargoFinal = cargo || empleado.cargo || null
+  const obsFinal = observaciones?.trim() || `Sustitución patronal de ${empresaOrigen} hacia ${empresaDestino}. Conserva antigüedad, fecha de ingreso original e historial integral.`
+
+  // 1. Intentar primero ejecutar vía RPC si existe en PostgreSQL
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('ejecutar_sustitucion_patronal', {
+      p_empleado_id: empleado.id,
+      p_empresa_destino: empresaDestino,
+      p_fecha_sustitucion: fechaEfectiva,
+      p_dependencia: depFinal,
+      p_cargo: cargoFinal,
+      p_observaciones: obsFinal,
+    })
+    if (!rpcErr && rpcData?.success) {
+      return { data: rpcData, error: null }
+    }
+  } catch {
+    // Si no está la función RPC, proceder con fallback directo
+  }
+
+  // 2. Fallback: Ejecución directa en tablas Supabase
+  try {
+    // 2.1 Actualizar registro principal en public.empleados
+    const { data: empActualizado, error: errEmp } = await supabase
+      .from(TABLA)
+      .update({
+        empresa: empresaDestino,
+        dependencia: depFinal,
+        cargo: cargoFinal,
+        activo: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', empleado.id)
+      .select()
+      .single()
+
+    if (errEmp) throw errEmp
+
+    // 2.2 Cerrar periodo anterior y crear nuevo periodo con continuidad laboral
+    const { data: periodosActivos } = await supabase
+      .from(TABLA_PERIODOS)
+      .select('id')
+      .eq('empleado_id', empleado.id)
+      .eq('es_periodo_actual', true)
+
+    if (periodosActivos && periodosActivos.length > 0) {
+      await supabase
+        .from(TABLA_PERIODOS)
+        .update({
+          fecha_retiro: fechaEfectiva,
+          motivo_retiro: 'Sustitución Patronal',
+          observaciones: `Sustitución patronal hacia ${empresaDestino}`,
+          es_periodo_actual: false,
+        })
+        .eq('id', periodosActivos[0].id)
+    }
+
+    await supabase
+      .from(TABLA_PERIODOS)
+      .insert([{
+        empleado_id: empleado.id,
+        empresa: empresaDestino,
+        dependencia: depFinal,
+        cargo: cargoFinal,
+        fecha_ingreso: fechaEfectiva,
+        fecha_primer_ingreso: empleado.fecha_primer_ingreso || empleado.fecha_ingreso,
+        es_periodo_actual: true,
+        continuidad_laboral: true,
+        motivo_transicion: 'sustitucion_patronal',
+        observaciones: obsFinal,
+      }])
+
+    // 2.3 Migrar novedades existentes y registrar novedad de 'Sustitución Patronal'
+    await supabase
+      .from('novedades')
+      .update({ empresa: empresaDestino })
+      .or(`empleado_id.eq.${empleado.id},nombre_empleado.ilike.${empleado.nombre_completo}`)
+
+    const periodoStr = fechaEfectiva.slice(0, 7)
+    await supabase
+      .from('novedades')
+      .insert([{
+        concepto: 'Sustitución Patronal',
+        fecha_inicio: fechaEfectiva,
+        fecha_fin: fechaEfectiva,
+        total_dias: 0,
+        periodo: periodoStr,
+        observacion: obsFinal,
+        empleado_id: empleado.id,
+        nombre_empleado: empleado.nombre_completo,
+        dependencia: depFinal,
+        empresa: empresaDestino,
+      }])
+
+    // 2.4 Migrar Procesos Disciplinarios
+    try {
+      await supabase
+        .from('procesos_disciplinarios')
+        .update({ empresa: empresaDestino })
+        .or(`empleado_id.eq.${empleado.id},nombre_empleado.ilike.${empleado.nombre_completo}`)
+    } catch (e) {
+      console.warn('Migración procesos_disciplinarios:', e)
+    }
+
+    // 2.5 Migrar Productividad
+    try {
+      await supabase
+        .from('productividad')
+        .update({ empresa: empresaDestino })
+        .ilike('nombre', empleado.nombre_completo)
+    } catch (e) {
+      console.warn('Migración productividad:', e)
+    }
+
+    // 2.6 Migrar Vacaciones
+    try {
+      await supabase
+        .from('vacaciones')
+        .update({ empresa: empresaDestino })
+        .or(`empleado_id.eq.${empleado.id},nombre_empleado.ilike.${empleado.nombre_completo}`)
+    } catch (e) {
+      console.warn('Migración vacaciones:', e)
+    }
+
+    // 2.7 Migrar Parqueadero
+    try {
+      await supabase
+        .from('registros_parqueadero')
+        .update({ empresa: empresaDestino })
+        .or(`empleado_id.eq.${empleado.id},nombre_empleado.ilike.${empleado.nombre_completo}`)
+    } catch (e) {
+      console.warn('Migración parqueadero:', e)
+    }
+
+    return { data: empActualizado, error: null }
+  } catch (err) {
+    console.error('Error al ejecutar sustitución patronal:', err)
+    return { data: null, error: err }
+  }
+}
+

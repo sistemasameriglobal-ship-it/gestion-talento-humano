@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import * as departamentosApi from '../api/departamentos'
+import * as empresasApi from '../api/empresas'
 import { DEPENDENCIAS, EMPRESAS_DISPONIBLES } from '../constants'
 
 const CompanyContext = createContext(null)
@@ -10,14 +11,33 @@ export { EMPRESAS_DISPONIBLES }
 export function CompanyProvider({ children }) {
   const { perfil, isAdmin } = useAuth()
 
+  // Lista de empresas registradas (dinámicas desde Supabase + fallback a constantes)
+  const [listaEmpresas, setListaEmpresas] = useState(() => empresasApi.obtenerEmpresasCache())
+
+  const cargarEmpresas = useCallback(async () => {
+    try {
+      const { data } = await empresasApi.listarEmpresas()
+      if (data && data.length > 0) {
+        setListaEmpresas(data)
+      }
+    } catch (err) {
+      console.warn('Error al cargar empresas dinámicas:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    Promise.resolve().then(() => cargarEmpresas())
+  }, [cargarEmpresas])
+
   // Empresas a las que tiene acceso el usuario actual
   const empresasPermitidas = useMemo(() => {
-    if (!perfil) return [EMPRESAS_DISPONIBLES[0]]
-    if (isAdmin) return EMPRESAS_DISPONIBLES
+    const activas = listaEmpresas.filter(e => e.activo !== false)
+    if (!perfil) return activas.slice(0, 1)
+    if (isAdmin) return activas
     const userEmpresas = Array.isArray(perfil.empresas) ? perfil.empresas : ['ameriglobal']
-    const filtradas = EMPRESAS_DISPONIBLES.filter(e => userEmpresas.includes(e.id))
-    return filtradas.length > 0 ? filtradas : [EMPRESAS_DISPONIBLES[0]]
-  }, [perfil, isAdmin])
+    const filtradas = activas.filter(e => userEmpresas.includes(e.id) || userEmpresas.includes(e.codigo))
+    return filtradas.length > 0 ? filtradas : activas.slice(0, 1)
+  }, [perfil, isAdmin, listaEmpresas])
 
   const [currentCompany, setCurrentCompanyState] = useState(() => {
     const saved = localStorage.getItem('active_company')
@@ -27,9 +47,9 @@ export function CompanyProvider({ children }) {
   // Sincronizar si la empresa guardada ya no está entre las permitidas
   useEffect(() => {
     if (empresasPermitidas.length > 0) {
-      const existe = empresasPermitidas.some(e => e.id === currentCompany)
+      const existe = empresasPermitidas.some(e => e.id === currentCompany || e.codigo === currentCompany)
       if (!existe) {
-        const fallback = empresasPermitidas[0].id
+        const fallback = empresasPermitidas[0].id || empresasPermitidas[0].codigo
         Promise.resolve().then(() => {
           setCurrentCompanyState(fallback)
           localStorage.setItem('active_company', fallback)
@@ -44,8 +64,8 @@ export function CompanyProvider({ children }) {
   }, [])
 
   const companyConfig = useMemo(() => {
-    return EMPRESAS_DISPONIBLES.find(e => e.id === currentCompany) || EMPRESAS_DISPONIBLES[0]
-  }, [currentCompany])
+    return listaEmpresas.find(e => e.id === currentCompany || e.codigo === currentCompany) || listaEmpresas[0] || EMPRESAS_DISPONIBLES[0]
+  }, [currentCompany, listaEmpresas])
 
   // Departamentos dinámicos de la empresa activa
   const [departamentos, setDepartamentos] = useState([])
@@ -136,6 +156,8 @@ export function CompanyProvider({ children }) {
     companyConfig,
     setCompany,
     empresasPermitidas,
+    empresasDisponibles: listaEmpresas,
+    reloadEmpresas: cargarEmpresas,
     hasPermission,
     canWrite,
     getSectionAccess,

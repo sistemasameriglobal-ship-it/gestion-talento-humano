@@ -3,7 +3,7 @@
 // -------------------------------------------------------------
 // Vista de tarjetas de empleados con acciones rápidas.
 // =============================================================
-import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale, AlertTriangle, CheckCircle2, ArrowRight, FileText } from 'lucide-react'
+import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale, AlertTriangle, CheckCircle2, ArrowRight, FileText, Building2 } from 'lucide-react'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 import './empleados.css'
 
@@ -36,6 +36,7 @@ export default function EmpleadoCards({
   onRetirar,
   onReintegrar,
   onLiquidar,
+  onSustitucion,
   setDeleteId,
 }) {
   return (
@@ -141,6 +142,16 @@ export default function EmpleadoCards({
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                   <button className="icon-btn" title="Editar" onClick={() => openEdit(emp)}><Edit2 size={13} /></button>
+                  {onSustitucion && emp.activo !== false && (
+                    <button
+                      className="icon-btn"
+                      title="Sustitución Patronal (Cambio de razón social)"
+                      style={{ color: '#4338CA' }}
+                      onClick={() => onSustitucion(emp)}
+                    >
+                      <Building2 size={13} />
+                    </button>
+                  )}
                   <button
                     className="btn btn-sm"
                     style={{

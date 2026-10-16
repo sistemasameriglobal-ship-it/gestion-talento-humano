@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import * as perfilesApi from '../../api/perfiles'
 import { useAuth } from '../../context/AuthContext'
+import { useCompany } from '../../context/CompanyContext'
 import {
   X, Check, Shield, CheckCircle2,
   AlertCircle, Loader2, LayoutDashboard, FileText,
@@ -21,6 +22,7 @@ const SECCIONES_APP = [
 
 export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
   const { user: currentUser } = useAuth()
+  const { empresasDisponibles } = useCompany()
   const esYo = user.id === currentUser?.id
 
   // Campos de perfil y credenciales
@@ -68,10 +70,19 @@ export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
       return res
     }
 
-    return {
-      ameriglobal: normalizar(p.ameriglobal),
-      global_link: normalizar(p.global_link),
-    }
+    const permisosObj = {}
+    const todasLasClaves = new Set([
+      'ameriglobal',
+      'global_link',
+      ...Object.keys(p),
+      ...(empresasDisponibles || []).map(e => e.codigo || e.id),
+    ])
+
+    todasLasClaves.forEach(k => {
+      permisosObj[k] = normalizar(p[k])
+    })
+
+    return permisosObj
   })
 
   const [loading, setLoading] = useState(false)
@@ -332,318 +343,185 @@ export default function ModalEditarPermisos({ user, onClose, onUpdated }) {
                 <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>
                   Empresas con Acceso
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {/* AmeriGlobal */}
-                  <label
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      border: empresas.includes('ameriglobal') ? '2px solid #2563EB' : '1px solid var(--border)',
-                      background: empresas.includes('ameriglobal') ? 'var(--info-bg)' : 'var(--bg)',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={empresas.includes('ameriglobal')}
-                      onChange={() => toggleEmpresa('ameriglobal')}
-                      style={{ accentColor: '#2563EB', width: 16, height: 16 }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--info-text)' }}>🏢 AmeriGlobal</div>
-                      <div style={{ fontSize: 10.5, color: '#6B7280' }}>Novedades e Incapacidades</div>
-                    </div>
-                  </label>
-
-                  {/* Global Link */}
-                  <label
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      border: empresas.includes('global_link') ? '2px solid #0D9488' : '1px solid var(--border)',
-                      background: empresas.includes('global_link') ? '#F0FDFA' : 'var(--bg)',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={empresas.includes('global_link')}
-                      onChange={() => toggleEmpresa('global_link')}
-                      style={{ accentColor: '#0D9488', width: 16, height: 16 }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 12.5, color: '#0F766E' }}>🌐 Global Link</div>
-                      <div style={{ fontSize: 10.5, color: '#6B7280' }}>Cobranza & Departamentos</div>
-                    </div>
-                  </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+                  {empresasDisponibles.map(emp => {
+                    const empCode = emp.codigo || emp.id
+                    const isChecked = empresas.includes(empCode)
+                    return (
+                      <label
+                        key={empCode}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          border: isChecked ? `2px solid ${emp.colorPrincipal || '#2563EB'}` : '1px solid var(--border)',
+                          background: isChecked ? (emp.colorFondoTag || 'var(--info-bg)') : 'var(--bg)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleEmpresa(empCode)}
+                          style={{ accentColor: emp.colorPrincipal || '#2563EB', width: 16, height: 16 }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 12.5, color: isChecked ? (emp.colorSecundario || 'var(--text)') : 'var(--text)' }}>
+                            {emp.icono || '🏢'} {emp.nombre}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: '#6B7280' }}>
+                            {emp.tagline || emp.razonSocial || 'Operaciones'}
+                          </div>
+                        </div>
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
 
-              {/* ── 4. Permisos por Secciones (AmeriGlobal) ── */}
-              {empresas.includes('ameriglobal') && (
-                <div style={{ marginBottom: 16, padding: '14px 16px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--info-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        🏢 Secciones en AmeriGlobal
-                      </span>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                        Configura si el usuario puede modificar o solo ver la información de cada módulo.
+              {/* ── 4. Permisos por Secciones para cada empresa con acceso ── */}
+              {empresasDisponibles.filter(emp => empresas.includes(emp.codigo || emp.id)).map(emp => {
+                const empCode = emp.codigo || emp.id
+                return (
+                  <div
+                    key={empCode}
+                    style={{
+                      marginBottom: 16,
+                      padding: '14px 16px',
+                      background: emp.colorFondoTag || '#F8FAFC',
+                      borderRadius: 12,
+                      border: `1px solid color-mix(in srgb, ${emp.colorPrincipal || '#2563EB'} 25%, #E2E8F0)`,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: emp.colorSecundario || emp.colorPrincipal || 'var(--info-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {emp.icono || '🏢'} Secciones en {emp.nombre}
+                        </span>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          Configura si el usuario puede modificar o solo ver la información de cada módulo en {emp.nombre}.
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleSetAll(empCode, 'total')}
+                          style={{ fontSize: 11, padding: '3px 8px', color: '#15803D' }}
+                        >
+                          <CheckSquare size={12} style={{ marginRight: 3 }} /> Todo Acceso Total
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleSetAll(empCode, 'lectura')}
+                          style={{ fontSize: 11, padding: '3px 8px', color: '#B45309' }}
+                        >
+                          <Eye size={12} style={{ marginRight: 3 }} /> Todo Solo Ver
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleSetAll(empCode, 'none')}
+                          style={{ fontSize: 11, padding: '3px 8px', color: '#6B7280' }}
+                        >
+                          <X size={12} style={{ marginRight: 3 }} /> Bloquear Todo
+                        </button>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleSetAll('ameriglobal', 'total')}
-                        style={{ fontSize: 11, padding: '3px 8px', color: '#15803D' }}
-                      >
-                        <CheckSquare size={12} style={{ marginRight: 3 }} /> Todo Acceso Total
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleSetAll('ameriglobal', 'lectura')}
-                        style={{ fontSize: 11, padding: '3px 8px', color: '#B45309' }}
-                      >
-                        <Eye size={12} style={{ marginRight: 3 }} /> Todo Solo Ver
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleSetAll('ameriglobal', 'none')}
-                        style={{ fontSize: 11, padding: '3px 8px', color: '#6B7280' }}
-                      >
-                        <X size={12} style={{ marginRight: 3 }} /> Bloquear Todo
-                      </button>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {SECCIONES_APP.map(sec => {
+                        const nivel = permisos[empCode]?.[sec.id] || 'none'
+                        return (
+                          <div
+                            key={`${empCode}-${sec.id}`}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '6px 12px',
+                              borderRadius: 8,
+                              background: '#FFFFFF',
+                              border: nivel === 'total'
+                                ? '1px solid #86EFAC'
+                                : nivel === 'lectura'
+                                  ? '1px solid #FCD34D'
+                                  : '1px solid #E5E7EB',
+                              gap: 10,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: nivel !== 'none' ? 600 : 400, color: nivel !== 'none' ? 'var(--text)' : 'var(--text-muted)' }}>
+                              <span>{sec.emoji}</span>
+                              <span>{sec.label}</span>
+                            </div>
+
+                            <div style={{ display: 'inline-flex', background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleNivelChange(empCode, sec.id, 'total')}
+                                style={{
+                                  padding: '3px 8px',
+                                  fontSize: 11,
+                                  fontWeight: nivel === 'total' ? 700 : 500,
+                                  borderRadius: 5,
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  background: nivel === 'total' ? '#DCFCE7' : 'transparent',
+                                  color: nivel === 'total' ? '#15803D' : 'var(--text-muted)',
+                                  transition: 'all 0.12s',
+                                }}
+                                title="Acceso total: puede ver, crear, editar y eliminar"
+                              >
+                                🟢 Acceso Total
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleNivelChange(empCode, sec.id, 'lectura')}
+                                style={{
+                                  padding: '3px 8px',
+                                  fontSize: 11,
+                                  fontWeight: nivel === 'lectura' ? 700 : 500,
+                                  borderRadius: 5,
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  background: nivel === 'lectura' ? '#FEF3C7' : 'transparent',
+                                  color: nivel === 'lectura' ? '#B45309' : 'var(--text-muted)',
+                                  transition: 'all 0.12s',
+                                }}
+                                title="Solo lectura: únicamente consultar información"
+                              >
+                                👁️ Solo Ver
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleNivelChange(empCode, sec.id, 'none')}
+                                style={{
+                                  padding: '3px 8px',
+                                  fontSize: 11,
+                                  fontWeight: nivel === 'none' ? 700 : 500,
+                                  borderRadius: 5,
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  background: nivel === 'none' ? '#F3F4F6' : 'transparent',
+                                  color: nivel === 'none' ? '#4B5563' : 'var(--text-muted)',
+                                  transition: 'all 0.12s',
+                                }}
+                                title="Sin acceso: oculta el módulo del menú"
+                              >
+                                🚫 Sin Acceso
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {SECCIONES_APP.map(sec => {
-                      const nivel = permisos.ameriglobal?.[sec.id] || 'none'
-                      return (
-                        <div
-                          key={`ag-${sec.id}`}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '6px 12px',
-                            borderRadius: 8,
-                            background: '#FFFFFF',
-                            border: nivel === 'total'
-                              ? '1px solid #86EFAC'
-                              : nivel === 'lectura'
-                                ? '1px solid #FCD34D'
-                                : '1px solid #E5E7EB',
-                            gap: 10,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: nivel !== 'none' ? 600 : 400, color: nivel !== 'none' ? 'var(--text)' : 'var(--text-muted)' }}>
-                            <span>{sec.emoji}</span>
-                            <span>{sec.label}</span>
-                          </div>
-
-                          <div style={{ display: 'inline-flex', background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleNivelChange('ameriglobal', sec.id, 'total')}
-                              style={{
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                fontWeight: nivel === 'total' ? 700 : 500,
-                                borderRadius: 5,
-                                border: 'none',
-                                cursor: 'pointer',
-                                background: nivel === 'total' ? '#DCFCE7' : 'transparent',
-                                color: nivel === 'total' ? '#15803D' : 'var(--text-muted)',
-                                transition: 'all 0.12s',
-                              }}
-                              title="Acceso total: puede ver, crear, editar y eliminar"
-                            >
-                              🟢 Acceso Total
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleNivelChange('ameriglobal', sec.id, 'lectura')}
-                              style={{
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                fontWeight: nivel === 'lectura' ? 700 : 500,
-                                borderRadius: 5,
-                                border: 'none',
-                                cursor: 'pointer',
-                                background: nivel === 'lectura' ? '#FEF3C7' : 'transparent',
-                                color: nivel === 'lectura' ? '#B45309' : 'var(--text-muted)',
-                                transition: 'all 0.12s',
-                              }}
-                              title="Solo lectura: únicamente consultar información"
-                            >
-                              👁️ Solo Ver
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleNivelChange('ameriglobal', sec.id, 'none')}
-                              style={{
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                fontWeight: nivel === 'none' ? 700 : 500,
-                                borderRadius: 5,
-                                border: 'none',
-                                cursor: 'pointer',
-                                background: nivel === 'none' ? '#F3F4F6' : 'transparent',
-                                color: nivel === 'none' ? '#4B5563' : 'var(--text-muted)',
-                                transition: 'all 0.12s',
-                              }}
-                              title="Sin acceso: oculta el módulo del menú"
-                            >
-                              🚫 Sin Acceso
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ── 5. Permisos por Secciones (Global Link) ── */}
-              {empresas.includes('global_link') && (
-                <div style={{ marginBottom: 16, padding: '14px 16px', background: '#F0FDFA', borderRadius: 12, border: '1px solid #CCFBF1' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: '#0F766E', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        🌐 Secciones en Global Link
-                      </span>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                        Configura los privilegios de visualización o modificación para Global Link.
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleSetAll('global_link', 'total')}
-                        style={{ fontSize: 11, padding: '3px 8px', color: '#0F766E' }}
-                      >
-                        <CheckSquare size={12} style={{ marginRight: 3 }} /> Todo Acceso Total
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleSetAll('global_link', 'lectura')}
-                        style={{ fontSize: 11, padding: '3px 8px', color: '#B45309' }}
-                      >
-                        <Eye size={12} style={{ marginRight: 3 }} /> Todo Solo Ver
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleSetAll('global_link', 'none')}
-                        style={{ fontSize: 11, padding: '3px 8px', color: '#6B7280' }}
-                      >
-                        <X size={12} style={{ marginRight: 3 }} /> Bloquear Todo
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {SECCIONES_APP.map(sec => {
-                      const nivel = permisos.global_link?.[sec.id] || 'none'
-                      return (
-                        <div
-                          key={`gl-${sec.id}`}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '6px 12px',
-                            borderRadius: 8,
-                            background: '#FFFFFF',
-                            border: nivel === 'total'
-                              ? '1px solid #99F6E4'
-                              : nivel === 'lectura'
-                                ? '1px solid #FCD34D'
-                                : '1px solid #E5E7EB',
-                            gap: 10,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: nivel !== 'none' ? 600 : 400, color: nivel !== 'none' ? 'var(--text)' : 'var(--text-muted)' }}>
-                            <span>{sec.emoji}</span>
-                            <span>{sec.label}</span>
-                          </div>
-
-                          <div style={{ display: 'inline-flex', background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleNivelChange('global_link', sec.id, 'total')}
-                              style={{
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                fontWeight: nivel === 'total' ? 700 : 500,
-                                borderRadius: 5,
-                                border: 'none',
-                                cursor: 'pointer',
-                                background: nivel === 'total' ? '#CCFBF1' : 'transparent',
-                                color: nivel === 'total' ? '#0F766E' : 'var(--text-muted)',
-                                transition: 'all 0.12s',
-                              }}
-                              title="Acceso total: puede ver, crear, editar y eliminar"
-                            >
-                              🟢 Acceso Total
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleNivelChange('global_link', sec.id, 'lectura')}
-                              style={{
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                fontWeight: nivel === 'lectura' ? 700 : 500,
-                                borderRadius: 5,
-                                border: 'none',
-                                cursor: 'pointer',
-                                background: nivel === 'lectura' ? '#FEF3C7' : 'transparent',
-                                color: nivel === 'lectura' ? '#B45309' : 'var(--text-muted)',
-                                transition: 'all 0.12s',
-                              }}
-                              title="Solo lectura: únicamente consultar información"
-                            >
-                              👁️ Solo Ver
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleNivelChange('global_link', sec.id, 'none')}
-                              style={{
-                                padding: '3px 8px',
-                                fontSize: 11,
-                                fontWeight: nivel === 'none' ? 700 : 500,
-                                borderRadius: 5,
-                                border: 'none',
-                                cursor: 'pointer',
-                                background: nivel === 'none' ? '#F3F4F6' : 'transparent',
-                                color: nivel === 'none' ? '#4B5563' : 'var(--text-muted)',
-                                transition: 'all 0.12s',
-                              }}
-                              title="Sin acceso: oculta el módulo del menú"
-                            >
-                              🚫 Sin Acceso
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
+                )
+              })}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
                 <button type="button" className="btn btn-ghost" onClick={onClose} disabled={loading}>

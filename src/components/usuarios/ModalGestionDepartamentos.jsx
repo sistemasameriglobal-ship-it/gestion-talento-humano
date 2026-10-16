@@ -7,8 +7,8 @@ import {
 } from 'lucide-react'
 
 export default function ModalGestionDepartamentos({ onClose }) {
-  const { reloadDepartamentos } = useCompany()
-  const [empresaFiltro, setEmpresaFiltro] = useState('global_link')
+  const { reloadDepartamentos, empresasDisponibles, currentCompany } = useCompany()
+  const [empresaFiltro, setEmpresaFiltro] = useState(() => currentCompany || 'ameriglobal')
   const [departamentos, setDepartamentos] = useState([])
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState(null)
@@ -124,36 +124,33 @@ export default function ModalGestionDepartamentos({ onClose }) {
           )}
 
           {/* Selector de empresa a gestionar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 6, background: 'var(--bg)', padding: 4, borderRadius: 10, border: '1px solid var(--border)' }}>
-              <button
-                type="button"
-                className="btn btn-sm"
-                style={{
-                  background: empresaFiltro === 'global_link' ? '#0D9488' : 'transparent',
-                  color: empresaFiltro === 'global_link' ? '#fff' : 'var(--text-muted)',
-                  border: 'none',
-                  fontWeight: 600,
-                  fontSize: 12,
-                }}
-                onClick={() => { setEmpresaFiltro('global_link'); setModo('list') }}
-              >
-                🌐 Global Link
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
-                style={{
-                  background: empresaFiltro === 'ameriglobal' ? '#2563EB' : 'transparent',
-                  color: empresaFiltro === 'ameriglobal' ? '#fff' : 'var(--text-muted)',
-                  border: 'none',
-                  fontWeight: 600,
-                  fontSize: 12,
-                }}
-                onClick={() => { setEmpresaFiltro('ameriglobal'); setModo('list') }}
-              >
-                🏢 AmeriGlobal
-              </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 6, background: 'var(--bg)', padding: 4, borderRadius: 10, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+              {(empresasDisponibles || []).map(emp => {
+                const empCode = emp.codigo || emp.id
+                const isSelected = empresaFiltro === empCode
+                return (
+                  <button
+                    key={empCode}
+                    type="button"
+                    className="btn btn-sm"
+                    style={{
+                      background: isSelected ? (emp.colorPrincipal || '#2563EB') : 'transparent',
+                      color: isSelected ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      fontWeight: 600,
+                      fontSize: 12,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                    }}
+                    onClick={() => { setEmpresaFiltro(empCode); setModo('list') }}
+                  >
+                    <span>{emp.icono || '🏢'}</span>
+                    <span>{emp.nombre}</span>
+                  </button>
+                )
+              })}
             </div>
 
             {modo === 'list' && (

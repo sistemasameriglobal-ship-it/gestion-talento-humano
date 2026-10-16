@@ -4,13 +4,15 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import * as authApi from '../api/auth'
 import * as perfilesApi from '../api/perfiles'
 import { useAuth } from '../context/AuthContext'
+import { useCompany } from '../context/CompanyContext'
 import {
   Search, Mail, UserCheck, UserX, ShieldCheck, ShieldAlert, Shield,
   Users as UsersIcon, AlertCircle, CheckCircle2, UserPlus, X, Loader2,
-  Eye, EyeOff, Layers, UserCog,
+  Eye, EyeOff, Layers, UserCog, Building2, ArrowRight,
 } from 'lucide-react'
 import ModalEditarPermisos from '../components/usuarios/ModalEditarPermisos'
 import ModalGestionDepartamentos from '../components/usuarios/ModalGestionDepartamentos'
+import ModalGestionEmpresas from '../components/usuarios/ModalGestionEmpresas'
 import ModalAuditLogs from '../components/usuarios/ModalAuditLogs'
 import PersonCell from '../components/ui/PersonCell'
 
@@ -41,13 +43,17 @@ function PasswordField({ value, onChange, placeholder, autoComplete }) {
   )
 }
 
-function ModalCrearUsuario({ onClose, onCreated }) {
+function ModalCrearUsuario({ onClose, onCreated, empresasDisponibles = [] }) {
   const [nombreCompleto, setNombreCompleto] = useState('')
   const [correo, setCorreo] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [esAdmin, setEsAdmin] = useState(false)
-  const [empresas, setEmpresas] = useState(['ameriglobal', 'global_link'])
+  const [empresas, setEmpresas] = useState(() => {
+    return empresasDisponibles.length > 0
+      ? empresasDisponibles.map(e => e.codigo || e.id)
+      : ['ameriglobal', 'global_link']
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -181,15 +187,39 @@ function ModalCrearUsuario({ onClose, onCreated }) {
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
                   Empresas con acceso:
                 </label>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer', padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                    <input type="checkbox" checked={empresas.includes('ameriglobal')} onChange={() => toggleEmpresa('ameriglobal')} style={{ accentColor: '#2563EB' }} />
-                    <span>🏢 AmeriGlobal</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer', padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                    <input type="checkbox" checked={empresas.includes('global_link')} onChange={() => toggleEmpresa('global_link')} style={{ accentColor: '#0D9488' }} />
-                    <span>🌐 Global Link</span>
-                  </label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {(empresasDisponibles.length > 0 ? empresasDisponibles : [
+                    { id: 'ameriglobal', codigo: 'ameriglobal', nombre: 'AmeriGlobal', icono: '🏢', colorPrincipal: '#2563EB', colorFondoTag: '#EFF6FF' },
+                    { id: 'global_link', codigo: 'global_link', nombre: 'Global Link', icono: '🌐', colorPrincipal: '#0D9488', colorFondoTag: '#F0FDFA' },
+                  ]).map(emp => {
+                    const empCode = emp.codigo || emp.id
+                    const isChecked = empresas.includes(empCode)
+                    return (
+                      <label
+                        key={empCode}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 12.5,
+                          cursor: 'pointer',
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          background: isChecked ? (emp.colorFondoTag || 'var(--bg)') : 'var(--bg)',
+                          border: isChecked ? `1.5px solid ${emp.colorPrincipal || 'var(--primary)'}` : '1px solid var(--border)',
+                          fontWeight: isChecked ? 600 : 400,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleEmpresa(empCode)}
+                          style={{ accentColor: emp.colorPrincipal || '#2563EB' }}
+                        />
+                        <span>{emp.icono || '🏢'} {emp.nombre}</span>
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -215,17 +245,20 @@ function ModalCrearUsuario({ onClose, onCreated }) {
 
 export default function Usuarios() {
   const { user: currentUser } = useAuth()
+  const { empresasDisponibles, reloadEmpresas, currentCompany, setCompany } = useCompany()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtro, setFiltro] = useState('')
   const [msg, setMsg] = useState(null)
   const [busyId, setBusyId] = useState(null)
+  const [seccionTab, setSeccionTab] = useState('usuarios') // 'usuarios' | 'empresas'
 
   // Modales
   const [modalCrear, setModalCrear] = useState(false)
   const [modalPermisosUser, setModalPermisosUser] = useState(null)
   const [modalDepartamentos, setModalDepartamentos] = useState(false)
+  const [modalEmpresas, setModalEmpresas] = useState(false)
   const [modalAuditoria, setModalAuditoria] = useState(false)
 
   const load = useCallback(async () => {
@@ -298,6 +331,9 @@ export default function Usuarios() {
           <button className="btn btn-ghost" onClick={() => setModalDepartamentos(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Layers size={15} /> Gestionar Departamentos
           </button>
+          <button className="btn btn-ghost" onClick={() => setModalEmpresas(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Building2 size={15} /> Gestionar Empresas
+          </button>
           <button className="btn btn-primary" onClick={() => setModalCrear(true)}>
             <UserPlus size={15} /> Crear usuario
           </button>
@@ -312,6 +348,7 @@ export default function Usuarios() {
 
       {modalCrear && (
         <ModalCrearUsuario
+          empresasDisponibles={empresasDisponibles}
           onClose={() => setModalCrear(false)}
           onCreated={() => { setModalCrear(false); flash('success', 'Usuario creado correctamente.'); load() }}
         />
@@ -331,171 +368,323 @@ export default function Usuarios() {
         />
       )}
 
+      {modalEmpresas && (
+        <ModalGestionEmpresas
+          onClose={() => {
+            setModalEmpresas(false)
+            reloadEmpresas()
+          }}
+        />
+      )}
+
+      {/* Selector de sub-sección: Usuarios / Empresas */}
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button
+          className={`tab-btn ${seccionTab === 'usuarios' ? 'tab-btn--active' : ''}`}
+          onClick={() => setSeccionTab('usuarios')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+        >
+          <UsersIcon size={14} /> Usuarios y Roles ({rows.length})
+        </button>
+        <button
+          className={`tab-btn ${seccionTab === 'empresas' ? 'tab-btn--active' : ''}`}
+          onClick={() => setSeccionTab('empresas')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+        >
+          <Building2 size={14} /> Empresas del Sistema ({empresasDisponibles.length})
+        </button>
+      </div>
+
       {msg && (
         <div className={`alert alert-${msg.type}`} style={{ marginBottom: 16 }}>
           {msg.type === 'error' ? <AlertCircle size={15} /> : <CheckCircle2 size={15} />} {msg.text}
         </div>
       )}
 
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Total</div>
-          <div className="stat-value">{stats.total}</div>
-        </div>
-        <div className="stat-card accent">
-          <div className="stat-label">Pendientes</div>
-          <div className="stat-value" style={{ color: '#D97706' }}>{stats.pendientes}</div>
-          <div className="stat-sub">Esperando aprobación</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Activos</div>
-          <div className="stat-value" style={{ color: 'var(--success-text)' }}>{stats.activos}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Administradores</div>
-          <div className="stat-value" style={{ color: '#7C3AED' }}>{stats.admins}</div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="filters-row">
-          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 160 }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              className="form-control search-input"
-              style={{ paddingLeft: 32 }}
-              placeholder="Buscar nombre o correo..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+      {seccionTab === 'usuarios' ? (
+        <>
+          <div className="stat-grid">
+            <div className="stat-card">
+              <div className="stat-label">Total</div>
+              <div className="stat-value">{stats.total}</div>
+            </div>
+            <div className="stat-card accent">
+              <div className="stat-label">Pendientes</div>
+              <div className="stat-value" style={{ color: '#D97706' }}>{stats.pendientes}</div>
+              <div className="stat-sub">Esperando aprobación</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Activos</div>
+              <div className="stat-value" style={{ color: 'var(--success-text)' }}>{stats.activos}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Administradores</div>
+              <div className="stat-value" style={{ color: '#7C3AED' }}>{stats.admins}</div>
+            </div>
           </div>
-          <div className="tabs" style={{ border: 'none', marginBottom: 0 }}>
-            {FILTROS.map(f => (
-              <button
-                key={f.id}
-                className={`tab-btn ${filtro === f.id ? 'tab-btn--active' : ''}`}
-                onClick={() => setFiltro(f.id)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 13 }}>
-            {filtered.length} usuario(s)
-          </span>
-        </div>
 
-        {loading ? (
-          <div className="empty-state"><p>Cargando...</p></div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <UsersIcon size={32} style={{ color: '#D1D5DB', marginBottom: 8 }} />
-            <p>No hay usuarios que coincidan.</p>
-          </div>
-        ) : (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Usuario</th>
-                  <th>Correo</th>
-                  <th>Empresas Asignadas</th>
-                  <th style={{ textAlign: 'center' }}>Estado</th>
-                  <th style={{ textAlign: 'center' }}>Rol</th>
-                  <th style={{ textAlign: 'right' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(row => {
-                  const esYo = row.id === currentUser?.id
-                  const ocupado = busyId === row.id
-                  const userEmpresas = Array.isArray(row.empresas) && row.empresas.length > 0 ? row.empresas : ['ameriglobal']
+          <div className="card">
+            <div className="filters-row">
+              <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 160 }}>
+                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  className="form-control search-input"
+                  style={{ paddingLeft: 32 }}
+                  placeholder="Buscar nombre o correo..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="tabs" style={{ border: 'none', marginBottom: 0 }}>
+                {FILTROS.map(f => (
+                  <button
+                    key={f.id}
+                    className={`tab-btn ${filtro === f.id ? 'tab-btn--active' : ''}`}
+                    onClick={() => setFiltro(f.id)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 13 }}>
+                {filtered.length} usuario(s)
+              </span>
+            </div>
 
-                  return (
-                    <tr key={row.id}>
-                      <td style={{ maxWidth: 240 }}>
-                        <PersonCell nombre={row.nombre_completo || '—'}>
-                          {esYo && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>(tú)</span>}
-                        </PersonCell>
-                      </td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <Mail size={12} /> {row.correo}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {userEmpresas.includes('ameriglobal') && (
-                            <span className="badge" style={{ background: 'var(--info-bg)', color: 'var(--info-text)', border: '1px solid color-mix(in srgb, var(--info) 30%, transparent)', fontSize: 11 }}>
-                              🏢 AmeriGlobal
+            {loading ? (
+              <div className="empty-state"><p>Cargando...</p></div>
+            ) : filtered.length === 0 ? (
+              <div className="empty-state">
+                <UsersIcon size={32} style={{ color: '#D1D5DB', marginBottom: 8 }} />
+                <p>No hay usuarios que coincidan.</p>
+              </div>
+            ) : (
+              <div className="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Usuario</th>
+                      <th>Correo</th>
+                      <th>Empresas Asignadas</th>
+                      <th style={{ textAlign: 'center' }}>Estado</th>
+                      <th style={{ textAlign: 'center' }}>Rol</th>
+                      <th style={{ textAlign: 'right' }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(row => {
+                      const esYo = row.id === currentUser?.id
+                      const ocupado = busyId === row.id
+                      const userEmpresas = Array.isArray(row.empresas) && row.empresas.length > 0 ? row.empresas : ['ameriglobal']
+
+                      return (
+                        <tr key={row.id}>
+                          <td style={{ maxWidth: 240 }}>
+                            <PersonCell nombre={row.nombre_completo || '—'}>
+                              {esYo && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>(tú)</span>}
+                            </PersonCell>
+                          </td>
+                          <td style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <Mail size={12} /> {row.correo}
                             </span>
-                          )}
-                          {userEmpresas.includes('global_link') && (
-                            <span className="badge" style={{ background: '#F0FDFA', color: '#0F766E', border: '1px solid #99F6E4', fontSize: 11 }}>
-                              🌐 Global Link
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {userEmpresas.map(code => {
+                                const empInfo = empresasDisponibles.find(e => e.id === code || e.codigo === code)
+                                return (
+                                  <span
+                                    key={code}
+                                    className="badge"
+                                    style={{
+                                      background: empInfo?.colorFondoTag || '#EFF6FF',
+                                      color: empInfo?.colorSecundario || empInfo?.colorPrincipal || '#1D4ED8',
+                                      border: `1px solid color-mix(in srgb, ${empInfo?.colorPrincipal || '#2563EB'} 30%, transparent)`,
+                                      fontSize: 11,
+                                    }}
+                                  >
+                                    {empInfo?.icono || '🏢'} {empInfo?.nombre || code}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`badge ${row.activo ? 'pill-ok' : 'pill-pending'}`}>
+                              {row.activo ? 'Activo' : 'Pendiente'}
                             </span>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span className={`badge ${row.activo ? 'pill-ok' : 'pill-pending'}`}>
-                          {row.activo ? 'Activo' : 'Pendiente'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        {row.es_admin ? (
-                          <span className="badge" style={{ background: 'var(--purple-bg)', color: 'var(--purple-text)' }}>
-                            <ShieldCheck size={11} style={{ marginRight: 3 }} /> Admin
-                          </span>
-                        ) : (
-                          <span className="badge" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>
-                            {row.rol || 'Operativo'}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {row.es_admin ? (
+                              <span className="badge" style={{ background: 'var(--purple-bg)', color: 'var(--purple-text)' }}>
+                                <ShieldCheck size={11} style={{ marginRight: 3 }} /> Admin
+                              </span>
+                            ) : (
+                              <span className="badge" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>
+                                {row.rol || 'Operativo'}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                title="Editar perfil, credenciales, empresas y permisos"
+                                onClick={() => setModalPermisosUser(row)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                              >
+                                <UserCog size={13} style={{ color: 'var(--primary)' }} />
+                                <span style={{ fontSize: 11.5 }}>Editar Perfil</span>
+                              </button>
+
+                              <button
+                                className="btn btn-sm"
+                                style={row.activo
+                                  ? { background: 'var(--danger-bg)', color: 'var(--danger-text)', border: 'none' }
+                                  : { background: 'var(--success-bg)', color: 'var(--success-text)', border: 'none' }}
+                                disabled={ocupado || (esYo && row.activo)}
+                                onClick={() => toggleActivo(row)}
+                                title={esYo && row.activo ? 'No puedes desactivar tu propia cuenta' : (row.activo ? 'Desactivar acceso' : 'Aprobar acceso')}
+                              >
+                                {row.activo ? <UserX size={13} /> : <UserCheck size={13} />}
+                                {row.activo ? 'Desactivar' : 'Aprobar'}
+                              </button>
+
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                disabled={ocupado || esYo}
+                                onClick={() => toggleAdmin(row)}
+                                title={esYo ? 'No puedes cambiar tu propio rol' : (row.es_admin ? 'Quitar admin' : 'Hacer admin')}
+                              >
+                                <ShieldAlert size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="card" style={{ padding: '22px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Building2 size={18} style={{ color: '#4338CA' }} /> Empresas y Razones Sociales Registradas
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--text-muted)' }}>
+                Entidades con soporte multi-empresa independiente. Puedes crear una nueva empresa y seleccionarla para operar como AmeriGlobal o Global Link.
+              </p>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={() => setModalEmpresas(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Plus size={14} /> Registrar Nueva Empresa
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+            {empresasDisponibles.map(emp => {
+              const empCode = emp.codigo || emp.id
+              const esActiva = empCode === currentCompany
+              return (
+                <div
+                  key={empCode}
+                  style={{
+                    padding: '18px 20px',
+                    borderRadius: 14,
+                    background: 'var(--bg)',
+                    border: esActiva ? `2px solid ${emp.colorPrincipal || '#2563EB'}` : '1px solid var(--border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                    boxShadow: esActiva ? '0 4px 12px rgba(0,0,0,0.06)' : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div
+                      style={{
+                        width: 48, height: 48, borderRadius: 12,
+                        background: `linear-gradient(135deg, ${emp.colorPrincipal || '#2563EB'} 0%, ${emp.colorSecundario || '#1D4ED8'} 100%)`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 20, color: '#fff', fontWeight: 800, flexShrink: 0,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                      }}
+                    >
+                      {emp.icono || '🏢'}
+                    </div>
+
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontWeight: 800, fontSize: 15 }}>{emp.nombre}</span>
+                        {esActiva && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999,
+                            background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0',
+                          }}>
+                            EN SESIÓN
                           </span>
                         )}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            title="Editar perfil, credenciales, empresas y permisos"
-                            onClick={() => setModalPermisosUser(row)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5 }}
-                          >
-                            <UserCog size={13} style={{ color: 'var(--primary)' }} />
-                            <span style={{ fontSize: 11.5 }}>Editar Perfil</span>
-                          </button>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                        {emp.razonSocial}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                        <span style={{ fontSize: 10.5, fontFamily: 'monospace', padding: '1px 6px', borderRadius: 4, background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                          código: {empCode}
+                        </span>
+                        {emp.nit && (
+                          <span style={{ fontSize: 10.5, padding: '1px 6px', borderRadius: 4, background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                            NIT: {emp.nit}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
-                          <button
-                            className="btn btn-sm"
-                            style={row.activo
-                              ? { background: 'var(--danger-bg)', color: 'var(--danger-text)', border: 'none' }
-                              : { background: 'var(--success-bg)', color: 'var(--success-text)', border: 'none' }}
-                            disabled={ocupado || (esYo && row.activo)}
-                            onClick={() => toggleActivo(row)}
-                            title={esYo && row.activo ? 'No puedes desactivar tu propia cuenta' : (row.activo ? 'Desactivar acceso' : 'Aprobar acceso')}
-                          >
-                            {row.activo ? <UserX size={13} /> : <UserCheck size={13} />}
-                            {row.activo ? 'Desactivar' : 'Aprobar'}
-                          </button>
+                  {emp.tagline && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 10px', background: 'var(--card-bg)', borderRadius: 8 }}>
+                      "{emp.tagline}"
+                    </div>
+                  )}
 
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            disabled={ocupado || esYo}
-                            onClick={() => toggleAdmin(row)}
-                            title={esYo ? 'No puedes cambiar tu propio rol' : (row.es_admin ? 'Quitar admin' : 'Hacer admin')}
-                          >
-                            <ShieldAlert size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 'auto' }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: 11.5, padding: '4px 9px' }}
+                      onClick={() => setModalEmpresas(true)}
+                    >
+                      <UserCog size={13} style={{ marginRight: 4 }} /> Configurar
+                    </button>
+
+                    {!esActiva ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 11.5, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5 }}
+                        onClick={() => {
+                          setCompany(empCode)
+                          flash('success', `Sesión cambiada a ${emp.nombre}.`)
+                        }}
+                      >
+                        Activar empresa <ArrowRight size={12} />
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: emp.colorSecundario || emp.colorPrincipal || '#2563EB' }}>
+                        ✓ Empresa actual
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

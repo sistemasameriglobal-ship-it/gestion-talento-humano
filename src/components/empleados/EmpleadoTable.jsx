@@ -3,7 +3,7 @@
 // -------------------------------------------------------------
 // Vista de tabla de empleados con acciones rápidas.
 // =============================================================
-import { Edit2, Trash2, RotateCcw, Archive, CheckCircle2, Scale } from 'lucide-react'
+import { Edit2, Trash2, RotateCcw, Archive, CheckCircle2, Scale, Building2 } from 'lucide-react'
 import PersonCell from '../ui/PersonCell'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 
@@ -18,6 +18,7 @@ export default function EmpleadoTable({
   onRetirar,
   onReintegrar,
   onLiquidar,
+  onSustitucion,
   setDeleteId,
 }) {
   return (
@@ -257,6 +258,16 @@ export default function EmpleadoTable({
                   <td onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="icon-btn" title="Editar" onClick={() => openEdit(emp)}><Edit2 size={12} /></button>
+                      {onSustitucion && emp.activo !== false && (
+                        <button
+                          className="icon-btn"
+                          style={{ color: '#4338CA' }}
+                          title="Sustitución Patronal (Cambio de razón social)"
+                          onClick={() => onSustitucion(emp)}
+                        >
+                          <Building2 size={12} />
+                        </button>
+                      )}
                       <button
                         className="icon-btn"
                         style={{

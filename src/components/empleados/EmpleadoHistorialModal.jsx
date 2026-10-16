@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   X, Edit2, Award, Scale, Phone, ChevronDown, ChevronUp,
-  IdCard, MapPin, ShieldCheck, HeartPulse, Landmark, FileSpreadsheet,
+  IdCard, MapPin, ShieldCheck, HeartPulse, Landmark, FileSpreadsheet, Building2,
 } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
@@ -68,6 +68,7 @@ export default function EmpleadoHistorialModal({
   onEdit,
   onReintegrar,
   onLiquidar,
+  onSustitucion,
 }) {
   const { currentCompany } = useCompany()
   const nombreEmpresaActiva = currentCompany === 'global_link' ? 'Global Link' : 'AmeriGlobal'
@@ -729,9 +730,24 @@ export default function EmpleadoHistorialModal({
           >
             Cerrar
           </button>
-          <button className="btn btn-primary" onClick={onEdit}>
-            <Edit2 size={14} /> Editar expediente
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {onSustitucion && selectedEmp.activo !== false && (
+              <button
+                className="btn btn-secondary"
+                style={{ color: '#4338CA', borderColor: '#C7D2FE', background: '#EEF2FF', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                onClick={() => {
+                  const emp = selectedEmp
+                  onClose()
+                  onSustitucion(emp)
+                }}
+              >
+                <Building2 size={14} /> Sustitución Patronal
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={onEdit}>
+              <Edit2 size={14} /> Editar expediente
+            </button>
+          </div>
         </div>
       </div>
     </div>
