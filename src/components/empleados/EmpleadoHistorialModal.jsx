@@ -13,8 +13,12 @@ import {
 import { useCompany } from '../../context/CompanyContext'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { CONCEPTOS_CON_FECHA, calcularEdad, formatCOP } from './empleadosConstants'
-import { formatFecha, calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
-import { diasHabilesEntre } from '../../utils/diasHabiles'
+import {
+  formatFecha, calcAntiguedadEmpleado,
+  getEstadoVacacionActual, obtenerPeriodosVacacionesEmpleado
+} from '../../utils/vacacionesHelpers'
+import { hoyISO } from '../../utils/fecha'
+import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
 import './empleados.css'
 
 function inicialesNombre(nombre) {
@@ -109,7 +113,7 @@ export default function EmpleadoHistorialModal({
       }] : [])
 
   const periodoActivo = listaPeriodos.find(p => p.es_periodo_actual) || listaPeriodos[listaPeriodos.length - 1] || (selectedEmp.fecha_ingreso ? { id: 'base', fecha_ingreso: selectedEmp.fecha_ingreso, es_periodo_actual: true } : null)
-  const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacaciones, listaPeriodos, selectedEmp)
+  const periodosVacaciones = obtenerPeriodosVacacionesEmpleado(selectedEmp, vacaciones, listaPeriodos)
   const vacacionActiva = getEstadoVacacionActual(selectedEmp, vacaciones, nov?.novedades)
   const antig = calcAntiguedadEmpleado(selectedEmp, listaPeriodos)
 
@@ -395,7 +399,7 @@ export default function EmpleadoHistorialModal({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span>🌴</span>
                 <span style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em' }}>
-                  Vacaciones y Saldo Disponible ({saldoVac.saldoPendiente}d disponibles)
+                  Vacaciones y Saldo Disponible ({periodosVacaciones.saldoTotal}d disponibles)
                 </span>
                 {vacacionActiva && (
                   <span style={{
@@ -411,82 +415,177 @@ export default function EmpleadoHistorialModal({
 
             {openSections.vacaciones && (
               <div style={{ padding: '0 16px 14px', borderTop: '1px solid var(--border)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: 8, marginTop: 12, marginBottom: vacaciones.length > 0 ? 12 : 0 }}>
-                  <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{saldoVac.diasCausados}d</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>Días causados</div>
-                  </div>
-                  {saldoVac.diasManuales > 0 && (
-                    <div style={{ background: 'var(--bg)', border: '1px solid rgba(249, 115, 22, 0.4)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: '#FB923C' }}>{saldoVac.diasManuales}d</div>
-                      <div style={{ fontSize: 10.5, color: '#F97316' }}>Tomados (histórico)</div>
+                {/* Resumen General Superior */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'var(--bg)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '12px 14px', marginTop: 12, marginBottom: 14,
+                  flexWrap: 'wrap', gap: 10,
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                      Saldo Total Acumulado
                     </div>
-                  )}
-                  <div style={{ background: 'var(--bg)', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#10B981' }}>{saldoVac.diasDisfrutados}d</div>
-                    <div style={{ fontSize: 10.5, color: '#059669' }}>Disfrutados</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: periodosVacaciones.saldoTotal > 0 ? '#10B981' : 'var(--text)' }}>
+                      {periodosVacaciones.saldoTotal} {periodosVacaciones.saldoTotal === 1 ? 'día disponible' : 'días disponibles'}
+                    </div>
                   </div>
-                  <div style={{ background: 'var(--bg)', border: '1px solid rgba(234, 179, 8, 0.35)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#EAB308' }}>{saldoVac.diasEnDinero}d</div>
-                    <div style={{ fontSize: 10.5, color: '#CA8A04' }}>En dinero</div>
-                  </div>
-                  <div style={{ background: 'var(--bg)', border: '1px solid rgba(var(--secondary-rgb), 0.45)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--secondary)' }}>{saldoVac.saldoPendiente}d</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--secondary)' }}>Saldo disponible</div>
+                  <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Total Causados</div>
+                      <div style={{ fontWeight: 700, color: 'var(--text)' }}>{periodosVacaciones.totalCausados}d</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Total Disfrutados</div>
+                      <div style={{ fontWeight: 700, color: '#10B981' }}>{periodosVacaciones.totalDisfrutados}d</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Total En Dinero</div>
+                      <div style={{ fontWeight: 700, color: '#EAB308' }}>{periodosVacaciones.totalEnDinero}d</div>
+                    </div>
+                    {periodosVacaciones.totalAjusteManual > 0 && (
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Ajuste Histórico</div>
+                        <div style={{ fontWeight: 700, color: '#F97316' }}>{periodosVacaciones.totalAjusteManual}d</div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {vacaciones && vacaciones.length > 0 && (
-                  <div className="emp-hist-table-wrap">
-                    <table className="emp-hist-table">
-                      <thead>
-                        <tr>
-                          <th>Rango de fechas</th>
-                          <th style={{ textAlign: 'center' }}>Días tiempo</th>
-                          <th style={{ textAlign: 'center' }}>Días dinero</th>
-                          <th style={{ textAlign: 'center' }}>Estado</th>
-                          <th>Observación</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {vacaciones.map(v => {
-                          const dTiempo = v.dias_disfrutados != null && v.dias_disfrutados !== ''
-                            ? v.dias_disfrutados
-                            : (v.fecha_inicio && v.fecha_fin ? diasHabilesEntre(v.fecha_inicio, v.fecha_fin) : (v.tipo_vacacion !== 'Vacaciones en dinero' ? v.total_dias : '—'))
-                          const dDinero = v.dias_en_dinero != null && v.dias_en_dinero !== ''
-                            ? v.dias_en_dinero
-                            : (v.tipo_vacacion === 'Vacaciones en dinero' ? v.total_dias : '—')
-                          const estado = v.estado || 'Pendiente'
-                          const esOk = estado === 'Aprobada' || estado === 'Disfrutadas'
-                          return (
-                            <tr key={v.id}>
-                              <td className="emp-hist-cell-date">
-                                {v.fecha_inicio ? `${formatFecha(v.fecha_inicio)} → ${v.fecha_fin ? formatFecha(v.fecha_fin) : '—'}` : 'Sin fecha (compensación)'}
-                              </td>
-                              <td style={{ textAlign: 'center', fontWeight: 600 }}>
-                                {dTiempo !== '—' && dTiempo != null ? `${dTiempo}d` : '—'}
-                              </td>
-                              <td style={{ textAlign: 'center', fontWeight: 600 }}>
-                                {dDinero !== '—' && dDinero != null && Number(dDinero) > 0 ? `${dDinero}d` : '—'}
-                              </td>
-                              <td style={{ textAlign: 'center' }}>
-                                <span style={{
-                                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999,
-                                  background: esOk ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)',
-                                  color: esOk ? '#10B981' : '#F59E0B',
-                                  border: `1px solid ${esOk ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
-                                }}>
-                                  {estado}
+                {/* Lista de Períodos Anuales Independientes */}
+                {periodosVacaciones.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0', textAlign: 'center' }}>
+                    El colaborador no registra fecha de ingreso contractual para calcular sus periodos de vacaciones.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {periodosVacaciones.map((c) => (
+                      <div
+                        key={c.etiqueta}
+                        style={{
+                          background: 'var(--bg)',
+                          border: c.saldo_restante > 0 ? '1.5px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border)',
+                          borderRadius: 12,
+                          padding: '12px 14px',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {/* Cabecera del período */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 16 }}>🌴</span>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', letterSpacing: '.02em' }}>
+                                  PERÍODO {c.etiquetaVisual}
                                 </span>
-                              </td>
-                              <td style={{ color: 'var(--text-muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {v.observacion_contable || v.observacion || '—'}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                                <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>
+                                  ({c.subtitulo})
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                {formatFecha(c.fecha_inicio_ciclo)} → {formatFecha(c.fecha_fin_ciclo)}
+                              </div>
+                            </div>
+                          </div>
+                          <span style={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                            padding: '3px 12px',
+                            borderRadius: 999,
+                            background: c.saldo_restante > 0 ? 'rgba(16, 185, 129, 0.16)' : 'var(--surface)',
+                            color: c.saldo_restante > 0 ? '#10B981' : 'var(--text-muted)',
+                            border: `1px solid ${c.saldo_restante > 0 ? 'rgba(16, 185, 129, 0.35)' : 'var(--border)'}`,
+                          }}>
+                            Saldo: {c.saldo_restante} {c.saldo_restante === 1 ? 'día' : 'días'}
+                          </span>
+                        </div>
+
+                        {/* Mini KPIs del período */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 6, marginBottom: 10 }}>
+                          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{c.dias_causados}d</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Causados</div>
+                          </div>
+                          <div style={{ background: 'var(--surface)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#10B981' }}>{c.dias_disfrutados}d</div>
+                            <div style={{ fontSize: 10, color: '#059669' }}>Disfrutados</div>
+                          </div>
+                          <div style={{ background: 'var(--surface)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#EAB308' }}>{c.dias_en_dinero}d</div>
+                            <div style={{ fontSize: 10, color: '#CA8A04' }}>En dinero</div>
+                          </div>
+                          {c.dias_ajuste_manual > 0 && (
+                            <div style={{ background: 'var(--surface)', border: '1px solid rgba(249, 115, 22, 0.35)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: '#FB923C' }}>{c.dias_ajuste_manual}d</div>
+                              <div style={{ fontSize: 10, color: '#F97316' }}>Ajuste manual</div>
+                            </div>
+                          )}
+                          <div style={{ background: 'var(--surface)', border: `1px solid ${c.saldo_restante > 0 ? 'rgba(16, 185, 129, 0.45)' : 'var(--border)'}`, borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: c.saldo_restante > 0 ? '#10B981' : 'var(--text-muted)' }}>{c.saldo_restante}d</div>
+                            <div style={{ fontSize: 10, color: c.saldo_restante > 0 ? '#059669' : 'var(--text-muted)' }}>Restantes</div>
+                          </div>
+                        </div>
+
+                        {/* Solicitudes de este período */}
+                        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                          {c.solicitudes && c.solicitudes.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                                Solicitudes de este período:
+                              </div>
+                              {c.solicitudes.map((v, vIdx) => {
+                                const estado = v.estado || 'Pendiente'
+                                const esOk = estado === 'Aprobada' || estado === 'Disfrutadas' || estado === 'Finalizada'
+                                return (
+                                  <div
+                                    key={v.id || vIdx}
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      flexWrap: 'wrap',
+                                      gap: 8,
+                                      background: 'var(--surface)',
+                                      borderRadius: 8,
+                                      padding: '6px 10px',
+                                      border: '1px solid var(--border)',
+                                      fontSize: 12,
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                      <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                        {v.fecha_inicio ? `📅 ${formatFecha(v.fecha_inicio)} → ${v.fecha_fin ? formatFecha(v.fecha_fin) : '—'}` : '💰 Sin fecha (compensación)'}
+                                      </span>
+                                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                                        ({v.dias_tiempo_calc || 0}d tiempo{v.dias_dinero_calc ? ` + ${v.dias_dinero_calc}d dinero` : ''})
+                                      </span>
+                                      {(v.observacion_contable || v.observacion) && (
+                                        <span style={{ color: 'var(--text-muted)', fontSize: 11, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          • {v.observacion_contable || v.observacion}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span style={{
+                                      fontSize: 10.5, fontWeight: 700, padding: '1px 8px', borderRadius: 999,
+                                      background: esOk ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)',
+                                      color: esOk ? '#10B981' : '#F59E0B',
+                                      border: `1px solid ${esOk ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                                    }}>
+                                      {estado}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', padding: '2px 0' }}>
+                              Sin solicitudes en este período.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -682,6 +781,7 @@ export default function EmpleadoHistorialModal({
                             <th>F. Inicio</th>
                             <th>F. Fin</th>
                             <th style={{ textAlign: 'center' }}>Días</th>
+                            <th style={{ textAlign: 'center' }}>Estado</th>
                             <th>Periodo</th>
                           </tr>
                         </thead>
@@ -689,6 +789,13 @@ export default function EmpleadoHistorialModal({
                           {[...nov.novedades].sort((a, b) => (b.fecha_inicio || '').localeCompare(a.fecha_inicio || '')).map(r => {
                             const tipo = normalizarConcepto(r.concepto)
                             const color = CONCEPTO_COLORS[tipo] || '#60A5FA'
+                            const estadoTemp = evaluarEstadoTemporalAusencia(r, hoyISO())
+                            const badgeClass =
+                              estadoTemp?.badgeTipo === 'activa' ? 'db-badge-activa' :
+                              estadoTemp?.badgeTipo === 'reincorporacion' ? 'db-badge-reincorporacion' :
+                              estadoTemp?.badgeTipo === 'finalizada' ? 'db-badge-finalizada' :
+                              'db-badge-programada'
+
                             return (
                               <tr key={r.id}>
                                 <td>
@@ -699,6 +806,13 @@ export default function EmpleadoHistorialModal({
                                 <td className="emp-hist-cell-date">{r.fecha_inicio || '—'}</td>
                                 <td className="emp-hist-cell-date">{r.fecha_fin || '—'}</td>
                                 <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.total_dias ?? '—'}</td>
+                                <td style={{ textAlign: 'center' }}>
+                                  {estadoTemp ? (
+                                    <span className={badgeClass} style={{ fontSize: 10.5, padding: '2px 8px' }}>
+                                      {estadoTemp.badgeTexto}
+                                    </span>
+                                  ) : '—'}
+                                </td>
                                 <td style={{ color: 'var(--text-muted)' }}>{r.periodo || '—'}</td>
                               </tr>
                             )

@@ -7,8 +7,8 @@
 // =============================================================
 import { useState, useMemo } from 'react'
 import {
-  Building2, Plus, X, Edit2, Check, AlertCircle, CheckCircle2,
-  Loader2, ArrowRight, ShieldCheck, Tag, Palette, Hash, Sparkles
+  Building2, Plus, X, Edit2, AlertCircle, CheckCircle2,
+  Loader2, ArrowRight, Palette, Sparkles
 } from 'lucide-react'
 import * as empresasApi from '../../api/empresas'
 import { useCompany } from '../../context/CompanyContext'
@@ -48,7 +48,6 @@ export default function ModalGestionEmpresas({ onClose }) {
   } = useCompany()
 
   const [modo, setModo] = useState('list') // 'list' | 'add' | 'edit'
-  const [empresaEditando, setEmpresaEditando] = useState(null)
 
   // Form states
   const [nombre, setNombre] = useState('')
@@ -83,7 +82,6 @@ export default function ModalGestionEmpresas({ onClose }) {
     setColorSecundario('#4338CA')
     setColorFondoTag('#EEF2FF')
     setDepartamentosTexto('OPERACIONES, ADMINISTRACION, RRHH, GERENCIA')
-    setEmpresaEditando(null)
     setModo('add')
   }
 
@@ -98,7 +96,6 @@ export default function ModalGestionEmpresas({ onClose }) {
     setColorPrincipal(emp.colorPrincipal || '#2563EB')
     setColorSecundario(emp.colorSecundario || '#1D4ED8')
     setColorFondoTag(emp.colorFondoTag || '#EFF6FF')
-    setEmpresaEditando(emp)
     setModo('edit')
   }
 

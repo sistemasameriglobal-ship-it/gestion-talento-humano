@@ -8,7 +8,7 @@ import { useCompany } from '../context/CompanyContext'
 import {
   Search, Mail, UserCheck, UserX, ShieldCheck, ShieldAlert, Shield,
   Users as UsersIcon, AlertCircle, CheckCircle2, UserPlus, X, Loader2,
-  Eye, EyeOff, Layers, UserCog, Building2, ArrowRight,
+  Eye, EyeOff, Layers, UserCog, Building2, ArrowRight, Plus,
 } from 'lucide-react'
 import ModalEditarPermisos from '../components/usuarios/ModalEditarPermisos'
 import ModalGestionDepartamentos from '../components/usuarios/ModalGestionDepartamentos'

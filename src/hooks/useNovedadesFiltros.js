@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { hoyISO } from '../utils/fecha'
 import { normalizarConcepto } from '../utils/parseExcel'
+import { evaluarEstadoTemporalAusencia } from '../utils/diasHabiles'
 import { PAGE_SIZE } from '../utils/novedadesConstants'
 
 // Agrupa todo el cálculo derivado de la tabla de Novedades: opciones de
@@ -55,7 +56,7 @@ export function useNovedadesFiltros({
       const matchDiagnostico = !filterDiagnostico || (r.diagnostico || '').toLowerCase().includes(filterDiagnostico.toLowerCase())
 
       const hoy = hoyISO()
-      const matchActiva = !soloActivas || (!!r.fecha_inicio && !!r.fecha_fin && r.fecha_fin >= hoy)
+      const matchActiva = !soloActivas || (!!r.fecha_inicio && evaluarEstadoTemporalAusencia(r, hoy)?.esActivaHoy === true)
 
       let matchFecha = true
       if (rangoMes) {

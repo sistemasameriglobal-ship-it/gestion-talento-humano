@@ -1,8 +1,12 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { X, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
-import { calcAntiguedad, calcDias, calcularAniosCumplidos, obtenerFechaIngresoContinua, aFechaInputDate } from '../../utils/vacacionesHelpers'
+import {
+  calcAntiguedad, calcDias, calcularAniosCumplidos,
+  obtenerFechaIngresoContinua, aFechaInputDate,
+  obtenerPeriodosVacacionesEmpleado, normalizarPeriodoVacaciones
+} from '../../utils/vacacionesHelpers'
 import { ESTADOS, ESTADO_STYLES, DEPENDENCIAS } from '../../utils/vacacionesConstants'
 import SearchableSelect from '../ui/SearchableSelect'
 
@@ -50,12 +54,50 @@ export default function ModalForm({
     ? diasDinero
     : (diasDisfrute + diasDinero)
 
-  const saldoDisponible = saldoVacacionesForm != null
-    ? Math.max(0, saldoVacacionesForm.saldoPendiente)
-    : 0
-  const topeDisponible = saldoVacacionesForm?.topeDisponible != null
-    ? Math.max(0, saldoVacacionesForm.topeDisponible)
-    : saldoDisponible
+  const empSeleccionado = useMemo(() => {
+    if (!form.nombre_empleado?.trim()) return null
+    const nom = form.nombre_empleado.trim().toLowerCase()
+    const todos = (empleados && empleados.length > 0)
+      ? empleados
+      : [...(empActivos || []), ...(empInactivos || [])]
+    return todos.find(e =>
+      (typeof e === 'object' ? e.nombre_completo : e)?.trim().toLowerCase() === nom
+    ) || null
+  }, [form.nombre_empleado, empleados, empActivos, empInactivos])
+
+  // Obtener todos los períodos anuales del colaborador (excluyendo la solicitud actual que se edita)
+  const periodosVacaciones = useMemo(() => {
+    if (!form.nombre_empleado?.trim()) return []
+    const empRef = empSeleccionado || {
+      nombre_completo: form.nombre_empleado,
+      fecha_ingreso: form.fecha_ingreso,
+      periodo_id: form.periodo_id,
+    }
+    const otrasVacs = (rows || []).filter(r => r.id !== form.id)
+    return obtenerPeriodosVacacionesEmpleado(empRef, otrasVacs, periodos)
+  }, [empSeleccionado, form.nombre_empleado, form.fecha_ingreso, form.periodo_id, form.id, rows, periodos])
+
+  // Periodo seleccionado en el formulario
+  const cicloSeleccionado = useMemo(() => {
+    if (!form.periodo_vacaciones || !periodosVacaciones.length) return null
+    const pNorm = normalizarPeriodoVacaciones(form.periodo_vacaciones)
+    return periodosVacaciones.find(c =>
+      normalizarPeriodoVacaciones(c.etiqueta) === pNorm ||
+      normalizarPeriodoVacaciones(c.etiquetaVisual) === pNorm ||
+      pNorm === `año${c.numero_ciclo}` ||
+      pNorm === `ano${c.numero_ciclo}`
+    ) || null
+  }, [form.periodo_vacaciones, periodosVacaciones])
+
+  const saldoDisponibleGlobal = periodosVacaciones.saldoTotal ?? (saldoVacacionesForm?.saldoPendiente ?? 0)
+
+  // El tope disponible se limita al período anual específico seleccionado
+  const topeDisponible = cicloSeleccionado != null
+    ? Math.max(0, cicloSeleccionado.saldo_restante)
+    : (saldoVacacionesForm?.topeDisponible != null
+        ? Math.max(0, saldoVacacionesForm.topeDisponible)
+        : saldoDisponibleGlobal)
+
   const excedeSaldo = diasSolicitados > 0 && diasSolicitados > topeDisponible
   const sinSaldo = topeDisponible <= 0
   const saldoRestante = Math.max(0, topeDisponible - diasSolicitados)
@@ -122,18 +164,15 @@ export default function ModalForm({
 
     let periodoSugerido = ''
     if (res?.fIngreso && modal === 'add') {
-      const nom = (val || '').trim().toLowerCase()
-      const prevVacs = (rows || []).filter(r =>
-        (r.nombre_empleado || '').trim().toLowerCase() === nom &&
-        ['Pendiente', 'Aprobada', 'En curso', 'Finalizada'].includes(r.estado || 'Pendiente')
-      )
-      const cicloNum = prevVacs.length + 1
-      const hireYear = new Date(res.fIngreso + 'T00:00:00').getFullYear()
-      if (!isNaN(hireYear)) {
-        const y1 = hireYear + (cicloNum - 1)
-        const y2 = y1 + 1
-        periodoSugerido = `${y1}-${y2}`
+      const empRef = res?.emp || {
+        nombre_completo: val,
+        fecha_ingreso: res?.fIngreso,
+        periodo_id: res?.periodoId,
       }
+      const otrasVacs = (rows || []).filter(r => r.id !== form.id)
+      const ciclosEmp = obtenerPeriodosVacacionesEmpleado(empRef, otrasVacs, periodos)
+      const primerConSaldo = ciclosEmp.find(c => c.saldo_restante > 0) || ciclosEmp[0]
+      periodoSugerido = primerConSaldo?.etiqueta || ''
     }
 
     setForm(p => ({
@@ -143,9 +182,19 @@ export default function ModalForm({
       dependencia: res?.dependencia || p.dependencia || '',
       fecha_ingreso: res?.fIngreso || p.fecha_ingreso || '',
       periodo_id: res?.periodoId || p.periodo_id || null,
-      periodo_vacaciones: p.periodo_vacaciones || periodoSugerido || p.periodo_vacaciones,
+      periodo_vacaciones: periodoSugerido || p.periodo_vacaciones || '',
     }))
   }
+
+  // Auto-asignar el primer período con saldo disponible si aún no hay período seleccionado
+  useEffect(() => {
+    if (form.nombre_empleado && !form.periodo_vacaciones && periodosVacaciones.length > 0) {
+      const primerConSaldo = periodosVacaciones.find(c => c.saldo_restante > 0) || periodosVacaciones[0]
+      if (primerConSaldo) {
+        setForm(p => ({ ...p, periodo_vacaciones: primerConSaldo.etiqueta }))
+      }
+    }
+  }, [form.nombre_empleado, form.periodo_vacaciones, periodosVacaciones, setForm])
 
   const onTipoChange = (tipoVal) => {
     if (tipoVal === 'Vacaciones en dinero') {
@@ -283,13 +332,24 @@ export default function ModalForm({
                   title={saldoVacacionesForm ? `Años cumplidos: ${aniosCumplidos} | Causados: ${saldoVacacionesForm.diasCausados} días${saldoVacacionesForm.diasManuales ? ` | Tomados históricos: ${saldoVacacionesForm.diasManuales} días` : ''} | Tomados en app: ${saldoVacacionesForm.diasDisfrutados + saldoVacacionesForm.diasEnDinero} días` : undefined}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
-                    background: (saldoDisponible > 0) ? 'var(--success-bg)' : 'var(--danger-bg)',
-                    color: (saldoDisponible > 0) ? 'var(--success-text)' : 'var(--danger-text)',
-                    border: `1px solid ${saldoDisponible > 0 ? 'color-mix(in srgb, var(--success) 35%, transparent)' : 'color-mix(in srgb, var(--danger) 35%, transparent)'}`,
+                    background: (saldoDisponibleGlobal > 0) ? 'var(--success-bg)' : 'var(--danger-bg)',
+                    color: (saldoDisponibleGlobal > 0) ? 'var(--success-text)' : 'var(--danger-text)',
+                    border: `1px solid ${saldoDisponibleGlobal > 0 ? 'color-mix(in srgb, var(--success) 35%, transparent)' : 'color-mix(in srgb, var(--danger) 35%, transparent)'}`,
                     borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700
                   }}>
-                  🌴 Días disponibles: {saldoDisponible} días
+                  🌴 Saldo global: {saldoDisponibleGlobal} días
                 </span>
+                {cicloSeleccionado && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    background: cicloSeleccionado.saldo_restante > 0 ? 'rgba(5, 150, 105, 0.12)' : 'var(--bg)',
+                    color: cicloSeleccionado.saldo_restante > 0 ? '#059669' : 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700
+                  }}>
+                    Período {cicloSeleccionado.etiquetaVisual}: {cicloSeleccionado.saldo_restante}d disponibles
+                  </span>
+                )}
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F5F3FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>
                   <Calendar size={11} /> Días hábiles {anioActual}: {diasAcumuladosForm}
                 </span>
@@ -310,7 +370,7 @@ export default function ModalForm({
                   }}>
                     <AlertCircle size={15} style={{ flexShrink: 0 }} />
                     <span>
-                      Este colaborador no tiene días de vacaciones disponibles en su contrato vigente (Saldo disponible: {saldoDisponible} días).
+                      Este colaborador no tiene días de vacaciones disponibles en su contrato vigente (Saldo disponible: {saldoDisponibleGlobal} días).
                     </span>
                   </div>
                 )}
@@ -398,8 +458,31 @@ export default function ModalForm({
                 <input className="form-control" value={form.cargo || ''} onChange={f('cargo')} placeholder="Cargo del colaborador" />
               </div>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Período de vacaciones</label>
-                <input className="form-control" value={form.periodo_vacaciones || ''} onChange={f('periodo_vacaciones')} placeholder="Ej: 2024-2025" />
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>
+                  Período a Imputar *
+                </label>
+                {periodosVacaciones.length > 0 ? (
+                  <select
+                    className="form-control"
+                    value={form.periodo_vacaciones || ''}
+                    onChange={f('periodo_vacaciones')}
+                    style={{ fontWeight: 600 }}
+                  >
+                    <option value="">— Seleccionar período —</option>
+                    {periodosVacaciones.map(c => (
+                      <option key={c.etiqueta} value={c.etiqueta}>
+                        Período {c.etiquetaVisual} (Saldo restante: {c.saldo_restante} {c.saldo_restante === 1 ? 'día' : 'días'})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="form-control"
+                    value={form.periodo_vacaciones || ''}
+                    onChange={f('periodo_vacaciones')}
+                    placeholder="Ej: 2024-2025"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -460,7 +543,7 @@ export default function ModalForm({
                   ⏱ {diasSolicitados} día{diasSolicitados !== 1 ? 's' : ''} solicitado{diasSolicitados !== 1 ? 's' : ''}
                   {diasDinero > 0 && ` (${diasDisfrute} disfrute + ${diasDinero} dinero)`}
                 </span>
-                {saldoDisponible != null && (
+                {topeDisponible != null && (
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                     background: excedeSaldo ? 'var(--danger-bg)' : 'var(--success-bg)',
@@ -468,7 +551,7 @@ export default function ModalForm({
                     border: `1px solid ${excedeSaldo ? 'color-mix(in srgb, var(--danger) 35%, transparent)' : 'color-mix(in srgb, var(--success) 35%, transparent)'}`,
                     borderRadius: 999, padding: '3px 11px', fontSize: 12, fontWeight: 700
                   }}>
-                    {excedeSaldo ? '⚠️' : '✓'} Saldo restante: {saldoRestante} días
+                    {excedeSaldo ? '⚠️' : '✓'} Saldo restante en {form.periodo_vacaciones || 'período'}: {saldoRestante} días
                   </span>
                 )}
               </div>
@@ -491,7 +574,7 @@ export default function ModalForm({
               }}>
                 <AlertCircle size={16} style={{ flexShrink: 0 }} />
                 <span>
-                  No puedes solicitar más de los <strong>{topeDisponible} días</strong> disponibles. Estás solicitando <strong>{diasSolicitados} días</strong> (exceso de {diasSolicitados - topeDisponible} días).
+                  No puedes solicitar más de los <strong>{topeDisponible} días</strong> disponibles en el <strong>Período {form.periodo_vacaciones || 'seleccionado'}</strong>. Estás solicitando <strong>{diasSolicitados} días</strong> (exceso de {diasSolicitados - topeDisponible} días).
                 </span>
               </div>
             )}

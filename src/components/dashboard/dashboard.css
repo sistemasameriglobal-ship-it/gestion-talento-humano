@@ -100,6 +100,167 @@
   border-color: rgba(59, 130, 246, 0.45);
 }
 
+/* ── Badges y Chips Temporales de Ausentismo e Incapacidades ────────── */
+.db-badge-activa {
+  background: rgba(220, 38, 38, 0.12);
+  color: #DC2626;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-badge-activa {
+  background: rgba(220, 38, 38, 0.22);
+  color: #F87171;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.db-badge-reincorporacion {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-badge-reincorporacion {
+  background: rgba(16, 185, 129, 0.22);
+  color: #34D399;
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.db-badge-finalizada {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748B;
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-badge-finalizada {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94A3B8;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.db-badge-programada {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4F46E5;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-badge-programada {
+  background: rgba(99, 102, 241, 0.22);
+  color: #818CF8;
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.db-chip-activa {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-chip-activa {
+  background: rgba(30, 58, 138, 0.4);
+  color: #93C5FD;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.db-chip-reincorporacion {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #ECFDF5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-chip-reincorporacion {
+  background: rgba(6, 78, 59, 0.35);
+  color: #6EE7B7;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.db-chip-finalizada {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.08);
+  color: #64748B;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-chip-finalizada {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94A3B8;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.db-chip-programada {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #EEF2FF;
+  color: #4338CA;
+  border: 1px solid #C7D2FE;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .db-chip-programada {
+  background: rgba(49, 46, 129, 0.35);
+  color: #A5B4FC;
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
 .db-empty-ausentes {
   display: flex;
   align-items: center;

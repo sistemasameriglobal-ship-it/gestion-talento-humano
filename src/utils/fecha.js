@@ -87,5 +87,5 @@ export function formatDuracion(iso1, iso2) {
   return parts.join(' y ')
 }
 
-export { obtenerFechaRegresoLaboral } from './diasHabiles'
+export { obtenerFechaRegresoLaboral, evaluarEstadoTemporalAusencia } from './diasHabiles'
 

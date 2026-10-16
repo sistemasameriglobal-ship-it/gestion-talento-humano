@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { X, Search, User, ExternalLink, Filter } from 'lucide-react'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
+import { hoyISO } from '../../utils/fecha'
+import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
 
 function iniciales(nombre) {
   const p = (nombre || '').trim().split(/\s+/).filter(Boolean)
@@ -110,6 +112,23 @@ export default function DrillDownModal({ drillDown, onCerrar, onVerExpediente, o
             filtrados.map((r, i) => {
               const cNorm = normalizarConcepto(r.concepto)
               const cColor = CONCEPTO_COLORS[cNorm] || '#64748B'
+              const hoy = hoyISO()
+              const estadoTemp = evaluarEstadoTemporalAusencia(r, hoy)
+
+              const badgeClass =
+                estadoTemp?.badgeTipo === 'activa' ? 'db-badge-activa' :
+                estadoTemp?.badgeTipo === 'reincorporacion' ? 'db-badge-reincorporacion' :
+                estadoTemp?.badgeTipo === 'finalizada' ? 'db-badge-finalizada' :
+                estadoTemp?.badgeTipo === 'programada' ? 'db-badge-programada' :
+                'badge tag-c'
+
+              const chipClass =
+                estadoTemp?.chipTipo === 'activa' ? 'db-chip-activa' :
+                estadoTemp?.chipTipo === 'reincorporacion' ? 'db-chip-reincorporacion' :
+                estadoTemp?.chipTipo === 'finalizada' ? 'db-chip-finalizada' :
+                estadoTemp?.chipTipo === 'programada' ? 'db-chip-programada' :
+                'db-regreso-pill'
+
               return (
                 <div
                   key={r.id || i}
@@ -121,7 +140,8 @@ export default function DrillDownModal({ drillDown, onCerrar, onVerExpediente, o
                     padding: '12px 14px',
                     borderRadius: 10,
                     background: 'var(--bg)',
-                    border: '1px solid var(--border)',
+                    border: estadoTemp?.esActivaHoy ? '1px solid rgba(220, 38, 38, 0.25)' : '1px solid var(--border)',
+                    opacity: estadoTemp?.estado === 'finalizada' ? 0.88 : 1,
                     flexWrap: 'wrap',
                     transition: 'all 0.15s ease',
                   }}
@@ -158,6 +178,11 @@ export default function DrillDownModal({ drillDown, onCerrar, onVerExpediente, o
                             {r.concepto}
                           </span>
                         )}
+                        {estadoTemp && (
+                          <span className={badgeClass} style={{ fontSize: 10, padding: '1px 7px' }}>
+                            {estadoTemp.badgeTexto}
+                          </span>
+                        )}
                         {r.periodo && <span>📅 {r.periodo}</span>}
                       </div>
                     </div>
@@ -170,11 +195,18 @@ export default function DrillDownModal({ drillDown, onCerrar, onVerExpediente, o
                         {formatDDMMYYYY(r.fecha_inicio)}
                         {r.fecha_fin && r.fecha_fin !== r.fecha_inicio ? ` → ${formatDDMMYYYY(r.fecha_fin)}` : ''}
                       </div>
-                      {r.total_dias != null && r.total_dias !== '' && (
-                        <div style={{ fontSize: 11, fontWeight: 700, color: colorBorde }}>
-                          {r.total_dias} día{r.total_dias !== 1 ? 's' : ''}
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                        {r.total_dias != null && r.total_dias !== '' && (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: colorBorde }}>
+                            {r.total_dias} día{r.total_dias !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {estadoTemp && estadoTemp.chipTexto !== '—' && (
+                          <span className={chipClass} style={{ fontSize: 10, padding: '1px 7px' }}>
+                            {estadoTemp.chipTexto}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {onVerExpediente && (

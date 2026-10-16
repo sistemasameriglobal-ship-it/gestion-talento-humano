@@ -1,5 +1,5 @@
 import { hoyISO, sumarDiasISO, mesActualISO, mesRelativoISO } from './fecha'
-import { obtenerFechaRegresoLaboral } from './diasHabiles'
+import { obtenerFechaRegresoLaboral, evaluarEstadoTemporalAusencia } from './diasHabiles'
 import { normalizarConcepto, CONCEPTO_COLORS } from './parseExcel'
 import { MESES_DASHBOARD as MESES } from './dashboardConstants'
 
@@ -174,19 +174,22 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
       return normalizarConcepto(r.concepto) === concepto && (v === '' || v === 'validar')
     })
 
-    // Próximos vencimientos (7 días)
+    // Próximos vencimientos (7 días): fecha_regreso estrictamente >= hoy y <= hasta7
     const proxVencimientos = allData
       .filter(r => normalizarConcepto(r.concepto) === concepto && (r.fecha_fin || r.fecha_inicio))
       .map(enriquecerRegistro)
-      .filter(r => r.fecha_regreso && r.fecha_regreso >= hoy && (r.fecha_regreso <= hasta7 || (r.fecha_fin || r.fecha_inicio) <= hasta7))
-      .sort((a, b) => (a.fecha_regreso || a.fecha_fin || a.fecha_inicio).localeCompare(b.fecha_regreso || b.fecha_fin || b.fecha_inicio))
+      .filter(r => {
+        if (!r.fecha_regreso) return false
+        return r.fecha_regreso >= hoy && r.fecha_regreso <= hasta7
+      })
+      .sort((a, b) => (a.fecha_regreso || '').localeCompare(b.fecha_regreso || ''))
 
-    // Activos hoy
+    // Activos hoy (estrictamente: hoy >= fecha_inicio && hoy < fechaRegreso)
     const activasHoy = allData
       .filter(r => {
         if (normalizarConcepto(r.concepto) !== concepto || !r.fecha_inicio) return false
-        const fin = r.fecha_fin || r.fecha_inicio
-        return r.fecha_inicio <= hoy && fin >= hoy
+        const estado = evaluarEstadoTemporalAusencia(r, hoy)
+        return estado?.esActivaHoy === true
       })
       .map(enriquecerRegistro)
 
@@ -233,13 +236,13 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
   })
   const depTodosOrdenadas = Object.entries(porDepTodos).sort((a, b) => b[1] - a[1])
 
-  // ── Colaboradores Ausentes Hoy (activos en fecha actual hoyISO) ─────────
+  // ── Colaboradores Ausentes Hoy (estrictamente activos hoy: hoy >= fIni && hoy < fReg) ─────────
   const ausentesHoy = allData
     .filter(r => {
       const c = normalizarConcepto(r.concepto)
       if (!CONCEPTOS_AUSENCIA_ACTIVA.includes(c) || !r.fecha_inicio) return false
-      const fin = r.fecha_fin || r.fecha_inicio
-      return r.fecha_inicio <= hoy && fin >= hoy
+      const estado = evaluarEstadoTemporalAusencia(r, hoy)
+      return estado?.esActivaHoy === true
     })
     .map(enriquecerRegistro)
     .sort((a, b) => (a.fecha_regreso || '').localeCompare(b.fecha_regreso || ''))

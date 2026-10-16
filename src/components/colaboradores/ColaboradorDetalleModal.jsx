@@ -8,6 +8,7 @@
 import { X, AlertTriangle, Trash2 } from 'lucide-react'
 import { CONCEPTO_COLORS, normalizarConcepto } from '../../utils/parseExcel'
 import { hoyISO } from '../../utils/fecha'
+import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
 import { avatarColor, initials, formatProductividad, UMBRAL_ALERTA_PD, CONCEPTOS_CON_FECHA } from '../../utils/colaboradores'
 import './colaboradores.css'
 
@@ -187,8 +188,13 @@ export default function ColaboradorDetalleModal({ selected, onClose, onDelete })
                     {[...selected.novedades].sort((a, b) => (b.fecha_inicio || '').localeCompare(a.fecha_inicio || '')).map(r => {
                       const tipo = normalizarConcepto(r.concepto)
                       const color = CONCEPTO_COLORS[tipo] || '#374151'
-                      const fin = r.fecha_fin || r.fecha_inicio
-                      const vigente = r.fecha_inicio && fin && r.fecha_inicio <= hoyISOVal && fin >= hoyISOVal
+                      const estadoTemp = evaluarEstadoTemporalAusencia(r, hoyISOVal)
+                      const badgeClass =
+                        estadoTemp?.badgeTipo === 'activa' ? 'db-badge-activa' :
+                        estadoTemp?.badgeTipo === 'reincorporacion' ? 'db-badge-reincorporacion' :
+                        estadoTemp?.badgeTipo === 'finalizada' ? 'db-badge-finalizada' :
+                        'db-badge-programada'
+
                       return (
                         <tr key={r.id}>
                           <td><span className="badge tag-c" style={{ '--tag': color }}>{r.concepto}</span></td>
@@ -196,10 +202,13 @@ export default function ColaboradorDetalleModal({ selected, onClose, onDelete })
                           <td>{r.fecha_fin || '—'}</td>
                           <td>{r.total_dias ?? '—'}</td>
                           <td>
-                            {!r.fecha_inicio ? <span style={{ color: 'var(--text-muted)' }}>—</span>
-                              : vigente
-                                ? <span style={{ background: 'var(--success-bg)', color: 'var(--success-text)', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>Vigente</span>
-                                : <span style={{ background: 'var(--bg)', color: 'var(--text-muted)', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>Finalizado</span>}
+                            {!r.fecha_inicio || !estadoTemp ? (
+                              <span style={{ color: 'var(--text-muted)' }}>—</span>
+                            ) : (
+                              <span className={badgeClass} style={{ fontSize: 10.5, padding: '2px 8px' }}>
+                                {estadoTemp.badgeTexto}
+                              </span>
+                            )}
                           </td>
                           <td style={{ color: 'var(--text-muted)' }}>{r.periodo || '—'}</td>
                           <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 12 }} title={r.observacion || ''}>{r.observacion || '—'}</td>

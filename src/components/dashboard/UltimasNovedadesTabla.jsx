@@ -1,5 +1,7 @@
 import { Eye, ExternalLink } from 'lucide-react'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
+import { hoyISO } from '../../utils/fecha'
+import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
 
 function iniciales(nombre) {
   const p = (nombre || '').trim().split(/\s+/).filter(Boolean)
@@ -110,67 +112,105 @@ export default function UltimasNovedadesTabla({
 
                   {/* Fechas */}
                   <td>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                      {formatDDMMYYYY(r.fecha_inicio)}
-                      {r.fecha_fin && r.fecha_fin !== r.fecha_inicio ? ` → ${formatDDMMYYYY(r.fecha_fin)}` : ''}
-                    </div>
-                    {r.total_dias != null && r.total_dias !== '' && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                        {r.total_dias} día{r.total_dias !== 1 ? 's' : ''}
-                      </div>
-                    )}
+                    {(() => {
+                      const hoy = hoyISO()
+                      const estadoTemp = evaluarEstadoTemporalAusencia(r, hoy)
+                      const chipClass =
+                        estadoTemp?.chipTipo === 'activa' ? 'db-chip-activa' :
+                        estadoTemp?.chipTipo === 'reincorporacion' ? 'db-chip-reincorporacion' :
+                        estadoTemp?.chipTipo === 'finalizada' ? 'db-chip-finalizada' :
+                        'db-chip-programada'
+
+                      return (
+                        <>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                            {formatDDMMYYYY(r.fecha_inicio)}
+                            {r.fecha_fin && r.fecha_fin !== r.fecha_inicio ? ` → ${formatDDMMYYYY(r.fecha_fin)}` : ''}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                            {r.total_dias != null && r.total_dias !== '' && (
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {r.total_dias} día{r.total_dias !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {estadoTemp && estadoTemp.chipTexto !== '—' && (
+                              <span className={chipClass} style={{ fontSize: 10, padding: '1px 7px' }} title={`Estado: ${estadoTemp.chipTexto}`}>
+                                {estadoTemp.chipTexto}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )
+                    })()}
                   </td>
 
                   {/* Estado / Validación */}
                   <td>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {validacion ? (
-                        <span style={{
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          padding: '2px 6px',
-                          borderRadius: 6,
-                          background: validacion.toLowerCase().includes('ok') || validacion.toLowerCase().includes('si') || validacion.toLowerCase().includes('válid')
-                            ? 'rgba(22, 163, 74, 0.12)'
-                            : 'rgba(217, 119, 6, 0.12)',
-                          color: validacion.toLowerCase().includes('ok') || validacion.toLowerCase().includes('si') || validacion.toLowerCase().includes('válid')
-                            ? '#16A34A'
-                            : '#D97706',
-                          border: '1px solid var(--border)',
-                        }}>
-                          Val: {validacion}
-                        </span>
-                      ) : null}
-                      {radicacion ? (
-                        <span style={{
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          padding: '2px 6px',
-                          borderRadius: 6,
-                          background: 'rgba(3, 105, 161, 0.1)',
-                          color: '#0369A1',
-                          border: '1px solid var(--border)',
-                        }}>
-                          Rad: {radicacion}
-                        </span>
-                      ) : null}
-                      {prorrog ? (
-                        <span style={{
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          padding: '2px 6px',
-                          borderRadius: 6,
-                          background: 'rgba(124, 58, 237, 0.1)',
-                          color: '#7C3AED',
-                          border: '1px solid var(--border)',
-                        }}>
-                          Prórroga
-                        </span>
-                      ) : null}
-                      {!validacion && !radicacion && !prorrog && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
-                      )}
-                    </div>
+                    {(() => {
+                      const hoy = hoyISO()
+                      const estadoTemp = evaluarEstadoTemporalAusencia(r, hoy)
+                      const badgeClass =
+                        estadoTemp?.badgeTipo === 'activa' ? 'db-badge-activa' :
+                        estadoTemp?.badgeTipo === 'reincorporacion' ? 'db-badge-reincorporacion' :
+                        estadoTemp?.badgeTipo === 'finalizada' ? 'db-badge-finalizada' :
+                        'db-badge-programada'
+
+                      return (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {estadoTemp && estadoTemp.badgeTexto && (
+                            <span className={badgeClass} style={{ fontSize: 10, padding: '1px 7px' }}>
+                              {estadoTemp.badgeTexto}
+                            </span>
+                          )}
+                          {validacion ? (
+                            <span style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              borderRadius: 6,
+                              background: validacion.toLowerCase().includes('ok') || validacion.toLowerCase().includes('si') || validacion.toLowerCase().includes('válid')
+                                ? 'rgba(22, 163, 74, 0.12)'
+                                : 'rgba(217, 119, 6, 0.12)',
+                              color: validacion.toLowerCase().includes('ok') || validacion.toLowerCase().includes('si') || validacion.toLowerCase().includes('válid')
+                                ? '#16A34A'
+                                : '#D97706',
+                              border: '1px solid var(--border)',
+                            }}>
+                              Val: {validacion}
+                            </span>
+                          ) : null}
+                          {radicacion ? (
+                            <span style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              borderRadius: 6,
+                              background: 'rgba(3, 105, 161, 0.1)',
+                              color: '#0369A1',
+                              border: '1px solid var(--border)',
+                            }}>
+                              Rad: {radicacion}
+                            </span>
+                          ) : null}
+                          {prorrog ? (
+                            <span style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              borderRadius: 6,
+                              background: 'rgba(124, 58, 237, 0.1)',
+                              color: '#7C3AED',
+                              border: '1px solid var(--border)',
+                            }}>
+                              Prórroga
+                            </span>
+                          ) : null}
+                          {!validacion && !radicacion && !prorrog && !estadoTemp && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </td>
 
                   {/* Acción rápida */}

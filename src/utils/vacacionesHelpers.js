@@ -201,14 +201,306 @@ export function calcularDiasCausadosVacaciones(fechaIngreso, fechaCorte = null) 
 export const ESTADOS_VALIDOS_VACACIONES = ['Aprobada', 'En curso', 'Finalizada']
 
 /**
+ * Normaliza etiquetas de períodos (ej: "2024-2025" o "2024 - 2025" -> "2024-2025")
+ */
+export function normalizarPeriodoVacaciones(str) {
+  if (!str) return ''
+  return String(str).replace(/\s+/g, '').trim().toLowerCase()
+}
+
+/**
+ * Calcula los ciclos anuales de vacaciones individuales de un colaborador
+ * a partir de la fecha de inicio del contrato vigente (o cadena continua de contratos).
+ * Retorna cada período con su causación independiente (15d por año cumplido),
+ * días disfrutados en tiempo, compensados en dinero, ajuste manual y saldo restante.
+ *
+ * @param {Object|string} empleado - Objeto empleado, periodo o fecha
+ * @param {Array} solicitudesVacaciones - Array de solicitudes de la tabla `vacaciones`
+ * @param {Array} listaPeriodos - Array de periodos laborales (`empleado_periodos`)
+ * @returns {Array} Array de ciclos con propiedades añadidas (.saldoTotal, .saldoTotalDisponible, etc.)
+ */
+export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacaciones = [], listaPeriodos = []) {
+  if (!empleado) {
+    const empty = []
+    empty.periodos = []
+    empty.ciclos = []
+    empty.saldoTotal = 0
+    empty.saldoTotalDisponible = 0
+    empty.totalCausados = 0
+    empty.totalDisfrutados = 0
+    empty.totalEnDinero = 0
+    empty.totalAjusteManual = 0
+    return empty
+  }
+
+  // 1. Resolver periodo activo y fecha de ingreso continua
+  const empObj = typeof empleado === 'object' ? empleado : null
+  const empNombre = (empObj?.nombre_completo || empObj?.nombre_empleado || (typeof empleado === 'string' && !empleado.includes('-') ? empleado : '')).trim().toLowerCase()
+  const empId = empObj?.id || null
+
+  const periodosEmp = (listaPeriodos || []).filter(p => (empId && p.empleado_id === empId))
+  const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || null
+
+  const fIngRaw = pActivo
+    ? (obtenerFechaIngresoContinua(pActivo, periodosEmp) || pActivo.fecha_ingreso)
+    : (empObj?.fecha_ingreso || (typeof empleado === 'string' && empleado.includes('-') ? empleado : null))
+
+  if (!fIngRaw) {
+    const empty = []
+    empty.periodos = []
+    empty.ciclos = []
+    empty.saldoTotal = 0
+    empty.saldoTotalDisponible = 0
+    empty.totalCausados = 0
+    empty.totalDisfrutados = 0
+    empty.totalEnDinero = 0
+    empty.totalAjusteManual = 0
+    return empty
+  }
+
+  const cleanIng = String(fIngRaw).slice(0, 10)
+  const partsIng = cleanIng.split('-').map(Number)
+  if (partsIng.length !== 3 || partsIng.some(isNaN)) {
+    const empty = []
+    empty.periodos = []
+    empty.ciclos = []
+    empty.saldoTotal = 0
+    empty.saldoTotalDisponible = 0
+    empty.totalCausados = 0
+    empty.totalDisfrutados = 0
+    empty.totalEnDinero = 0
+    empty.totalAjusteManual = 0
+    return empty
+  }
+
+  const [yIng, mIng, dIng] = partsIng
+  const hoy = hoyISO()
+  const fechaCorte = (empObj && empObj.activo === false)
+    ? (empObj.fecha_retiro || pActivo?.fecha_retiro || hoy)
+    : hoy
+
+  const corteParts = String(fechaCorte).slice(0, 10).split('-').map(Number)
+  const dCorte = new Date(corteParts[0], corteParts[1] - 1, corteParts[2])
+
+  // 2. Generar los ciclos anuales completos
+  const ciclos = []
+  let i = 0
+
+  while (true) {
+    const anioInicio = yIng + i
+    const anioFin = yIng + i + 1
+    const dIniCiclo = new Date(anioInicio, mIng - 1, dIng)
+
+    if (dIniCiclo > dCorte) {
+      break
+    }
+
+    const dFinCiclo = new Date(anioFin, mIng - 1, dIng - 1)
+
+    const pad = n => String(n).padStart(2, '0')
+    const fIniISO = `${dIniCiclo.getFullYear()}-${pad(dIniCiclo.getMonth() + 1)}-${pad(dIniCiclo.getDate())}`
+    const fFinISO = `${dFinCiclo.getFullYear()}-${pad(dFinCiclo.getMonth() + 1)}-${pad(dFinCiclo.getDate())}`
+
+    const esCumplido = dCorte >= dFinCiclo
+    const estadoCiclo = esCumplido ? 'cumplido' : 'en_curso'
+    const numeroCiclo = i + 1
+    const etiqueta = `${anioInicio}-${anioFin}`
+    const etiquetaVisual = `${anioInicio} - ${anioFin}`
+    const subtitulo = esCumplido ? `Año ${numeroCiclo} cumplido` : `Año ${numeroCiclo} en curso`
+
+    let diasCausados
+    let diasProporcionales
+
+    if (esCumplido) {
+      diasCausados = 15
+      diasProporcionales = 15
+    } else {
+      const diffMs = Math.max(0, dCorte.getTime() - dIniCiclo.getTime())
+      const diasTrabajados = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1
+      diasProporcionales = Math.min(15, Math.round(((diasTrabajados * 15) / 360) * 10) / 10)
+      diasCausados = 0
+    }
+
+    ciclos.push({
+      numero_ciclo: numeroCiclo,
+      etiqueta,
+      etiquetaVisual,
+      subtitulo,
+      fecha_inicio_ciclo: fIniISO,
+      fecha_fin_ciclo: fFinISO,
+      estado_ciclo: estadoCiclo,
+      es_cumplido: esCumplido,
+      dias_causados: diasCausados,
+      dias_proporcionales: diasProporcionales,
+      dias_disfrutados: 0,
+      dias_en_dinero: 0,
+      dias_ajuste_manual: 0,
+      dias_consumidos: 0,
+      saldo_restante: diasCausados,
+      solicitudes: [],
+    })
+
+    if (!esCumplido) {
+      break
+    }
+
+    i++
+    if (i > 60) break
+  }
+
+  // 3. Filtrar solicitudes válidas del empleado
+  const ESTADOS_VALIDOS = ['Aprobada', 'En curso', 'Finalizada', 'Pendiente_Preview']
+  const vacsEmp = (solicitudesVacaciones || []).filter(v => {
+    if (!v) return false
+    const matchId = empId && v.empleado_id && v.empleado_id === empId
+    const matchNom = empNombre && (v.nombre_empleado || '').trim().toLowerCase() === empNombre
+    if (!matchId && !matchNom) return false
+    if (v.estado && !ESTADOS_VALIDOS.includes(v.estado)) return false
+    return true
+  })
+
+  // 4. Imputar solicitudes a los períodos correspondientes
+  const solicitudesNoAsignadas = []
+
+  vacsEmp.forEach(v => {
+    const rawPeriodo = v.periodo_vacaciones || v.ciclo_vacaciones || v.periodo
+    const pNorm = normalizarPeriodoVacaciones(rawPeriodo)
+
+    let cicloAsignado = null
+    if (pNorm) {
+      cicloAsignado = ciclos.find(c =>
+        normalizarPeriodoVacaciones(c.etiqueta) === pNorm ||
+        normalizarPeriodoVacaciones(c.etiquetaVisual) === pNorm ||
+        pNorm === `año${c.numero_ciclo}` ||
+        pNorm === `ano${c.numero_ciclo}`
+      )
+    }
+
+    if (cicloAsignado) {
+      const dinero = Number(v.dias_en_dinero) || (v.tipo_vacacion === 'Vacaciones en dinero' ? (Number(v.total_dias) || 15) : 0)
+      const tiempo = v.tipo_vacacion === 'Vacaciones en dinero' ? 0 : (
+        Number(v.dias_disfrutados) || Number(v.total_dias) || (
+          (v.fecha_inicio && v.fecha_fin) ? (diasHabilesEntre(v.fecha_inicio, v.fecha_fin) || 0) : 0
+        )
+      )
+
+      cicloAsignado.dias_disfrutados += tiempo
+      cicloAsignado.dias_en_dinero += dinero
+      cicloAsignado.solicitudes.push({
+        ...v,
+        dias_tiempo_calc: tiempo,
+        dias_dinero_calc: dinero,
+      })
+    } else {
+      solicitudesNoAsignadas.push(v)
+    }
+  })
+
+  // Imputar solicitudes no asignadas históricas mediante FIFO (del ciclo cumplido más antiguo al más reciente)
+  solicitudesNoAsignadas.sort((a, b) =>
+    (a.fecha_inicio || a.fecha_solicitud || a.created_at || '').localeCompare(b.fecha_inicio || b.fecha_solicitud || b.created_at || '')
+  )
+
+  solicitudesNoAsignadas.forEach(v => {
+    const dinero = Number(v.dias_en_dinero) || (v.tipo_vacacion === 'Vacaciones en dinero' ? (Number(v.total_dias) || 15) : 0)
+    const tiempo = v.tipo_vacacion === 'Vacaciones en dinero' ? 0 : (
+      Number(v.dias_disfrutados) || Number(v.total_dias) || (
+        (v.fecha_inicio && v.fecha_fin) ? (diasHabilesEntre(v.fecha_inicio, v.fecha_fin) || 0) : 0
+      )
+    )
+
+    const cicloConSaldo = ciclos.find(c => c.es_cumplido && (c.dias_causados - c.dias_disfrutados - c.dias_en_dinero) > 0)
+    const cicloDestino = cicloConSaldo || ciclos.find(c => c.es_cumplido) || ciclos[0]
+
+    if (cicloDestino) {
+      cicloDestino.dias_disfrutados += tiempo
+      cicloDestino.dias_en_dinero += dinero
+      cicloDestino.solicitudes.push({
+        ...v,
+        dias_tiempo_calc: tiempo,
+        dias_dinero_calc: dinero,
+        imputacion_automatica: true,
+      })
+    }
+  })
+
+  // 5. Ajustes manuales históricos (dias_vacaciones_tomados_manual)
+  const ajustesEspecificos = empObj?.ajustes_periodos_vacaciones || {}
+  let remanenteManual = Number(
+    empObj?.dias_vacaciones_tomados_manual != null
+      ? empObj.dias_vacaciones_tomados_manual
+      : (pActivo?.dias_vacaciones_tomados_manual || 0)
+  ) || 0
+
+  ciclos.forEach(c => {
+    const aj = Number(ajustesEspecificos[c.etiqueta] || ajustesEspecificos[c.etiquetaVisual] || 0)
+    if (aj > 0) {
+      c.dias_ajuste_manual += aj
+      remanenteManual = Math.max(0, remanenteManual - aj)
+    }
+  })
+
+  if (remanenteManual > 0) {
+    for (const c of ciclos) {
+      if (remanenteManual <= 0) break
+      if (!c.es_cumplido) continue
+      const saldoPreAjuste = Math.max(0, c.dias_causados - c.dias_disfrutados - c.dias_en_dinero - c.dias_ajuste_manual)
+      const aDescontar = Math.min(remanenteManual, saldoPreAjuste)
+      c.dias_ajuste_manual += aDescontar
+      remanenteManual -= aDescontar
+    }
+    if (remanenteManual > 0 && ciclos.length > 0) {
+      ciclos[0].dias_ajuste_manual += remanenteManual
+    }
+  }
+
+  // 6. Consolidar métricas y saldos por ciclo
+  ciclos.forEach(c => {
+    c.dias_disfrutados = Math.round(c.dias_disfrutados * 10) / 10
+    c.dias_en_dinero = Math.round(c.dias_en_dinero * 10) / 10
+    c.dias_ajuste_manual = Math.round(c.dias_ajuste_manual * 10) / 10
+    c.dias_consumidos = Math.round((c.dias_disfrutados + c.dias_en_dinero + c.dias_ajuste_manual) * 10) / 10
+    c.saldo_restante = Math.max(0, Math.round((c.dias_causados - c.dias_consumidos) * 10) / 10)
+
+    if (c.saldo_restante % 1 === 0) c.saldo_restante = Math.round(c.saldo_restante)
+    if (c.dias_consumidos % 1 === 0) c.dias_consumidos = Math.round(c.dias_consumidos)
+    if (c.dias_disfrutados % 1 === 0) c.dias_disfrutados = Math.round(c.dias_disfrutados)
+    if (c.dias_en_dinero % 1 === 0) c.dias_en_dinero = Math.round(c.dias_en_dinero)
+    if (c.dias_ajuste_manual % 1 === 0) c.dias_ajuste_manual = Math.round(c.dias_ajuste_manual)
+  })
+
+  // 7. Calcular totales globales
+  const ciclosCumplidos = ciclos.filter(c => c.es_cumplido)
+  const saldoTotal = ciclosCumplidos.reduce((acc, c) => acc + c.saldo_restante, 0)
+  const totalCausados = ciclosCumplidos.reduce((acc, c) => acc + c.dias_causados, 0)
+  const totalDisfrutados = ciclos.reduce((acc, c) => acc + c.dias_disfrutados, 0)
+  const totalEnDinero = ciclos.reduce((acc, c) => acc + c.dias_en_dinero, 0)
+  const totalAjusteManual = ciclos.reduce((acc, c) => acc + c.dias_ajuste_manual, 0)
+
+  const resultado = [...ciclos]
+  resultado.periodos = ciclos
+  resultado.ciclos = ciclos
+  resultado.periodosCumplidos = ciclosCumplidos
+  resultado.periodoEnCurso = ciclos.find(c => !c.es_cumplido) || null
+  resultado.saldoTotal = saldoTotal % 1 === 0 ? Math.round(saldoTotal) : Math.round(saldoTotal * 10) / 10
+  resultado.saldoTotalDisponible = resultado.saldoTotal
+  resultado.totalCausados = totalCausados
+  resultado.totalDisfrutados = totalDisfrutados
+  resultado.totalEnDinero = totalEnDinero
+  resultado.totalAjusteManual = totalAjusteManual
+
+  return resultado
+}
+
+/**
  * Calcula el balance consolidado de vacaciones para un periodo laboral:
  * En casos de continuidad laboral (ascenso/cambio de cargo), respeta toda la antigüedad
  * acumulada de la cadena continua y descuenta los días disfrutados/compensados en dichos periodos.
- * Retorna: { aniosCumplidos, diasCausados, diasDisfrutados, diasEnDinero, saldoPendiente, esContinuo, fechaIngresoRaiz, cadenaPeriodos }
+ * Retorna: { aniosCumplidos, diasCausados, diasManuales, diasDisfrutados, diasEnDinero, saldoPendiente, esContinuo, fechaIngresoRaiz, cadenaPeriodos, periodosVacaciones }
  */
 export function calcularSaldoVacacionesPeriodo(periodoActivo, listaVacaciones = [], listaPeriodos = [], empleado = null) {
   if (!periodoActivo || (!periodoActivo.fecha_ingreso && typeof periodoActivo !== 'string')) {
-    return { aniosCumplidos: 0, diasCausados: 0, diasManuales: 0, diasDisfrutados: 0, diasEnDinero: 0, saldoPendiente: 0, esContinuo: false }
+    return { aniosCumplidos: 0, diasCausados: 0, diasManuales: 0, diasDisfrutados: 0, diasEnDinero: 0, saldoPendiente: 0, esContinuo: false, periodosVacaciones: [] }
   }
 
   const periodoObj = typeof periodoActivo === 'string'
@@ -220,86 +512,20 @@ export function calcularSaldoVacacionesPeriodo(periodoActivo, listaVacaciones = 
   const primerPeriodo = cadena[0] || periodoObj
   const fechaIngresoRaiz = primerPeriodo.fecha_ingreso || periodoObj.fecha_ingreso
 
-  const aniosCumplidos = calcularAniosCumplidos(
-    fechaIngresoRaiz,
-    periodoObj.fecha_retiro || null
-  )
-  const diasCausados = aniosCumplidos * 15
-
-  // Días tomados manualmente / histórico registrado en la ficha del empleado
-  const diasManuales = Number(
-    empleado?.dias_vacaciones_tomados_manual != null
-      ? empleado.dias_vacaciones_tomados_manual
-      : (periodoObj?.dias_vacaciones_tomados_manual != null
-          ? periodoObj.dias_vacaciones_tomados_manual
-          : (primerPeriodo?.dias_vacaciones_tomados_manual || 0))
-  ) || 0
-
-  // Conjunto de IDs de periodos que componen la cadena continua
-  const idsCadena = new Set(cadena.map(p => p.id).filter(Boolean))
-
-  const vacs = (listaVacaciones || []).filter(r => {
-    // Solo solicitudes en estados donde los días ya fueron consumidos o comprometidos
-    if (!r.estado || !ESTADOS_VALIDOS_VACACIONES.includes(r.estado)) return false
-
-    // Si la vacación tiene periodo_id y está enlazada a la cadena continua
-    if (r.periodo_id && idsCadena.size > 0) {
-      return idsCadena.has(r.periodo_id)
-    }
-
-    // Si hay fecha de inicio/solicitud y la cadena tiene rango de fechas
-    const fIni = r.fecha_inicio || r.fecha_solicitud
-    if (fIni && fechaIngresoRaiz) {
-      const matchIngreso = fIni >= fechaIngresoRaiz
-      const matchRetiro = !periodoObj.fecha_retiro || fIni <= periodoObj.fecha_retiro
-      return matchIngreso && matchRetiro
-    }
-
-    return true
-  })
-
-  let diasDisfrutados = 0
-  let diasEnDinero = 0
-
-  vacs.forEach(r => {
-    if (r.tipo_vacacion === 'Vacaciones en dinero') {
-      const dinero = Number(r.dias_en_dinero) || Number(r.total_dias) || 15
-      diasEnDinero += dinero
-    } else {
-      // Días tomados en tiempo: prioridad a dias_disfrutados o total_dias
-      const diasTiempo = Number(r.dias_disfrutados) || Number(r.total_dias) || (
-        (r.fecha_inicio && r.fecha_fin) ? (diasHabilesEntre(r.fecha_inicio, r.fecha_fin) || 0) : 0
-      )
-      diasDisfrutados += diasTiempo
-
-      if (r.dias_en_dinero) {
-        diasEnDinero += Number(r.dias_en_dinero) || 0
-      }
-    }
-  })
-
-  diasDisfrutados = Math.round(diasDisfrutados * 10) / 10
-  diasEnDinero = Math.round(diasEnDinero * 10) / 10
-
-  // Saldo disponible final = Math.max(0, diasCausados - diasManuales - (diasDisfrutados + diasEnDinero))
-  const diasSolicitudesApp = diasDisfrutados + diasEnDinero
-  const saldoCalculado = aniosCumplidos < 1
-    ? 0
-    : Math.max(0, diasCausados - diasManuales - diasSolicitudesApp)
-
-  // Formato limpio: entero si no tiene decimales
-  const saldoPendiente = saldoCalculado % 1 === 0 ? Math.round(saldoCalculado) : Math.round(saldoCalculado * 10) / 10
+  const empRef = empleado || periodoObj
+  const infoCiclos = obtenerPeriodosVacacionesEmpleado(empRef, listaVacaciones, listaPeriodos)
 
   return {
-    aniosCumplidos,
-    diasCausados,
-    diasManuales,
-    diasDisfrutados,
-    diasEnDinero,
-    saldoPendiente,
+    aniosCumplidos: infoCiclos.periodosCumplidos.length,
+    diasCausados: infoCiclos.totalCausados,
+    diasManuales: infoCiclos.totalAjusteManual,
+    diasDisfrutados: infoCiclos.totalDisfrutados,
+    diasEnDinero: infoCiclos.totalEnDinero,
+    saldoPendiente: infoCiclos.saldoTotal,
     esContinuo: cadena.length > 1,
     fechaIngresoRaiz,
     cadenaPeriodos: cadena,
+    periodosVacaciones: infoCiclos,
   }
 }
 

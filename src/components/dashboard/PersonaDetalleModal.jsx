@@ -1,4 +1,6 @@
 import { X } from 'lucide-react'
+import { hoyISO } from '../../utils/fecha'
+import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
 
 export default function PersonaDetalleModal({ personaDetalle, onCerrar }) {
   if (!personaDetalle) return null
@@ -25,17 +27,46 @@ export default function PersonaDetalleModal({ personaDetalle, onCerrar }) {
             {registrosOrdenados.length} registro{registrosOrdenados.length !== 1 ? 's' : ''} de {personaDetalle.concepto}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {registrosOrdenados.map((r, i) => (
-              <div key={r.id || i} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>
-                    {r.fecha_inicio || '—'}{r.fecha_fin ? ` → ${r.fecha_fin}` : ''}
-                  </span>
-                  {r.total_dias != null && r.total_dias !== '' && (
-                    <span style={{ fontSize: 12, fontWeight: 700, color: personaDetalle.color }}>{r.total_dias} días</span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+            {registrosOrdenados.map((r, i) => {
+              const hoy = hoyISO()
+              const estadoTemp = evaluarEstadoTemporalAusencia(r, hoy)
+              const badgeClass =
+                estadoTemp?.badgeTipo === 'activa' ? 'db-badge-activa' :
+                estadoTemp?.badgeTipo === 'reincorporacion' ? 'db-badge-reincorporacion' :
+                estadoTemp?.badgeTipo === 'finalizada' ? 'db-badge-finalizada' :
+                'db-badge-programada'
+
+              const chipClass =
+                estadoTemp?.chipTipo === 'activa' ? 'db-chip-activa' :
+                estadoTemp?.chipTipo === 'reincorporacion' ? 'db-chip-reincorporacion' :
+                estadoTemp?.chipTipo === 'finalizada' ? 'db-chip-finalizada' :
+                'db-chip-programada'
+
+              return (
+                <div key={r.id || i} style={{ border: estadoTemp?.esActivaHoy ? '1px solid rgba(220, 38, 38, 0.3)' : '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>
+                        {r.fecha_inicio || '—'}{r.fecha_fin ? ` → ${r.fecha_fin}` : ''}
+                      </span>
+                      {estadoTemp && (
+                        <span className={badgeClass} style={{ fontSize: 10, padding: '1px 7px' }}>
+                          {estadoTemp.badgeTexto}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {r.total_dias != null && r.total_dias !== '' && (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: personaDetalle.color }}>{r.total_dias} días</span>
+                      )}
+                      {estadoTemp && estadoTemp.chipTexto !== '—' && (
+                        <span className={chipClass} style={{ fontSize: 10, padding: '1px 7px' }}>
+                          {estadoTemp.chipTexto}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                   <span>📍 {r.dependencia || 'Sin área'}</span>
                   {r.periodo && <span>📅 {r.periodo}</span>}
                   {r.diagnostico && <span>🩺 {r.diagnostico}</span>}
@@ -55,7 +86,8 @@ export default function PersonaDetalleModal({ personaDetalle, onCerrar }) {
                   </div>
                 )}
               </div>
-            ))}
+            )
+          })}
           </div>
         </div>
         <div className="modal-footer">

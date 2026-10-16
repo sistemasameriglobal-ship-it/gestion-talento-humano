@@ -104,6 +104,7 @@ export default function Vacaciones() {
       vacsParaSaldo.push({
         id: form.id || 'temp-current-id',
         periodo_id: form.periodo_id || periodoActivo?.id,
+        periodo_vacaciones: form.periodo_vacaciones || null,
         nombre_empleado: form.nombre_empleado,
         estado: form.estado,
         tipo_vacacion: form.tipo_vacacion,
@@ -122,7 +123,7 @@ export default function Vacaciones() {
       topeDisponible: saldoOtras.saldoPendiente,
     }
   }, [
-    form.nombre_empleado, form.id, form.periodo_id, form.fecha_ingreso,
+    form.nombre_empleado, form.id, form.periodo_id, form.periodo_vacaciones, form.fecha_ingreso,
     form.estado, form.tipo_vacacion, form.fecha_inicio, form.fecha_fin,
     form.total_dias, form.dias_disfrutados, form.dias_en_dinero,
     empleados, periodos, rows

@@ -128,3 +128,168 @@ export function obtenerFechaRegresoLaboral(fechaFin) {
   }
 }
 
+/**
+ * Obtiene la fecha actual en zona horaria Colombia (UTC-5) en formato 'YYYY-MM-DD'
+ */
+function getHoyBogotaISO() {
+  try {
+    const partes = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date())
+    const obj = Object.fromEntries(partes.map(p => [p.type, p.value]))
+    return `${obj.year}-${obj.month}-${obj.day}`
+  } catch {
+    return new Date().toISOString().slice(0, 10)
+  }
+}
+
+/**
+ * Evalúa el estado temporal de una ausencia o incapacidad frente a la fecha actual ('hoy').
+ *
+ * Reglas de negocio:
+ * 1. Activa hoy: hoy >= fecha_inicio && hoy < fechaRegreso
+ *    (Si fechaRegreso <= hoy, ya no está ausente).
+ * 2. Casos:
+ *    - Caso A (hoy < fecha_inicio):
+ *      Badge: "Programada", Chip: "Inicia en: X días"
+ *    - Caso B (hoy >= fecha_inicio && hoy < fechaRegreso):
+ *      Badge rojo: "Incapacidad Activa" (o "{Concepto} Activa"), Chip azul: "Regresa: DD/MM/AAAA (en X días)"
+ *    - Caso C (hoy === fechaRegreso):
+ *      Badge verde/azul: "Reincorporación Hoy", Chip: "Regresa hoy"
+ *    - Caso D (hoy > fechaRegreso):
+ *      Badge neutro/verde: "Finalizada / En labores", Chip: "✓ Ya regresó (DD/MM/AAAA)"
+ *
+ * @param {Object} novedad - Objeto con fecha_inicio, fecha_fin, fecha_regreso, concepto
+ * @param {string} [hoyStr] - Fecha hoy en formato 'YYYY-MM-DD' (opcional)
+ * @returns {Object} Estado evaluado con badges, chips, tipos y banderas booleanas
+ */
+export function evaluarEstadoTemporalAusencia(novedad, hoyStr) {
+  if (!novedad) return null
+  const fIni = novedad.fecha_inicio ? String(novedad.fecha_inicio).trim().slice(0, 10) : null
+  const fFin = (novedad.fecha_fin ? String(novedad.fecha_fin).trim().slice(0, 10) : null) || fIni
+  const hoy = hoyStr ? String(hoyStr).trim().slice(0, 10) : getHoyBogotaISO()
+
+  if (!fIni) {
+    return {
+      estado: 'sin_fecha',
+      esActivaHoy: false,
+      badgeTexto: novedad.concepto || 'Sin fecha',
+      badgeTipo: 'neutro',
+      chipTexto: '—',
+      chipTipo: 'neutro',
+      fechaInicio: null,
+      fechaFin: null,
+      fechaRegreso: null,
+      diasRestantes: null,
+    }
+  }
+
+  const fReg = novedad.fecha_regreso || (fFin ? obtenerFechaRegresoLaboral(fFin) : null)
+  const conceptoRaw = novedad.concepto || 'Incapacidad'
+
+  const formatDDMMYYYY = (iso) => {
+    if (!iso) return '—'
+    const clean = String(iso).trim().slice(0, 10)
+    const p = clean.split('-')
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : clean
+  }
+
+  const parseUTC = (str) => {
+    const parts = str.split('-').map(Number)
+    return Date.UTC(parts[0], parts[1] - 1, parts[2])
+  }
+  const msPorDia = 86400000
+  const hoyUTC = parseUTC(hoy)
+
+  // Caso A: hoy < novedad.fecha_inicio (Programada)
+  if (hoy < fIni) {
+    const iniUTC = parseUTC(fIni)
+    const diasParaInicio = Math.max(1, Math.round((iniUTC - hoyUTC) / msPorDia))
+    return {
+      estado: 'programada',
+      esActivaHoy: false,
+      badgeTexto: 'Programada',
+      badgeTipo: 'programada',
+      chipTexto: `Inicia en: ${diasParaInicio} ${diasParaInicio === 1 ? 'día' : 'días'}`,
+      chipTipo: 'programada',
+      fechaInicio: fIni,
+      fechaFin: fFin,
+      fechaRegreso: fReg,
+      diasRestantes: diasParaInicio,
+    }
+  }
+
+  // Caso C: hoy === fechaRegreso (Reincorporación Hoy)
+  if (fReg && hoy === fReg) {
+    return {
+      estado: 'reincorporacion_hoy',
+      esActivaHoy: false,
+      badgeTexto: 'Reincorporación Hoy',
+      badgeTipo: 'reincorporacion',
+      chipTexto: 'Regresa hoy',
+      chipTipo: 'reincorporacion',
+      fechaInicio: fIni,
+      fechaFin: fFin,
+      fechaRegreso: fReg,
+      diasRestantes: 0,
+    }
+  }
+
+  // Caso D: hoy > fechaRegreso (o si no hay fReg y hoy > fFin) (Finalizada / En labores)
+  if ((fReg && hoy > fReg) || (!fReg && fFin && hoy > fFin)) {
+    return {
+      estado: 'finalizada',
+      esActivaHoy: false,
+      badgeTexto: 'Finalizada / En labores',
+      badgeTipo: 'finalizada',
+      chipTexto: `✓ Ya regresó (${formatDDMMYYYY(fReg || fFin)})`,
+      chipTipo: 'finalizada',
+      fechaInicio: fIni,
+      fechaFin: fFin,
+      fechaRegreso: fReg,
+      diasRestantes: 0,
+    }
+  }
+
+  // Caso B: hoy >= novedad.fecha_inicio && hoy < fechaRegreso (Incapacidad Activa)
+  if (hoy >= fIni && (!fReg || hoy < fReg)) {
+    const regUTC = fReg ? parseUTC(fReg) : parseUTC(fFin)
+    const diasParaRegreso = Math.max(0, Math.round((regUTC - hoyUTC) / msPorDia))
+    const sufijoDias = diasParaRegreso === 1 ? 'en 1 día' : `en ${diasParaRegreso} días`
+    const chipTexto = fReg
+      ? `Regresa: ${formatDDMMYYYY(fReg)} (${sufijoDias})`
+      : `Hasta ${formatDDMMYYYY(fFin)}`
+
+    const esIncapacidad = String(conceptoRaw).toLowerCase().includes('incapacidad')
+    const badgeTexto = esIncapacidad ? 'Incapacidad Activa' : `${conceptoRaw} Activa`
+
+    return {
+      estado: 'activa',
+      esActivaHoy: true,
+      badgeTexto,
+      badgeTipo: 'activa',
+      chipTexto,
+      chipTipo: 'activa',
+      fechaInicio: fIni,
+      fechaFin: fFin,
+      fechaRegreso: fReg,
+      diasRestantes: diasParaRegreso,
+    }
+  }
+
+  // Fallback seguro
+  return {
+    estado: 'desconocido',
+    esActivaHoy: false,
+    badgeTexto: conceptoRaw,
+    badgeTipo: 'neutro',
+    chipTexto: '—',
+    chipTipo: 'neutro',
+    fechaInicio: fIni,
+    fechaFin: fFin,
+    fechaRegreso: fReg,
+    diasRestantes: null,
+  }
+}
+

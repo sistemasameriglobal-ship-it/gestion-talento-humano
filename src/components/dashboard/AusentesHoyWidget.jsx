@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { UserX, CheckCircle2, Calendar, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { hoyISO } from '../../utils/fecha'
-import { obtenerFechaRegresoLaboral } from '../../utils/diasHabiles'
+import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
 
 function iniciales(nombre) {
   const p = (nombre || '').trim().split(/\s+/).filter(Boolean)
@@ -27,7 +27,17 @@ export default function AusentesHoyWidget({
   const [mostrarPeriodo, setMostrarPeriodo] = useState(false)
   const hoy = hoyISO()
 
-  const listadoAMostrar = mostrarPeriodo ? ausenciasPeriodo : ausentesHoy
+  // 1. En la vista de "Ausentes hoy", filtrar estrictamente a los colaboradores cuya ausencia
+  // esté activa hoy: hoy >= novedad.fecha_inicio && hoy < fechaRegreso.
+  // Se excluyen los que ya regresaron o se reincorporan hoy (fechaRegreso <= hoy).
+  const ausentesHoyActivos = useMemo(() => {
+    return (ausentesHoy || []).filter(r => {
+      const estado = evaluarEstadoTemporalAusencia(r, hoy)
+      return estado?.esActivaHoy === true
+    })
+  }, [ausentesHoy, hoy])
+
+  const listadoAMostrar = mostrarPeriodo ? ausenciasPeriodo : ausentesHoyActivos
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
@@ -45,13 +55,13 @@ export default function AusentesHoyWidget({
             width: 34,
             height: 34,
             borderRadius: 10,
-            background: ausentesHoy.length > 0 ? 'rgba(234, 88, 12, 0.14)' : 'rgba(22, 163, 74, 0.12)',
-            color: ausentesHoy.length > 0 ? '#EA580C' : '#16A34A',
+            background: ausentesHoyActivos.length > 0 ? 'rgba(234, 88, 12, 0.14)' : 'rgba(22, 163, 74, 0.12)',
+            color: ausentesHoyActivos.length > 0 ? '#EA580C' : '#16A34A',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            {ausentesHoy.length > 0 ? <UserX size={18} /> : <CheckCircle2 size={18} />}
+            {ausentesHoyActivos.length > 0 ? <UserX size={18} /> : <CheckCircle2 size={18} />}
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -63,11 +73,11 @@ export default function AusentesHoyWidget({
                 fontWeight: 700,
                 padding: '2px 8px',
                 borderRadius: 999,
-                background: ausentesHoy.length > 0 ? 'rgba(234, 88, 12, 0.16)' : 'rgba(22, 163, 74, 0.14)',
-                color: ausentesHoy.length > 0 ? '#EA580C' : '#16A34A',
-                border: `1px solid ${ausentesHoy.length > 0 ? 'rgba(234, 88, 12, 0.3)' : 'rgba(22, 163, 74, 0.3)'}`,
+                background: ausentesHoyActivos.length > 0 ? 'rgba(234, 88, 12, 0.16)' : 'rgba(22, 163, 74, 0.14)',
+                color: ausentesHoyActivos.length > 0 ? '#EA580C' : '#16A34A',
+                border: `1px solid ${ausentesHoyActivos.length > 0 ? 'rgba(234, 88, 12, 0.3)' : 'rgba(22, 163, 74, 0.3)'}`,
               }}>
-                {ausentesHoy.length} {ausentesHoy.length === 1 ? 'ausente' : 'ausentes'}
+                {ausentesHoyActivos.length} {ausentesHoyActivos.length === 1 ? 'ausente' : 'ausentes'}
               </span>
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -76,7 +86,7 @@ export default function AusentesHoyWidget({
           </div>
         </div>
 
-        {/* Toggle si hay ausencias en el periodo filtrado pero no hoy */}
+        {/* Toggle si hay ausencias en el periodo filtrado */}
         {ausenciasPeriodo.length > 0 && (
           <button
             className="btn btn-ghost"
@@ -110,8 +120,23 @@ export default function AusentesHoyWidget({
           {listadoAMostrar.map((r, i) => {
             const cNorm = normalizarConcepto(r.concepto)
             const cColor = CONCEPTO_COLORS[cNorm] || '#EA580C'
-            const finEfectiva = r.fecha_fin || r.fecha_inicio
-            const fechaRegreso = finEfectiva ? obtenerFechaRegresoLaboral(finEfectiva) : null
+            const estadoTemp = evaluarEstadoTemporalAusencia(r, hoy)
+
+            const badgeClass =
+              estadoTemp.badgeTipo === 'activa' ? 'db-badge-activa' :
+              estadoTemp.badgeTipo === 'reincorporacion' ? 'db-badge-reincorporacion' :
+              estadoTemp.badgeTipo === 'finalizada' ? 'db-badge-finalizada' :
+              estadoTemp.badgeTipo === 'programada' ? 'db-badge-programada' :
+              'badge tag-c'
+
+            const chipClass =
+              estadoTemp.chipTipo === 'activa' ? 'db-chip-activa' :
+              estadoTemp.chipTipo === 'reincorporacion' ? 'db-chip-reincorporacion' :
+              estadoTemp.chipTipo === 'finalizada' ? 'db-chip-finalizada' :
+              estadoTemp.chipTipo === 'programada' ? 'db-chip-programada' :
+              'db-regreso-pill'
+
+            const isDoneOrToday = estadoTemp.chipTipo === 'finalizada' || estadoTemp.chipTipo === 'reincorporacion'
 
             return (
               <div
@@ -125,7 +150,8 @@ export default function AusentesHoyWidget({
                   padding: '12px 14px',
                   borderRadius: 12,
                   background: 'var(--bg)',
-                  border: '1px solid var(--border)',
+                  border: estadoTemp.esActivaHoy ? '1px solid rgba(220, 38, 38, 0.25)' : '1px solid var(--border)',
+                  opacity: estadoTemp.estado === 'finalizada' ? 0.85 : 1,
                 }}
               >
                 {/* Info Colaborador */}
@@ -161,23 +187,30 @@ export default function AusentesHoyWidget({
                   </div>
                 </div>
 
-                {/* Concepto y Regreso */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                  <span
-                    className="badge tag-c"
-                    style={{ '--tag': cColor, fontSize: 11, padding: '2px 8px', fontWeight: 700 }}
-                  >
-                    {r.concepto}
+                {/* Concepto, Badge de estado y Chip de Regreso */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {mostrarPeriodo && r.concepto && (
+                      <span
+                        className="badge tag-c"
+                        style={{ '--tag': cColor, fontSize: 10.5, padding: '1px 7px', fontWeight: 700 }}
+                      >
+                        {r.concepto}
+                      </span>
+                    )}
+                    <span className={badgeClass}>
+                      {estadoTemp.badgeTexto}
+                    </span>
+                  </div>
+
+                  <span className={chipClass} title={`Detalle temporal: ${estadoTemp.chipTexto}`}>
+                    {isDoneOrToday ? (
+                      <CheckCircle2 size={11} style={{ flexShrink: 0 }} />
+                    ) : (
+                      <Calendar size={11} style={{ flexShrink: 0 }} />
+                    )}
+                    {estadoTemp.chipTexto}
                   </span>
-                  {fechaRegreso ? (
-                    <span className="db-regreso-pill" title={`Fecha efectiva de retorno: ${formatDDMMYYYY(fechaRegreso)}`}>
-                      <Calendar size={11} style={{ flexShrink: 0 }} /> Regresa: {formatDDMMYYYY(fechaRegreso)}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      Desde {formatDDMMYYYY(r.fecha_inicio)}
-                    </span>
-                  )}
                 </div>
               </div>
             )

@@ -1,7 +1,7 @@
 import { Eye, Edit2, Trash2 } from 'lucide-react'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { hoyISO } from '../../utils/fecha'
-import { diasHabilesEntre } from '../../utils/diasHabiles'
+import { diasHabilesEntre, evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
 import { PAGE_SIZE } from '../../utils/novedadesConstants'
 import { EditablePill, SortIcon, IncompleteIndicator } from './Pills'
 import Paginacion from '../ui/Paginacion'
@@ -101,11 +101,24 @@ export default function NovedadesTable({
                         💰 {row.dias_en_dinero}d dinero
                       </span>
                     )}
-                    {soloActivas && row.fecha_inicio && row.fecha_fin && (
-                      row.fecha_inicio <= hoyISO()
-                        ? <span style={{ marginLeft: 5, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--success-text)', background: 'var(--success-bg)', border: '1px solid color-mix(in srgb, var(--success) 35%, transparent)', borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22C55E' }} />En curso</span>
-                        : <span style={{ marginLeft: 5, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--info-text)', background: 'var(--info-bg)', border: '1px solid color-mix(in srgb, var(--info) 35%, transparent)', borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#3B82F6' }} />Próxima</span>
-                    )}
+                    {soloActivas && row.fecha_inicio && (() => {
+                      const estadoTemp = evaluarEstadoTemporalAusencia(row, hoyISO())
+                      if (!estadoTemp) return null
+                      const esActiva = estadoTemp.esActivaHoy
+                      return (
+                        <span style={{
+                          marginLeft: 5, display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 10, fontWeight: 700,
+                          color: esActiva ? '#DC2626' : '#2563EB',
+                          background: esActiva ? 'rgba(220, 38, 38, 0.12)' : 'rgba(37, 99, 235, 0.1)',
+                          border: `1px solid ${esActiva ? 'rgba(220, 38, 38, 0.35)' : 'rgba(37, 99, 235, 0.3)'}`,
+                          borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap'
+                        }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: esActiva ? '#DC2626' : '#2563EB' }} />
+                          {estadoTemp.badgeTexto}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.fecha_inicio || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.fecha_fin || '—'}</td>
