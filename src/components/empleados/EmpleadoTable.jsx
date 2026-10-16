@@ -57,7 +57,11 @@ export default function EmpleadoTable({
                   <td style={{ maxWidth: 260 }}>
                     <PersonCell
                       nombre={emp.nombre_completo}
-                      sub={antig?.texto ? `Ingreso: ${emp.fecha_ingreso} • Antigüedad: ${antig.texto}` : (emp.fecha_ingreso ? `Ingreso: ${emp.fecha_ingreso}` : null)}
+                      sub={[
+                        emp.numero_documento ? `${emp.tipo_documento || 'CC'}: ${emp.numero_documento}` : null,
+                        emp.fecha_ingreso ? `Ingreso: ${emp.fecha_ingreso}` : null,
+                        antig?.texto ? `Antigüedad: ${antig.texto}` : null,
+                      ].filter(Boolean).join(' • ') || null}
                     />
                   </td>
                   <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{emp.dependencia || '—'}</td>

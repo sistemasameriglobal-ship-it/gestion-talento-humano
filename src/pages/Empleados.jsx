@@ -220,7 +220,10 @@ export default function Empleados() {
       const s = search.toLowerCase()
       const matchSearch = !s ||
         r.nombre_completo?.toLowerCase().includes(s) ||
+        r.numero_documento?.toLowerCase().includes(s) ||
         r.correo?.toLowerCase().includes(s) ||
+        r.correo_personal?.toLowerCase().includes(s) ||
+        r.celular?.toLowerCase().includes(s) ||
         r.dependencia?.toLowerCase().includes(s) ||
         r.cargo?.toLowerCase().includes(s)
       const matchDep = !filterDep || r.dependencia === filterDep
@@ -261,8 +264,29 @@ export default function Empleados() {
   const openAdd = () => { setForm(EMPTY); setDuplicadoWarning(null); setModal('add') }
   const openEdit = (row) => {
     setForm({
+      ...EMPTY,
       ...row,
-      fecha_ingreso: row.fecha_ingreso || '',
+      tipo_documento: row.tipo_documento || 'CC',
+      numero_documento: row.numero_documento || '',
+      fecha_nacimiento: row.fecha_nacimiento || '',
+      tipo_sangre: row.tipo_sangre || '',
+      direccion: row.direccion || '',
+      barrio: row.barrio || '',
+      municipio: row.municipio || '',
+      celular: row.celular || '',
+      correo_personal: row.correo_personal || '',
+      salario: row.salario ?? '',
+      auxilio_transporte: row.auxilio_transporte ?? '',
+      eps: row.eps || '',
+      pension: row.pension || '',
+      cesantias: row.cesantias || '',
+      banco: row.banco || '',
+      tipo_cuenta: row.tipo_cuenta || 'Ahorros',
+      numero_cuenta: row.numero_cuenta || '',
+      contactos_emergencia: Array.isArray(row.contactos_emergencia) ? row.contactos_emergencia : [],
+      fecha_primer_ingreso: row.fecha_primer_ingreso || '',
+      fecha_inicio_empresa_actual: row.fecha_inicio_empresa_actual || row.fecha_ingreso || '',
+      fecha_ingreso: row.fecha_ingreso || row.fecha_inicio_empresa_actual || '',
       fecha_retiro: row.fecha_retiro || '',
       dias_vacaciones_tomados_manual: row.dias_vacaciones_tomados_manual ?? 0,
     })
@@ -292,7 +316,10 @@ export default function Empleados() {
   const save = async (forzar = false) => {
     if (!form.nombre_completo?.trim()) return setMsg({ type: 'error', text: 'El nombre es obligatorio.' })
     if (form.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo)) {
-      return setMsg({ type: 'error', text: 'El correo no tiene un formato válido.' })
+      return setMsg({ type: 'error', text: 'El correo empresarial no tiene un formato válido.' })
+    }
+    if (form.correo_personal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo_personal)) {
+      return setMsg({ type: 'error', text: 'El correo personal no tiene un formato válido.' })
     }
     const dup = checkDuplicado(form.nombre_completo, modal === 'edit' ? form.id : null)
     if (dup && dup.tipo === 'exacto' && !forzar) {
@@ -306,13 +333,34 @@ export default function Empleados() {
     }
     setSaving(true)
     let err
+    const fechaIngresoEfectiva = form.fecha_inicio_empresa_actual || form.fecha_ingreso || null
     const payload = {
       nombre_completo: form.nombre_completo.trim(),
+      tipo_documento: form.tipo_documento || 'CC',
+      numero_documento: form.numero_documento?.trim() || null,
+      fecha_nacimiento: form.fecha_nacimiento || null,
+      tipo_sangre: form.tipo_sangre || null,
       correo: form.correo?.trim() || null,
+      correo_personal: form.correo_personal?.trim() || null,
+      celular: form.celular?.trim() || null,
+      direccion: form.direccion?.trim() || null,
+      barrio: form.barrio?.trim() || null,
+      municipio: form.municipio?.trim() || null,
       dependencia: form.dependencia || null,
       activo: form.activo ?? true,
       cargo: form.cargo?.trim() || null,
-      fecha_ingreso: form.fecha_ingreso || null,
+      fecha_primer_ingreso: form.fecha_primer_ingreso || null,
+      fecha_inicio_empresa_actual: fechaIngresoEfectiva,
+      fecha_ingreso: fechaIngresoEfectiva,
+      salario: (form.salario !== '' && form.salario != null) ? Number(form.salario) || 0 : 0,
+      auxilio_transporte: (form.auxilio_transporte !== '' && form.auxilio_transporte != null) ? Number(form.auxilio_transporte) || 0 : 0,
+      eps: form.eps?.trim() || null,
+      pension: form.pension?.trim() || null,
+      cesantias: form.cesantias?.trim() || null,
+      banco: form.banco?.trim() || null,
+      tipo_cuenta: form.tipo_cuenta || 'Ahorros',
+      numero_cuenta: form.numero_cuenta?.trim() || null,
+      contactos_emergencia: Array.isArray(form.contactos_emergencia) ? form.contactos_emergencia : [],
       dias_vacaciones_tomados_manual: (form.dias_vacaciones_tomados_manual !== '' && form.dias_vacaciones_tomados_manual != null)
         ? Number(form.dias_vacaciones_tomados_manual)
         : 0,

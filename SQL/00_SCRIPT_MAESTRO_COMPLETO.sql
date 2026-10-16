@@ -78,7 +78,27 @@ create table if not exists public.empleados (
   dias_vacaciones_tomados_manual numeric default 0,
   liquidado boolean not null default false,
   fecha_liquidacion date,
-  observacion_liquidacion text
+  observacion_liquidacion text,
+  tipo_documento text default 'CC',
+  numero_documento text,
+  fecha_nacimiento date,
+  tipo_sangre text,
+  direccion text,
+  barrio text,
+  municipio text,
+  celular text,
+  correo_personal text,
+  salario numeric default 0,
+  auxilio_transporte numeric default 0,
+  eps text,
+  pension text,
+  cesantias text,
+  banco text,
+  tipo_cuenta text default 'Ahorros',
+  numero_cuenta text,
+  contactos_emergencia jsonb default '[]'::jsonb,
+  fecha_primer_ingreso date,
+  fecha_inicio_empresa_actual date
 );
 alter table public.empleados
   add column if not exists departamento_id uuid references public.departamentos(id),
@@ -86,7 +106,27 @@ alter table public.empleados
   add column if not exists dias_vacaciones_tomados_manual numeric default 0,
   add column if not exists liquidado boolean not null default false,
   add column if not exists fecha_liquidacion date,
-  add column if not exists observacion_liquidacion text;
+  add column if not exists observacion_liquidacion text,
+  add column if not exists tipo_documento text default 'CC',
+  add column if not exists numero_documento text,
+  add column if not exists fecha_nacimiento date,
+  add column if not exists tipo_sangre text,
+  add column if not exists direccion text,
+  add column if not exists barrio text,
+  add column if not exists municipio text,
+  add column if not exists celular text,
+  add column if not exists correo_personal text,
+  add column if not exists salario numeric default 0,
+  add column if not exists auxilio_transporte numeric default 0,
+  add column if not exists eps text,
+  add column if not exists pension text,
+  add column if not exists cesantias text,
+  add column if not exists banco text,
+  add column if not exists tipo_cuenta text default 'Ahorros',
+  add column if not exists numero_cuenta text,
+  add column if not exists contactos_emergencia jsonb default '[]'::jsonb,
+  add column if not exists fecha_primer_ingreso date,
+  add column if not exists fecha_inicio_empresa_actual date;
 
 -- ── perfiles (1:1 con auth.users) ────────────────────────────────────
 create table if not exists public.perfiles (

@@ -61,26 +61,108 @@ export function listarEmpleadosActivosPorDependencia(dependencia, empresa) {
   return query
 }
 
+const CAMPOS_EXPEDIENTE_DETALLADO = [
+  'tipo_documento',
+  'numero_documento',
+  'fecha_nacimiento',
+  'tipo_sangre',
+  'direccion',
+  'barrio',
+  'municipio',
+  'celular',
+  'correo_personal',
+  'salario',
+  'auxilio_transporte',
+  'eps',
+  'pension',
+  'cesantias',
+  'banco',
+  'tipo_cuenta',
+  'numero_cuenta',
+  'contactos_emergencia',
+  'fecha_primer_ingreso',
+  'fecha_inicio_empresa_actual',
+]
+
+function normalizarPayloadEmpleado(payload = {}) {
+  const out = { ...payload }
+  const strFields = [
+    'numero_documento', 'tipo_sangre', 'direccion', 'barrio', 'municipio',
+    'celular', 'correo_personal', 'eps', 'pension', 'cesantias', 'banco', 'numero_cuenta',
+  ]
+  for (const k of strFields) {
+    if (k in out) {
+      out[k] = typeof out[k] === 'string' ? (out[k].trim() || null) : (out[k] ?? null)
+    }
+  }
+  if ('tipo_documento' in out) out.tipo_documento = out.tipo_documento || 'CC'
+  if ('tipo_cuenta' in out) out.tipo_cuenta = out.tipo_cuenta || 'Ahorros'
+
+  const dateFields = ['fecha_ingreso', 'fecha_retiro', 'fecha_nacimiento', 'fecha_primer_ingreso', 'fecha_inicio_empresa_actual']
+  for (const k of dateFields) {
+    if (k in out) {
+      out[k] = out[k] ? String(out[k]).slice(0, 10) : null
+    }
+  }
+
+  const numFields = ['salario', 'auxilio_transporte', 'dias_vacaciones_tomados_manual']
+  for (const k of numFields) {
+    if (k in out) {
+      out[k] = (out[k] !== '' && out[k] != null) ? (Number(out[k]) || 0) : 0
+    }
+  }
+
+  if ('contactos_emergencia' in out) {
+    out.contactos_emergencia = Array.isArray(out.contactos_emergencia)
+      ? out.contactos_emergencia
+          .filter(c => c && (c.nombre?.trim() || c.telefono?.trim()))
+          .map(c => ({
+            nombre: (c.nombre || '').trim(),
+            telefono: (c.telefono || '').trim(),
+            parentesco: (c.parentesco || '').trim(),
+          }))
+      : []
+  }
+
+  // Asegurar que no viaje ningún campo descartado como dias_familia
+  delete out.dias_familia
+
+  return out
+}
+
 export async function crearEmpleado(payload, empresa = 'ameriglobal') {
-  const empresaFinal = payload.empresa || empresa
+  const cleanPayload = normalizarPayloadEmpleado(payload)
+  const empresaFinal = cleanPayload.empresa || empresa
   // Además de guardar 'empresa' y 'dependencia' como texto (igual que antes),
   // buscamos sus ids relacionales para dejar el registro ya conectado.
   const { empresa_id, departamento_id } = await resolverIdsRelacionales({
     empresa: empresaFinal,
-    dependencia: payload.dependencia,
+    dependencia: cleanPayload.dependencia,
   })
-  const res = await supabase.from(TABLA).insert([{
-    ...payload,
+  let res = await supabase.from(TABLA).insert([{
+    ...cleanPayload,
     empresa: empresaFinal,
     empresa_id,
     departamento_id,
   }]).select()
 
+  // Fallback seguro si aún no se ha corrido la migración SQL 08 en Supabase
+  if (res.error && res.error.message && CAMPOS_EXPEDIENTE_DETALLADO.some(c => res.error.message.includes(c))) {
+    const fallbackPayload = { ...cleanPayload }
+    CAMPOS_EXPEDIENTE_DETALLADO.forEach(c => delete fallbackPayload[c])
+    res = await supabase.from(TABLA).insert([{
+      ...fallbackPayload,
+      empresa: empresaFinal,
+      empresa_id,
+      departamento_id,
+    }]).select()
+  }
+
   // Si se crea el empleado con éxito, se crea automáticamente su Periodo 1 en empleado_periodos
   // y su novedad contractual de Ingreso
   if (!res.error && res.data?.[0]?.id) {
     const nuevoEmp = res.data[0]
-    const fechaIngresoFinal = nuevoEmp.fecha_ingreso || new Date().toISOString().split('T')[0]
+    const fechaIngresoFinal = nuevoEmp.fecha_ingreso || nuevoEmp.fecha_inicio_empresa_actual || new Date().toISOString().split('T')[0]
     await crearPeriodo({
       empleado_id: nuevoEmp.id,
       empresa: empresaFinal,
@@ -134,13 +216,13 @@ export async function crearEmpleado(payload, empresa = 'ameriglobal') {
 }
 
 export async function actualizarEmpleado(id, payload) {
-  const dataToUpdate = { ...payload }
+  const dataToUpdate = normalizarPayloadEmpleado(payload)
 
   // Solo recalculamos los ids si el update toca 'empresa' o 'dependencia'.
   // Si solo cambia una de las dos, igual hay que re-resolver el departamento
   // completo: la misma dependencia puede existir en más de una empresa.
-  if (payload.empresa || payload.dependencia) {
-    let { empresa: empresaParaResolver, dependencia: dependenciaParaResolver } = payload
+  if (dataToUpdate.empresa || dataToUpdate.dependencia) {
+    let { empresa: empresaParaResolver, dependencia: dependenciaParaResolver } = dataToUpdate
     if (!empresaParaResolver || !dependenciaParaResolver) {
       const { data: actual } = await supabase
         .from(TABLA)
@@ -158,7 +240,13 @@ export async function actualizarEmpleado(id, payload) {
     dataToUpdate.departamento_id = departamento_id
   }
 
-  return supabase.from(TABLA).update(dataToUpdate).eq('id', id)
+  let res = await supabase.from(TABLA).update(dataToUpdate).eq('id', id)
+  if (res.error && res.error.message && CAMPOS_EXPEDIENTE_DETALLADO.some(c => res.error.message.includes(c))) {
+    const fallbackPayload = { ...dataToUpdate }
+    CAMPOS_EXPEDIENTE_DETALLADO.forEach(c => delete fallbackPayload[c])
+    res = await supabase.from(TABLA).update(fallbackPayload).eq('id', id)
+  }
+  return res
 }
 
 export function eliminarEmpleado(id) {

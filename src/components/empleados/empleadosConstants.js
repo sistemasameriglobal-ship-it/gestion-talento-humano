@@ -27,10 +27,114 @@ export const DEP_COLORS = {
 
 export const CONCEPTOS_CON_FECHA = [
   'Incapacidad', 'Vacaciones', 'LNR', 'LR', 'Maternidad', 'Paternidad',
-  'Calamidad/Luto', 'Día Familia', 'Hospitalización', 'Embargo', 'Otro',
+  'Calamidad/Luto', 'Hospitalización', 'Embargo', 'Otro',
 ]
 
-export const EMPTY = {
-  nombre_completo: '', correo: '', dependencia: '', activo: true,
-  cargo: '', fecha_ingreso: '', fecha_retiro: '', dias_vacaciones_tomados_manual: 0,
+export const TIPOS_DOCUMENTO = ['CC', 'PEP', 'PPT', 'CE', 'Pasaporte']
+
+export const TIPOS_SANGRE = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+
+export const EPS_LIST = [
+  'Sura',
+  'Sanitas',
+  'Nueva EPS',
+  'Salud Total',
+  'Compensar',
+  'Famisanar',
+  'Coosalud',
+  'Mutual Ser',
+  'Aliansalud',
+  'Savia Salud',
+]
+
+export const PENSION_LIST = [
+  'Protección',
+  'Porvenir',
+  'Colfondos',
+  'Colpensiones',
+  'Skandia',
+]
+
+export const CESANTIAS_LIST = [
+  'Protección',
+  'Porvenir',
+  'Fondo Nacional del Ahorro',
+  'Colfondos',
+  'Skandia',
+]
+
+export const BANCOS_LIST = [
+  'Bancolombia',
+  'Davivienda',
+  'BBVA',
+  'Banco de Bogotá',
+  'Banco de Occidente',
+  'Banco Popular',
+  'Banco Caja Social',
+  'Scotiabank Colpatria',
+  'Itaú',
+  'Nequi',
+  'DaviPlata',
+  'Lulo Bank',
+  'Nu Colombia',
+]
+
+export const TIPOS_CUENTA = ['Ahorros', 'Corriente']
+
+export const PARENTESCOS_SUGERIDOS = [
+  'Familiar',
+  'Madre',
+  'Padre',
+  'Pareja / Esposo(a)',
+  'Hermano(a)',
+  'Hijo(a)',
+  'Abuelo(a)',
+  'Tío(a)',
+  'Amigo(a)',
+  'Otro',
+]
+
+export function calcularEdad(fechaNac) {
+  if (!fechaNac) return null
+  const d = new Date(fechaNac)
+  if (isNaN(d.getTime())) return null
+  const edad = Math.floor((new Date() - d) / (365.25 * 24 * 60 * 60 * 1000))
+  return Number.isFinite(edad) && edad >= 0 ? edad : null
 }
+
+export function formatCOP(val) {
+  const num = Number(val)
+  if (!Number.isFinite(num) || num <= 0) return '$0'
+  return '$' + Math.round(num).toLocaleString('es-CO')
+}
+
+export const EMPTY = {
+  nombre_completo: '',
+  tipo_documento: 'CC',
+  numero_documento: '',
+  fecha_nacimiento: '',
+  tipo_sangre: '',
+  correo: '',
+  correo_personal: '',
+  celular: '',
+  direccion: '',
+  barrio: '',
+  municipio: '',
+  dependencia: '',
+  cargo: '',
+  activo: true,
+  fecha_primer_ingreso: '',
+  fecha_inicio_empresa_actual: '',
+  fecha_ingreso: '',
+  fecha_retiro: '',
+  salario: '',
+  auxilio_transporte: '',
+  eps: '',
+  pension: '',
+  cesantias: '',
+  banco: '',
+  tipo_cuenta: 'Ahorros',
+  numero_cuenta: '',
+  contactos_emergencia: [],
+  dias_vacaciones_tomados_manual: 0,
+}

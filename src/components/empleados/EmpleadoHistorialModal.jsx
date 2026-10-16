@@ -1,15 +1,61 @@
 // =============================================================
 // src/components/empleados/EmpleadoHistorialModal.jsx
 // -------------------------------------------------------------
-// Modal con el historial de novedades de un empleado (KPIs por
-// concepto + tabla de registros).
+// Ficha / Expediente Integral del colaborador con bloques
+// modulares oscuros + secciones desplegables de Vacaciones,
+// Periodos Laborales, Procesos Disciplinarios y Novedades.
 // =============================================================
-import { useEffect, useRef } from 'react'
-import { X, Edit2, Award, Scale, CheckCircle2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  X, Edit2, Award, Scale, Phone, ChevronDown, ChevronUp,
+  IdCard, MapPin, ShieldCheck, HeartPulse, Landmark, FileSpreadsheet,
+} from 'lucide-react'
+import { useCompany } from '../../context/CompanyContext'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
-import { CONCEPTOS_CON_FECHA } from './empleadosConstants'
+import { CONCEPTOS_CON_FECHA, calcularEdad, formatCOP } from './empleadosConstants'
 import { formatFecha, calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
+import './empleados.css'
+
+function inicialesNombre(nombre) {
+  const partes = (nombre || '').trim().split(/\s+/).filter(Boolean)
+  if (partes.length === 0) return '?'
+  if (partes.length === 1) return partes[0][0].toUpperCase()
+  return (partes[0][0] + partes[1][0]).toUpperCase()
+}
+
+function formatDDMMYYYY(fechaISO) {
+  if (!fechaISO) return '—'
+  const clean = String(fechaISO).trim().slice(0, 10)
+  const parts = clean.split('-')
+  if (parts.length !== 3) return clean
+  return `${parts[2]}/${parts[1]}/${parts[0]}`
+}
+
+function DataRow({ label, value, badge, badgeColor }) {
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      gap: 10, padding: '6px 0', borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+    }}>
+      <span style={{ fontSize: 12, color: '#94A3B8' }}>{label}</span>
+      {badge ? (
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 999,
+          background: badgeColor?.bg || 'rgba(239, 68, 68, 0.18)',
+          color: badgeColor?.text || '#FCA5A5',
+          border: `1px solid ${badgeColor?.border || 'rgba(239, 68, 68, 0.35)'}`,
+        }}>
+          {value || '—'}
+        </span>
+      ) : (
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: '#F1F5F9', textAlign: 'right', wordBreak: 'break-word' }}>
+          {value || '—'}
+        </span>
+      )}
+    </div>
+  )
+}
 
 export default function EmpleadoHistorialModal({
   selectedEmp,
@@ -23,14 +69,26 @@ export default function EmpleadoHistorialModal({
   onReintegrar,
   onLiquidar,
 }) {
+  const { currentCompany } = useCompany()
+  const nombreEmpresaActiva = currentCompany === 'global_link' ? 'Global Link' : 'AmeriGlobal'
   const nov = novedadesPorEmpleado[selectedEmp.nombre_completo]
   const procesosRef = useRef(null)
 
+  const [openSections, setOpenSections] = useState({
+    vacaciones: true,
+    procesos: initialSection === 'procesos' || (procesos && procesos.length > 0),
+  })
+  const [activeHistoryTab, setActiveHistoryTab] = useState('periodos')
+
+  const toggleSection = (key) => {
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   useEffect(() => {
-    if (initialSection === 'procesos' && procesosRef.current) {
+    if (initialSection === 'procesos') {
       const t = setTimeout(() => {
         procesosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 80)
+      }, 100)
       return () => clearTimeout(t)
     }
   }, [initialSection])
@@ -49,508 +107,643 @@ export default function EmpleadoHistorialModal({
         observaciones: 'Periodo inicial registrado'
       }] : [])
 
-  const periodoActivo = listaPeriodos.find(p => p.es_periodo_actual) || listaPeriodos[0] || (selectedEmp.fecha_ingreso ? { id: 'base', fecha_ingreso: selectedEmp.fecha_ingreso, es_periodo_actual: true } : null)
+  const periodoActivo = listaPeriodos.find(p => p.es_periodo_actual) || listaPeriodos[listaPeriodos.length - 1] || (selectedEmp.fecha_ingreso ? { id: 'base', fecha_ingreso: selectedEmp.fecha_ingreso, es_periodo_actual: true } : null)
   const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacaciones, listaPeriodos, selectedEmp)
   const vacacionActiva = getEstadoVacacionActual(selectedEmp, vacaciones, nov?.novedades)
   const antig = calcAntiguedadEmpleado(selectedEmp, listaPeriodos)
-  const ultimoPeriodoCerrado = [...listaPeriodos].reverse().find(p => !p.es_periodo_actual) || listaPeriodos[listaPeriodos.length - 1]
+
+  const ultimoPeriodoCerrado = [...listaPeriodos].reverse().find(p => !p.es_periodo_actual) || null
   const estaLiquidado = Boolean(selectedEmp.liquidado || ultimoPeriodoCerrado?.liquidado)
   const fechaLiq = selectedEmp.fecha_liquidacion || ultimoPeriodoCerrado?.fecha_liquidacion || null
   const obsLiq = selectedEmp.observacion_liquidacion || ultimoPeriodoCerrado?.observacion_liquidacion || ''
 
+  // Fechas contractuales y edad
+  const fechaInicioActual = selectedEmp.fecha_inicio_empresa_actual || periodoActivo?.fecha_ingreso || selectedEmp.fecha_ingreso || ''
+  const fechaPrimerIngreso = selectedEmp.fecha_primer_ingreso || listaPeriodos[0]?.fecha_ingreso || selectedEmp.fecha_ingreso || ''
+  const periodoAnteriorCerrado = listaPeriodos.length > 1
+    ? listaPeriodos[listaPeriodos.length - 2]
+    : (selectedEmp.activo === false ? listaPeriodos[0] : null)
+  const fechaTerminacionAnterior = periodoAnteriorCerrado?.fecha_retiro || (selectedEmp.activo === false ? selectedEmp.fecha_retiro : null)
+
+  const edad = calcularEdad(selectedEmp.fecha_nacimiento)
+  const contactosEmergencia = Array.isArray(selectedEmp.contactos_emergencia)
+    ? selectedEmp.contactos_emergencia.filter(c => c && (c.nombre || c.telefono))
+    : []
+
+  const labelTipoDoc = {
+    CC: 'Cédula (CC)',
+    PEP: 'PEP',
+    PPT: 'PPT',
+    CE: 'Cédula Extranjería',
+    Pasaporte: 'Pasaporte',
+  }[selectedEmp.tipo_documento] || (selectedEmp.tipo_documento || 'Documento')
+
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 720 }}>
-        <div className="modal-header">
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <h2 style={{ margin: 0 }}>{selectedEmp.nombre_completo}</h2>
-              {selectedEmp.activo === false && (
-                estaLiquidado ? (
-                  <span
-                    onClick={() => { if (onLiquidar) { onClose(); onLiquidar(selectedEmp) } }}
-                    title={obsLiq ? `Observaciones: ${obsLiq}` : 'Liquidación registrada'}
-                    style={{
-                      fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 999,
-                      background: '#ECFDF5', color: '#047857', border: '1px solid #6EE7B7',
-                      cursor: onLiquidar ? 'pointer' : 'default',
-                    }}
-                  >
-                    ✓ Liquidado: {fechaLiq ? String(fechaLiq).slice(0, 10) : 'Sí'}
-                  </span>
-                ) : (
-                  <span
-                    onClick={() => { if (onLiquidar) { onClose(); onLiquidar(selectedEmp) } }}
-                    style={{
-                      fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 999,
-                      background: '#FEF3C7', color: '#B45309', border: '1px solid #F59E0B',
-                      cursor: onLiquidar ? 'pointer' : 'default',
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                    }}
-                  >
-                    ⚠️ Pendiente por liquidar {onLiquidar && <strong style={{ textDecoration: 'underline', marginLeft: 3 }}>• Liquidar</strong>}
-                  </span>
-                )
-              )}
-              {vacacionActiva && (
-                <span style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: '2px 9px',
-                  borderRadius: 999,
-                  background: vacacionActiva.estaDeVacaciones
-                    ? (vacacionActiva.esUltimoDia ? '#FEF3C7' : '#DBEAFE')
-                    : '#EEF2FF',
-                  color: vacacionActiva.estaDeVacaciones
-                    ? (vacacionActiva.esUltimoDia ? '#92400E' : '#1D4ED8')
-                    : '#4338CA',
-                  border: `1px solid ${
-                    vacacionActiva.estaDeVacaciones
-                      ? (vacacionActiva.esUltimoDia ? '#F59E0B' : '#93C5FD')
-                      : '#C7D2FE'
-                  }`,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4
-                }}>
-                  🌴 {vacacionActiva.esProgramada ? `Programadas • ${vacacionActiva.badgeTexto}` : vacacionActiva.badgeTexto}
-                </span>
-              )}
+      <div
+        className="modal"
+        style={{
+          maxWidth: 840,
+          width: '96vw',
+          background: '#0F172A',
+          color: '#F8FAFC',
+          border: '1px solid #1E293B',
+          borderRadius: 16,
+          overflow: 'hidden',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.55)',
+        }}
+      >
+        {/* ── 1. CABECERA PRINCIPAL ── */}
+        <div style={{
+          padding: '20px 24px 16px',
+          background: 'linear-gradient(180deg, #1E293B 0%, #0F172A 100%)',
+          borderBottom: '1px solid #1E293B',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 14,
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1 }}>
+            {/* Avatar circular */}
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
+              background: 'rgba(56, 189, 248, 0.15)',
+              border: '1.5px solid rgba(56, 189, 248, 0.4)',
+              color: '#38BDF8',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 17, fontWeight: 800, letterSpacing: '.02em',
+            }}>
+              {inicialesNombre(selectedEmp.nombre_completo)}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
-              {selectedEmp.dependencia || '—'}{selectedEmp.cargo ? ` · ${selectedEmp.cargo}` : ''}
-              {antig?.texto ? ` · Antigüedad: ${antig.texto}` : ''}
+
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#F8FAFC', letterSpacing: '-0.01em' }}>
+                  {selectedEmp.nombre_completo}
+                </h2>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+                  background: selectedEmp.activo === false ? 'rgba(239, 68, 68, 0.18)' : 'rgba(16, 185, 129, 0.18)',
+                  color: selectedEmp.activo === false ? '#FCA5A5' : '#6EE7B7',
+                  border: `1px solid ${selectedEmp.activo === false ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
+                }}>
+                  {selectedEmp.activo === false ? 'Inactivo' : 'Activo'}
+                </span>
+
+                {selectedEmp.activo === false && (
+                  estaLiquidado ? (
+                    <span
+                      onClick={() => { if (onLiquidar) { onClose(); onLiquidar(selectedEmp) } }}
+                      title={obsLiq ? `Observaciones: ${obsLiq}` : 'Liquidación registrada'}
+                      style={{
+                        fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+                        background: 'rgba(16, 185, 129, 0.15)', color: '#6EE7B7',
+                        border: '1px solid rgba(16, 185, 129, 0.35)',
+                        cursor: onLiquidar ? 'pointer' : 'default',
+                      }}
+                    >
+                      ✓ Liquidado: {fechaLiq ? String(fechaLiq).slice(0, 10) : 'Sí'}
+                    </span>
+                  ) : (
+                    <span
+                      onClick={() => { if (onLiquidar) { onClose(); onLiquidar(selectedEmp) } }}
+                      style={{
+                        fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+                        background: 'rgba(245, 158, 11, 0.18)', color: '#FCD34D',
+                        border: '1px solid rgba(245, 158, 11, 0.4)',
+                        cursor: onLiquidar ? 'pointer' : 'default',
+                      }}
+                    >
+                      ⚠️ Pendiente por liquidar {onLiquidar && <strong style={{ textDecoration: 'underline', marginLeft: 3 }}>• Liquidar</strong>}
+                    </span>
+                  )
+                )}
+              </div>
+
+              <div style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 4 }}>
+                {[
+                  selectedEmp.cargo || selectedEmp.dependencia || 'Colaborador',
+                  selectedEmp.dependencia && selectedEmp.cargo ? selectedEmp.dependencia : null,
+                  fechaInicioActual ? `Contrato desde: ${formatDDMMYYYY(fechaInicioActual)}` : null,
+                  antig?.texto ? `Antigüedad: ${antig.texto}` : null,
+                ].filter(Boolean).join(' • ')}
+              </div>
             </div>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(148, 163, 184, 0.12)', border: '1px solid rgba(148, 163, 184, 0.2)',
+              color: '#CBD5E1', borderRadius: 10, padding: 8, cursor: 'pointer', display: 'flex',
+            }}
+          >
+            <X size={18} />
+          </button>
         </div>
-        <div className="modal-body" style={{ maxHeight: '74vh', overflowY: 'auto' }}>
-          {/* Banner dinámico de vacaciones (Activas o Programadas) */}
-          {vacacionActiva && (
-            <div style={{
-              marginBottom: 18,
-              padding: '12px 16px',
-              borderRadius: 10,
-              background: vacacionActiva.estaDeVacaciones
-                ? (vacacionActiva.esUltimoDia
-                    ? 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)'
-                    : 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)')
-                : 'linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)',
-              border: `1.5px solid ${
-                vacacionActiva.estaDeVacaciones
-                  ? (vacacionActiva.esUltimoDia ? '#F59E0B' : '#60A5FA')
-                  : '#A78BFA'
-              }`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              boxShadow: vacacionActiva.estaDeVacaciones
-                ? '0 2px 8px rgba(37, 99, 235, 0.08)'
-                : '0 2px 8px rgba(124, 58, 237, 0.08)'
-            }}>
-              <div style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: vacacionActiva.estaDeVacaciones
-                  ? (vacacionActiva.esUltimoDia ? '#D97706' : '#2563EB')
-                  : '#7C3AED',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 19,
-                flexShrink: 0
-              }}>
-                🌴
+
+        {/* ── BODY CON SCROLL ── */}
+        <div className="modal-body" style={{ maxHeight: '76vh', overflowY: 'auto', padding: '18px 24px', background: '#0F172A' }}>
+
+          {/* ── 2. KPI CARDS SUPERIORES (4 TARJETAS EN FILA) ── */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: 10,
+            marginBottom: 16,
+          }}>
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Salario</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: '#F8FAFC' }}>
+                {Number(selectedEmp.salario) > 0 ? formatCOP(selectedEmp.salario) : '—'}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            </div>
+
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Aux. transporte</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: '#F8FAFC' }}>
+                {Number(selectedEmp.auxilio_transporte) > 0 ? formatCOP(selectedEmp.auxilio_transporte) : '—'}
+              </div>
+            </div>
+
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Ingreso</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#F8FAFC' }}>
+                {formatDDMMYYYY(fechaInicioActual)}
+              </div>
+            </div>
+
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Edad</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: '#F8FAFC' }}>
+                {edad !== null ? `${edad} años` : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* ── 3. GRILLA DE BLOQUES MODULARES (2 COLUMNAS) ── */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))',
+            gap: 12,
+            marginBottom: 18,
+          }}>
+            {/* Bloque 1: Identificación */}
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <IdCard size={13} style={{ color: '#38BDF8' }} /> Identificación
+              </div>
+              <DataRow label={labelTipoDoc} value={selectedEmp.numero_documento || '—'} />
+              <DataRow label="Fecha de nacimiento" value={formatDDMMYYYY(selectedEmp.fecha_nacimiento)} />
+              <DataRow
+                label="Tipo de sangre"
+                value={selectedEmp.tipo_sangre || '—'}
+                badge={Boolean(selectedEmp.tipo_sangre)}
+              />
+            </div>
+
+            {/* Bloque 2: Contacto */}
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <MapPin size={13} style={{ color: '#34D399' }} /> Contacto
+              </div>
+              <DataRow label="Celular" value={selectedEmp.celular || '—'} />
+              <DataRow label="Correo personal" value={selectedEmp.correo_personal || '—'} />
+              <DataRow label="Correo empresarial" value={selectedEmp.correo || '—'} />
+              <DataRow label="Dirección" value={selectedEmp.direccion || '—'} />
+              <DataRow
+                label="Barrio / Municipio"
+                value={[selectedEmp.barrio, selectedEmp.municipio].filter(Boolean).join(' • ') || '—'}
+              />
+            </div>
+
+            {/* Bloque 3: Seguridad Social */}
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ShieldCheck size={13} style={{ color: '#60A5FA' }} /> Seguridad Social
+              </div>
+              <DataRow label="EPS" value={selectedEmp.eps || '—'} />
+              <DataRow label="Pensión" value={selectedEmp.pension || '—'} />
+              <DataRow label="Cesantías" value={selectedEmp.cesantias || '—'} />
+            </div>
+
+            {/* Bloque 4: En caso de emergencia */}
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <HeartPulse size={13} style={{ color: '#F87171' }} /> En caso de emergencia
+              </div>
+              {contactosEmergencia.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic', padding: '10px 0' }}>
+                  Sin contactos de emergencia registrados.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {contactosEmergencia.map((c, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '8px 10px', borderRadius: 10,
+                        background: 'rgba(15, 23, 42, 0.55)', border: '1px solid rgba(148, 163, 184, 0.14)',
+                      }}
+                    >
+                      <div style={{
+                        width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                        background: 'rgba(245, 158, 11, 0.18)', color: '#FBBF24',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Phone size={13} />
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#F1F5F9', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span>{c.nombre || 'Contacto'}</span>
+                          {c.parentesco && (
+                            <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 500 }}>
+                              ({c.parentesco})
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: '#94A3B8' }}>
+                          {c.telefono || 'Sin teléfono'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Bloque 5: Datos bancarios */}
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Landmark size={13} style={{ color: '#A78BFA' }} /> Datos bancarios
+              </div>
+              <DataRow label="Banco" value={selectedEmp.banco || '—'} />
+              <DataRow label="Tipo de cuenta" value={selectedEmp.tipo_cuenta || '—'} />
+              <DataRow label="Número de cuenta" value={selectedEmp.numero_cuenta || '—'} />
+            </div>
+
+            {/* Bloque 6: Historial de contrato */}
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <FileSpreadsheet size={13} style={{ color: '#FBBF24' }} /> Historial de contrato
+              </div>
+              <DataRow label="Primer ingreso (subsidiaria)" value={formatDDMMYYYY(fechaPrimerIngreso)} />
+              <DataRow label="Fecha de terminación anterior" value={formatDDMMYYYY(fechaTerminacionAnterior)} />
+              <DataRow label={`Inicio en ${nombreEmpresaActiva}`} value={formatDDMMYYYY(fechaInicioActual)} />
+            </div>
+          </div>
+
+          {/* ── 4. BLOQUES INFERIORES: VACACIONES, PROCESOS Y PESTAÑAS DE PERIODOS / NOVEDADES ── */}
+
+          {/* 4A. Vacaciones y Saldo Disponible */}
+          <div className="emp-dark-accordion">
+            <button
+              type="button"
+              onClick={() => toggleSection('vacaciones')}
+              className="emp-dark-accordion-hdr"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span>🌴</span>
+                <span style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                  Vacaciones y Saldo Disponible ({saldoVac.saldoPendiente}d disponibles)
+                </span>
+                {vacacionActiva && (
                   <span style={{
-                    fontSize: 13,
-                    fontWeight: 800,
-                    color: vacacionActiva.estaDeVacaciones
-                      ? (vacacionActiva.esUltimoDia ? '#92400E' : '#1E40AF')
-                      : '#5B21B6'
-                  }}>
-                    {vacacionActiva.estaDeVacaciones
-                      ? (vacacionActiva.esUltimoDia ? 'Último día de vacaciones' : '🌴 Actualmente en Vacaciones')
-                      : '🌴 Vacaciones programadas'}
-                  </span>
-                  <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    background: vacacionActiva.estaDeVacaciones
-                      ? (vacacionActiva.esUltimoDia ? '#B45309' : '#1D4ED8')
-                      : '#6D28D9',
-                    color: '#FFFFFF',
+                    fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                    background: 'rgba(56, 189, 248, 0.2)', color: '#7DD3FC',
                   }}>
                     {vacacionActiva.countdownTexto}
                   </span>
-                </div>
-                <div style={{
-                  fontSize: 12,
-                  color: vacacionActiva.estaDeVacaciones
-                    ? (vacacionActiva.esUltimoDia ? '#78350F' : '#1E3A8A')
-                    : '#4C1D95',
-                  marginTop: 2
-                }}>
-                  Periodo del <strong>{formatFecha(vacacionActiva.fechaInicio)}</strong> hasta el <strong>{formatFecha(vacacionActiva.fechaFin)}</strong>
-                  {vacacionActiva.estaDeVacaciones ? (
-                    vacacionActiva.esUltimoDia
-                      ? ' • Regresa a labores el próximo día hábil.'
-                      : ` • Faltan ${vacacionActiva.diffDays} día${vacacionActiva.diffDays > 1 ? 's' : ''} calendario para finalizar su periodo de descanso.`
-                  ) : (
-                    ` • Faltan ${vacacionActiva.diasParaInicio} día${vacacionActiva.diasParaInicio > 1 ? 's' : ''} calendario para el inicio de su periodo de descanso.`
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Resumen Detallado de Vacaciones del Periodo Vigente */}
-          <div style={{ marginBottom: 18, background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '14px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 14 }}>🌴</span>
-                <span style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text)' }}>
-                  Vacaciones — Periodo Vigente
-                </span>
-                {periodoActivo && (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    (Periodo #{periodoActivo.numero_periodo || 1}{periodoActivo.fecha_ingreso ? ` desde ${periodoActivo.fecha_ingreso}` : ''})
-                  </span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {antig?.anios ? `${antig.anios} año${antig.anios !== 1 ? 's' : ''} cumplido${antig.anios !== 1 ? 's' : ''}` : 'Menos de 1 año'}
-              </div>
-            </div>
+              {openSections.vacaciones ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+            </button>
 
-            {/* 4 KPIs de Vacaciones */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 14 }}>
-              {/* Días causados acumulados */}
-              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#334155' }}>{saldoVac.diasCausados}d</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginTop: 2 }}>Días causados</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>15d por año cumplido</div>
-              </div>
-
-              {/* Días ya tomados / ajuste manual histórico si existen */}
-              {saldoVac.diasManuales > 0 && (
-                <div style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#EA580C' }}>{saldoVac.diasManuales}d</div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#C2410C', marginTop: 2 }}>Tomados (histórico)</div>
-                  <div style={{ fontSize: 10, color: '#9A3412' }}>Ajuste en ficha</div>
+            {openSections.vacaciones && (
+              <div style={{ padding: '0 16px 14px', borderTop: '1px solid rgba(51, 65, 85, 0.5)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: 8, marginTop: 12, marginBottom: vacaciones.length > 0 ? 12 : 0 }}>
+                  <div style={{ background: '#0F172A', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#E2E8F0' }}>{saldoVac.diasCausados}d</div>
+                    <div style={{ fontSize: 10.5, color: '#94A3B8' }}>Días causados</div>
+                  </div>
+                  {saldoVac.diasManuales > 0 && (
+                    <div style={{ background: '#0F172A', border: '1px solid rgba(249, 115, 22, 0.4)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#FB923C' }}>{saldoVac.diasManuales}d</div>
+                      <div style={{ fontSize: 10.5, color: '#FDBA74' }}>Tomados (histórico)</div>
+                    </div>
+                  )}
+                  <div style={{ background: '#0F172A', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#34D399' }}>{saldoVac.diasDisfrutados}d</div>
+                    <div style={{ fontSize: 10.5, color: '#6EE7B7' }}>Disfrutados</div>
+                  </div>
+                  <div style={{ background: '#0F172A', border: '1px solid rgba(234, 179, 8, 0.35)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#FACC15' }}>{saldoVac.diasEnDinero}d</div>
+                    <div style={{ fontSize: 10.5, color: '#FDE047' }}>En dinero</div>
+                  </div>
+                  <div style={{ background: '#0F172A', border: '1px solid rgba(56, 189, 248, 0.45)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#38BDF8' }}>{saldoVac.saldoPendiente}d</div>
+                    <div style={{ fontSize: 10.5, color: '#7DD3FC' }}>Saldo disponible</div>
+                  </div>
                 </div>
-              )}
 
-              {/* Días disfrutados tomados en tiempo */}
-              <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#16A34A' }}>{saldoVac.diasDisfrutados}d</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#15803D', marginTop: 2 }}>Disfrutados (tiempo)</div>
-                <div style={{ fontSize: 10, color: '#166534' }}>Físicos tomados</div>
-              </div>
-
-              {/* Días compensados en dinero */}
-              <div style={{ background: '#FEFCE8', border: '1px solid #FEF08A', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#CA8A04' }}>{saldoVac.diasEnDinero}d</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#A16207', marginTop: 2 }}>En dinero</div>
-                <div style={{ fontSize: 10, color: '#854D0E' }}>Compensados</div>
-              </div>
-
-              {/* Saldo de días restantes disponibles */}
-              <div style={{
-                background: saldoVac.saldoPendiente > 0 ? '#EFF6FF' : '#F3F4F6',
-                border: `1px solid ${saldoVac.saldoPendiente > 0 ? '#BFDBFE' : '#E5E7EB'}`,
-                borderRadius: 8,
-                padding: '10px 12px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: saldoVac.saldoPendiente > 0 ? '#2563EB' : '#6B7280' }}>
-                  {saldoVac.saldoPendiente}d
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: saldoVac.saldoPendiente > 0 ? '#1D4ED8' : '#4B5563', marginTop: 2 }}>
-                  Saldo disponible
-                </div>
-                <div style={{ fontSize: 10, color: saldoVac.saldoPendiente > 0 ? '#1E40AF' : '#6B7280' }}>
-                  {saldoVac.saldoPendiente > 0 ? 'Días restantes' : 'Sin saldo disponible'}
-                </div>
-              </div>
-            </div>
-
-            {/* Desglose de cada solicitud registrada */}
-            {vacaciones && vacaciones.length > 0 ? (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                  Desglose de solicitudes ({vacaciones.length})
-                </div>
-                <div className="table-container" style={{ border: 'none', margin: 0 }}>
-                  <table style={{ fontSize: 11.5 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '6px 8px' }}>Rango de fechas</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'center' }}>Días tiempo</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'center' }}>Días dinero</th>
-                        <th style={{ padding: '6px 8px' }}>Tipo</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'center' }}>Estado</th>
-                        <th style={{ padding: '6px 8px' }}>Observación</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {vacaciones.map(v => {
-                        const dTiempo = v.dias_disfrutados != null && v.dias_disfrutados !== ''
-                          ? v.dias_disfrutados
-                          : (v.fecha_inicio && v.fecha_fin ? diasHabilesEntre(v.fecha_inicio, v.fecha_fin) : (v.tipo_vacacion !== 'Vacaciones en dinero' ? v.total_dias : '—'))
-                        const dDinero = v.dias_en_dinero != null && v.dias_en_dinero !== ''
-                          ? v.dias_en_dinero
-                          : (v.tipo_vacacion === 'Vacaciones en dinero' ? v.total_dias : '—')
-                        return (
-                          <tr key={v.id}>
-                            <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
-                              {v.fecha_inicio ? `${formatFecha(v.fecha_inicio)} → ${v.fecha_fin ? formatFecha(v.fecha_fin) : '—'}` : 'Sin fecha (compensación)'}
-                            </td>
-                            <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600 }}>
-                              {dTiempo !== '—' && dTiempo != null ? `${dTiempo}d` : '—'}
-                            </td>
-                            <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600 }}>
-                              {dDinero !== '—' && dDinero != null && Number(dDinero) > 0 ? (
-                                <span style={{ color: '#B45309', background: '#FEF3C7', padding: '1px 6px', borderRadius: 999, fontSize: 10.5 }}>
-                                  💰 {dDinero}d
+                {vacaciones && vacaciones.length > 0 && (
+                  <div className="emp-dark-table-wrap">
+                    <table className="emp-dark-table">
+                      <thead>
+                        <tr>
+                          <th>Rango de fechas</th>
+                          <th style={{ textAlign: 'center' }}>Días tiempo</th>
+                          <th style={{ textAlign: 'center' }}>Días dinero</th>
+                          <th style={{ textAlign: 'center' }}>Estado</th>
+                          <th>Observación</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vacaciones.map(v => {
+                          const dTiempo = v.dias_disfrutados != null && v.dias_disfrutados !== ''
+                            ? v.dias_disfrutados
+                            : (v.fecha_inicio && v.fecha_fin ? diasHabilesEntre(v.fecha_inicio, v.fecha_fin) : (v.tipo_vacacion !== 'Vacaciones en dinero' ? v.total_dias : '—'))
+                          const dDinero = v.dias_en_dinero != null && v.dias_en_dinero !== ''
+                            ? v.dias_en_dinero
+                            : (v.tipo_vacacion === 'Vacaciones en dinero' ? v.total_dias : '—')
+                          const estado = v.estado || 'Pendiente'
+                          const esOk = estado === 'Aprobada' || estado === 'Disfrutadas'
+                          return (
+                            <tr key={v.id}>
+                              <td className="emp-cell-date">
+                                {v.fecha_inicio ? `${formatFecha(v.fecha_inicio)} → ${v.fecha_fin ? formatFecha(v.fecha_fin) : '—'}` : 'Sin fecha (compensación)'}
+                              </td>
+                              <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                {dTiempo !== '—' && dTiempo != null ? `${dTiempo}d` : '—'}
+                              </td>
+                              <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                {dDinero !== '—' && dDinero != null && Number(dDinero) > 0 ? `${dDinero}d` : '—'}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <span style={{
+                                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999,
+                                  background: esOk ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)',
+                                  color: esOk ? '#6EE7B7' : '#FCD34D',
+                                  border: `1px solid ${esOk ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                                }}>
+                                  {estado}
                                 </span>
-                              ) : '—'}
-                            </td>
-                            <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{v.tipo_vacacion || 'Vacaciones'}</td>
-                            <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                              <span style={{
-                                padding: '2px 8px',
-                                borderRadius: 12,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                background: v.estado === 'Aprobada' ? 'var(--success-bg)' : v.estado === 'En curso' ? '#DBEAFE' : v.estado === 'Rechazada' ? 'var(--danger-bg)' : '#FEF3C7',
-                                color: v.estado === 'Aprobada' ? 'var(--success-text)' : v.estado === 'En curso' ? '#1D4ED8' : v.estado === 'Rechazada' ? 'var(--danger-text)' : '#92400E',
-                              }}>
-                                {v.estado || 'Pendiente'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '6px 8px', color: 'var(--text-muted)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v.observacion_contable || v.observacion || ''}>
-                              {v.observacion_contable || v.observacion || '—'}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '6px 0' }}>
-                No registra solicitudes de vacaciones en este periodo.
+                              </td>
+                              <td style={{ color: '#94A3B8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {v.observacion_contable || v.observacion || '—'}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>
-          {/* Historial de Contratos / Periodos */}
-          {listaPeriodos.length > 0 && (
-            <div style={{ marginBottom: 18, background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span>📜 Periodos Laborales ({listaPeriodos.length})</span>
-                  {periodoActivo?.continuidad_laboral && (
-                    <span style={{ background: '#FDF2F8', color: '#BE185D', padding: '1px 7px', borderRadius: 20, fontSize: 10, fontWeight: 700, border: '1px solid #FBCFE8' }}>
-                      ⭐ Continuidad ({periodoActivo.motivo_transicion === 'ascenso' ? 'Ascenso' : 'Cambio cargo'})
-                    </span>
-                  )}
-                  {listaPeriodos.length > 1 && !periodoActivo?.continuidad_laboral && (
-                    <span style={{ background: '#F3E8FF', color: '#7E22CE', padding: '1px 7px', borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
-                      Reintegrado
-                    </span>
-                  )}
-                </div>
-                {onReintegrar && (
-                  <button
-                    type="button"
-                    className="btn btn-xs"
-                    onClick={() => {
-                      onClose()
-                      onReintegrar(selectedEmp)
-                    }}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: '3px 8px',
-                      borderRadius: 6,
-                      background: 'var(--primary-light)',
-                      color: 'var(--primary)',
-                      border: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Award size={12} /> Registrar Ascenso / Movimiento
-                  </button>
-                )}
-              </div>
-              <div className="table-container" style={{ border: 'none', margin: 0 }}>
-                <table style={{ fontSize: 12 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ padding: '6px 8px' }}>Periodo</th>
-                      <th style={{ padding: '6px 8px' }}>Ingreso</th>
-                      <th style={{ padding: '6px 8px' }}>Retiro</th>
-                      <th style={{ padding: '6px 8px' }}>Área / Cargo</th>
-                      <th style={{ textAlign: 'center', padding: '6px 8px' }}>Tipo</th>
-                      <th style={{ textAlign: 'center', padding: '6px 8px' }}>Estado</th>
-                      <th style={{ padding: '6px 8px' }}>Detalles</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {listaPeriodos.map(p => (
-                      <tr key={p.id || p.numero_periodo}>
-                        <td style={{ fontWeight: 700, padding: '6px 8px' }}>#{p.numero_periodo}</td>
-                        <td style={{ padding: '6px 8px' }}>{p.fecha_ingreso || '—'}</td>
-                        <td style={{ padding: '6px 8px', color: p.fecha_retiro ? 'var(--danger-text)' : 'inherit' }}>{p.fecha_retiro || '—'}</td>
-                        <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{[p.dependencia, p.cargo].filter(Boolean).join(' · ') || '—'}</td>
-                        <td style={{ textAlign: 'center', padding: '6px 8px' }}>
-                          {p.continuidad_laboral ? (
-                            <span style={{ background: '#FDF2F8', color: '#BE185D', borderRadius: 12, padding: '1px 6px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                              ⭐ Continuidad
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)', fontSize: 10.5 }}>
-                              {p.numero_periodo === 1 ? 'Inicial' : 'Reingreso'}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ textAlign: 'center', padding: '6px 8px' }}>
-                          {p.es_periodo_actual
-                            ? <span style={{ background: 'var(--success-bg)', color: 'var(--success-text)', borderRadius: 12, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>Vigente</span>
-                            : <span style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 12, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>Cerrado</span>}
-                        </td>
-                        <td style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 8px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.observaciones || ''}>
-                          {p.observaciones || '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
 
-          {/* Historial de Procesos Disciplinarios */}
-          {(procesos && procesos.length > 0) || initialSection === 'procesos' ? (
+          {/* 4B. Procesos Disciplinarios */}
+          {(procesos.length > 0 || initialSection === 'procesos') && (
             <div
               ref={procesosRef}
+              className="emp-dark-accordion"
               style={{
-                marginBottom: 18,
-                background: initialSection === 'procesos' ? '#FFFBEB' : 'var(--surface)',
-                borderRadius: 10,
-                border: initialSection === 'procesos' ? '1.5px solid #F59E0B' : '1px solid var(--border)',
-                padding: '12px 14px',
-                transition: 'all .3s ease',
+                border: initialSection === 'procesos' ? '1.5px solid #F59E0B' : undefined,
               }}
             >
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9A3412', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Scale size={13} style={{ color: '#EA580C' }} />
-                  Procesos Disciplinarios ({procesos.length})
+              <button
+                type="button"
+                onClick={() => toggleSection('procesos')}
+                className="emp-dark-accordion-hdr"
+                style={{ color: '#FBBF24' }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                  <Scale size={14} /> Procesos Disciplinarios ({procesos.length})
                 </span>
-              </div>
-              {procesos.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 0' }}>
-                  No registra procesos disciplinarios.
-                </div>
-              ) : (
-                <div className="table-container" style={{ border: 'none', margin: 0 }}>
-                  <table style={{ fontSize: 12 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '6px 8px' }}>Concepto</th>
-                        <th style={{ padding: '6px 8px' }}>Fecha</th>
-                        <th style={{ padding: '6px 8px' }}>Motivo / Observación</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {procesos.map(p => {
-                        const fEvento = p.fecha
-                          ? String(p.fecha).slice(0, 10)
-                          : p.fecha_inicio
-                            ? (p.fecha_fin && p.fecha_fin !== p.fecha_inicio
-                                ? `${String(p.fecha_inicio).slice(0, 10)} → ${String(p.fecha_fin).slice(0, 10)}`
-                                : String(p.fecha_inicio).slice(0, 10))
-                            : (p.created_at ? String(p.created_at).slice(0, 10) : '—')
-                        return (
-                          <tr key={p.id}>
-                            <td style={{ padding: '6px 8px', fontWeight: 700, color: '#9A3412', whiteSpace: 'nowrap' }}>
-                              {p.concepto}
-                            </td>
-                            <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
-                              {fEvento}{p.hora ? ` (${String(p.hora).slice(0, 5)})` : ''}
-                            </td>
-                            <td style={{ padding: '6px 8px', color: 'var(--text)' }}>
-                              {p.observacion || '—'}
-                            </td>
+                {openSections.procesos ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+              </button>
+
+              {openSections.procesos && (
+                <div style={{ padding: '12px 16px 14px', borderTop: '1px solid rgba(51, 65, 85, 0.5)' }}>
+                  {procesos.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#94A3B8', padding: '6px 0' }}>
+                      No registra procesos disciplinarios.
+                    </div>
+                  ) : (
+                    <div className="emp-dark-table-wrap">
+                      <table className="emp-dark-table">
+                        <thead>
+                          <tr>
+                            <th>Concepto</th>
+                            <th>Fecha</th>
+                            <th>Motivo / Observación</th>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {procesos.map(p => {
+                            const fEvento = p.fecha
+                              ? String(p.fecha).slice(0, 10)
+                              : p.fecha_inicio
+                                ? (p.fecha_fin && p.fecha_fin !== p.fecha_inicio
+                                    ? `${String(p.fecha_inicio).slice(0, 10)} → ${String(p.fecha_fin).slice(0, 10)}`
+                                    : String(p.fecha_inicio).slice(0, 10))
+                                : (p.created_at ? String(p.created_at).slice(0, 10) : '—')
+                            return (
+                              <tr key={p.id}>
+                                <td style={{ fontWeight: 700, color: '#FBBF24', whiteSpace: 'nowrap' }}>
+                                  {p.concepto}
+                                </td>
+                                <td className="emp-cell-date">
+                                  {fEvento}{p.hora ? ` (${String(p.hora).slice(0, 5)})` : ''}
+                                </td>
+                                <td style={{ color: '#E2E8F0' }}>
+                                  {p.observacion || '—'}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          ) : null}
-
-          {!nov || nov.novedades.length === 0 ? (
-            <div className="empty-state"><p>Este empleado no tiene novedades registradas.</p></div>
-          ) : (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 18 }}>
-                <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '12px 14px', textAlign: 'center', border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#2563EB' }}>{nov.novedades.length}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Total novedades</div>
-                </div>
-                {CONCEPTOS_CON_FECHA.filter(c => nov.porConcepto[c]).map(concepto => {
-                  const data = nov.porConcepto[concepto]
-                  const color = CONCEPTO_COLORS[concepto] || '#374151'
-                  return (
-                    <div key={concepto} style={{ background: color + '10', border: `1px solid ${color}35`, borderRadius: 8, padding: '12px 14px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color }}>{data.episodios}</div>
-                      <div style={{ fontSize: 12, color, fontWeight: 600, marginBottom: 2 }}>{concepto}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{data.dias.toFixed(0)} día{data.dias !== 1 ? 's' : ''}</div>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="table-container">
-                <table>
-                  <thead><tr><th>Concepto</th><th>F. Inicio</th><th>F. Fin</th><th>Días</th><th>Periodo</th></tr></thead>
-                  <tbody>
-                    {[...nov.novedades].sort((a, b) => (b.fecha_inicio || '').localeCompare(a.fecha_inicio || '')).map(r => {
-                      const tipo = normalizarConcepto(r.concepto)
-                      const color = CONCEPTO_COLORS[tipo] || '#374151'
-                      return (
-                        <tr key={r.id}>
-                          <td><span className="badge tag-c" style={{ '--tag': color }}>{r.concepto}</span></td>
-                          <td>{r.fecha_inicio || '—'}</td>
-                          <td>{r.fecha_fin || '—'}</td>
-                          <td>{r.total_dias ?? '—'}</td>
-                          <td style={{ color: 'var(--text-muted)' }}>{r.periodo || '—'}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
           )}
+
+          {/* 4C. Pestañas Conmutables: Periodos Laborales e Historial de Novedades */}
+          <div className="emp-dark-accordion" style={{ marginBottom: 0 }}>
+            <div className="emp-dark-tabs-bar">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveHistoryTab('periodos')}
+                  className={`emp-dark-tab-btn ${activeHistoryTab === 'periodos' ? 'active' : ''}`}
+                >
+                  <span>📜</span>
+                  <span>Periodos Laborales</span>
+                  <span className="emp-dark-tab-count">{listaPeriodos.length}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveHistoryTab('novedades')}
+                  className={`emp-dark-tab-btn ${activeHistoryTab === 'novedades' ? 'active' : ''}`}
+                >
+                  <span>📋</span>
+                  <span>Historial de Novedades</span>
+                  <span className="emp-dark-tab-count">{nov ? nov.novedades.length : 0}</span>
+                </button>
+              </div>
+
+              {onReintegrar && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose()
+                    onReintegrar(selectedEmp)
+                  }}
+                  className="emp-dark-action-btn"
+                >
+                  <Award size={13} /> Registrar Ascenso / Movimiento
+                </button>
+              )}
+            </div>
+
+            <div style={{ padding: '14px 16px' }}>
+              {activeHistoryTab === 'periodos' ? (
+                <div className="emp-dark-table-wrap">
+                  <table className="emp-dark-table">
+                    <thead>
+                      <tr>
+                        <th>Periodo</th>
+                        <th>Ingreso</th>
+                        <th>Retiro</th>
+                        <th>Área / Cargo</th>
+                        <th style={{ textAlign: 'center' }}>Estado</th>
+                        <th>Detalles</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {listaPeriodos.map(p => (
+                        <tr key={p.id || p.numero_periodo}>
+                          <td>
+                            <span className="emp-period-badge">#{p.numero_periodo}</span>
+                          </td>
+                          <td className="emp-cell-date">{p.fecha_ingreso || '—'}</td>
+                          <td className="emp-cell-date" style={{ color: p.fecha_retiro ? '#FCA5A5' : undefined }}>
+                            {p.fecha_retiro || '—'}
+                          </td>
+                          <td style={{ color: '#CBD5E1' }}>
+                            {[p.dependencia, p.cargo].filter(Boolean).join(' · ') || '—'}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '3px 9px',
+                              borderRadius: 999,
+                              background: p.es_periodo_actual ? 'rgba(16, 185, 129, 0.16)' : 'rgba(148, 163, 184, 0.14)',
+                              color: p.es_periodo_actual ? '#6EE7B7' : '#94A3B8',
+                              border: `1px solid ${p.es_periodo_actual ? 'rgba(16, 185, 129, 0.35)' : 'rgba(148, 163, 184, 0.28)'}`,
+                            }}>
+                              {p.es_periodo_actual ? 'Vigente' : 'Cerrado'}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: 12, color: '#94A3B8' }}>
+                            {p.observaciones || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                !nov || nov.novedades.length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: '#94A3B8', textAlign: 'center', padding: '14px 0' }}>
+                    Este empleado no tiene novedades registradas.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
+                      <div style={{ background: '#0F172A', borderRadius: 8, padding: '8px 10px', textAlign: 'center', border: '1px solid #334155' }}>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#38BDF8' }}>{nov.novedades.length}</div>
+                        <div style={{ fontSize: 11, color: '#94A3B8' }}>Total novedades</div>
+                      </div>
+                      {CONCEPTOS_CON_FECHA.filter(c => nov.porConcepto[c]).map(concepto => {
+                        const data = nov.porConcepto[concepto]
+                        const color = CONCEPTO_COLORS[concepto] || '#60A5FA'
+                        return (
+                          <div key={concepto} style={{ background: '#0F172A', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                            <div style={{ fontSize: 18, fontWeight: 800, color }}>{data.episodios}</div>
+                            <div style={{ fontSize: 11, color: '#E2E8F0', fontWeight: 600 }}>{concepto}</div>
+                            <div style={{ fontSize: 10, color: '#94A3B8' }}>{data.dias.toFixed(0)} día{data.dias !== 1 ? 's' : ''}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="emp-dark-table-wrap">
+                      <table className="emp-dark-table">
+                        <thead>
+                          <tr>
+                            <th>Concepto</th>
+                            <th>F. Inicio</th>
+                            <th>F. Fin</th>
+                            <th style={{ textAlign: 'center' }}>Días</th>
+                            <th>Periodo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...nov.novedades].sort((a, b) => (b.fecha_inicio || '').localeCompare(a.fecha_inicio || '')).map(r => {
+                            const tipo = normalizarConcepto(r.concepto)
+                            const color = CONCEPTO_COLORS[tipo] || '#60A5FA'
+                            return (
+                              <tr key={r.id}>
+                                <td>
+                                  <span className="emp-dark-tag" style={{ '--tag': color }}>
+                                    {r.concepto}
+                                  </span>
+                                </td>
+                                <td className="emp-cell-date">{r.fecha_inicio || '—'}</td>
+                                <td className="emp-cell-date">{r.fecha_fin || '—'}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.total_dias ?? '—'}</td>
+                                <td style={{ color: '#CBD5E1' }}>{r.periodo || '—'}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )
+              )}
+            </div>
+          </div>
         </div>
-        <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
-          <button className="btn btn-primary" onClick={onEdit}><Edit2 size={14} /> Editar empleado</button>
+
+        {/* ── FOOTER ── */}
+        <div style={{
+          padding: '14px 24px',
+          background: '#0F172A',
+          borderTop: '1px solid #1E293B',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 10,
+        }}>
+          <button
+            className="btn btn-ghost"
+            onClick={onClose}
+            style={{ color: '#CBD5E1', borderColor: '#334155' }}
+          >
+            Cerrar
+          </button>
+          <button className="btn btn-primary" onClick={onEdit}>
+            <Edit2 size={14} /> Editar expediente
+          </button>
         </div>
       </div>
     </div>
