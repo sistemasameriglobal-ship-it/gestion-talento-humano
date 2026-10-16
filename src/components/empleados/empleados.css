@@ -24,7 +24,7 @@
   animation: empBackdropIn .18s ease forwards;
 }
 
-/* ── Modal Box Adaptativo ─────────────────────────────────── */
+/* ── Modal Box Adaptativo (Estructura Flex con Scroll Central) ── */
 .emp-modal-box {
   animation: empModalIn .22s cubic-bezier(.16,1,.3,1) forwards;
   background: var(--surface) !important;
@@ -32,7 +32,10 @@
   border: 1px solid var(--border) !important;
   border-radius: 16px !important;
   box-shadow: var(--shadow-md), 0 20px 60px rgba(0, 0, 0, 0.15) !important;
-  overflow: hidden;
+  max-height: 92vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
 }
 
 :root[data-theme="dark"] .emp-modal-box {
@@ -42,8 +45,13 @@
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55) !important;
 }
 
-/* Scrollbar fino y elegante en el cuerpo de los modales */
+/* Cuerpo central con scroll vertical garantizado */
 .emp-modal-box .modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  display: block !important;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
@@ -63,6 +71,7 @@
 
 /* ── Cabecera de modal ────────────────────────────────────── */
 .emp-modal-hdr {
+  flex-shrink: 0 !important;
   padding: 20px 24px 16px;
   background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
   border-bottom: 1px solid var(--border);
@@ -663,4 +672,258 @@
   color: color-mix(in srgb, var(--tag, var(--secondary)) 40%, #ffffff);
   border-color: color-mix(in srgb, var(--tag, var(--secondary)) 38%, transparent);
 }
+
+/* ── Badges de Estado de Alto Contraste (Modo Claro y Oscuro) ── */
+.emp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.emp-badge--sm {
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
+.emp-badge--activo {
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  color: #047857;
+}
+
+:root[data-theme="dark"] .emp-badge--activo {
+  background: rgba(6, 78, 59, 0.45);
+  border-color: rgba(4, 120, 87, 0.6);
+  color: #6EE7B7;
+}
+
+.emp-badge--inactivo {
+  background: #FFF1F2;
+  border: 1px solid #FECDD3;
+  color: #BE123C;
+}
+
+:root[data-theme="dark"] .emp-badge--inactivo {
+  background: rgba(76, 5, 25, 0.45);
+  border-color: rgba(159, 18, 57, 0.6);
+  color: #FDA4AF;
+}
+
+.emp-badge--liquidado {
+  background: #ECFDF5;
+  border: 1px solid #6EE7B7;
+  color: #065F46;
+}
+
+:root[data-theme="dark"] .emp-badge--liquidado {
+  background: rgba(6, 78, 59, 0.45);
+  border-color: rgba(4, 120, 87, 0.6);
+  color: #6EE7B7;
+}
+
+.emp-badge--pendiente-liq {
+  background: #FFFBEB;
+  border: 1px solid #FCD34D;
+  color: #92400E;
+}
+
+:root[data-theme="dark"] .emp-badge--pendiente-liq {
+  background: rgba(69, 26, 3, 0.5);
+  border-color: rgba(180, 83, 9, 0.65);
+  color: #FDE68A;
+}
+
+.emp-badge-liq-link {
+  color: #78350F;
+  text-decoration: underline;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.emp-badge-liq-link:hover {
+  color: #451A03;
+}
+
+:root[data-theme="dark"] .emp-badge-liq-link {
+  color: #FEF3C7;
+}
+
+:root[data-theme="dark"] .emp-badge-liq-link:hover {
+  color: #FFFFFF;
+}
+
+/* ── Bloque Call-To-Action de Liquidación en Tarjetas (EmpleadoCards) ── */
+@keyframes empPulseSubtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.72; transform: scale(0.94); }
+}
+
+.emp-liq-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.emp-liq-banner--pending {
+  background: rgba(255, 251, 235, 0.92);
+  border: 1px solid rgba(252, 211, 77, 0.85);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.emp-liq-banner--pending:hover {
+  background: rgba(254, 243, 199, 0.85);
+}
+
+:root[data-theme="dark"] .emp-liq-banner--pending {
+  background: rgba(69, 26, 3, 0.42);
+  border-color: rgba(180, 83, 9, 0.6);
+}
+
+:root[data-theme="dark"] .emp-liq-banner--pending:hover {
+  background: rgba(69, 26, 3, 0.62);
+}
+
+.emp-liq-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.emp-liq-icon-pending {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: #FEF3C7;
+  color: #D97706;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  animation: empPulseSubtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+:root[data-theme="dark"] .emp-liq-icon-pending {
+  background: rgba(120, 53, 15, 0.55);
+  color: #FBBF24;
+}
+
+.emp-liq-text-pending {
+  font-size: 12px;
+  font-weight: 700;
+  color: #78350F;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:root[data-theme="dark"] .emp-liq-text-pending {
+  color: #FDE68A;
+}
+
+.emp-liq-btn {
+  background: #D97706;
+  color: #FFFFFF;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.emp-liq-btn:hover {
+  background: #B45309;
+}
+
+.emp-liq-btn:active {
+  transform: scale(0.95);
+}
+
+:root[data-theme="dark"] .emp-liq-btn {
+  background: #F59E0B;
+  color: #020617;
+}
+
+:root[data-theme="dark"] .emp-liq-btn:hover {
+  background: #FBBF24;
+}
+
+.emp-liq-banner--done {
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  color: #065F46;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.emp-liq-banner--done:hover {
+  background: rgba(209, 250, 229, 0.75);
+}
+
+:root[data-theme="dark"] .emp-liq-banner--done {
+  background: rgba(6, 78, 59, 0.4);
+  border-color: rgba(6, 95, 70, 0.55);
+  color: #6EE7B7;
+}
+
+:root[data-theme="dark"] .emp-liq-banner--done:hover {
+  background: rgba(6, 78, 59, 0.6);
+}
+
+.emp-liq-icon-done {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: rgba(209, 250, 229, 0.9);
+  color: #047857;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+:root[data-theme="dark"] .emp-liq-icon-done {
+  background: rgba(6, 95, 70, 0.55);
+  color: #6EE7B7;
+}
+
+.emp-liq-text-done {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emp-liq-detail-link {
+  font-size: 11px;
+  font-weight: 600;
+  color: #047857;
+  text-decoration: underline;
+  flex-shrink: 0;
+}
+
+:root[data-theme="dark"] .emp-liq-detail-link {
+  color: #6EE7B7;
+}
+
 

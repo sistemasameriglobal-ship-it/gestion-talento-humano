@@ -139,14 +139,19 @@ export default function EmpleadoHistorialModal({
   return (
     <div className="modal-backdrop emp-modal-wrap" onClick={e => e.target === e.currentTarget && onClose()}>
       <div
-        className="modal emp-modal-box max-h-[90vh] flex flex-col overflow-hidden rounded-2xl"
+        className="modal emp-modal-box"
         style={{
           maxWidth: 840,
           width: '96vw',
+          maxHeight: '92vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
         }}
       >
         {/* ── 1. CABECERA PRINCIPAL ── */}
-        <div className="emp-modal-hdr flex-shrink-0" style={{
+        <div className="emp-modal-hdr" style={{
+          flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -167,11 +172,7 @@ export default function EmpleadoHistorialModal({
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.01em' }}>
                   {selectedEmp.nombre_completo}
                 </h2>
-                <span className={
-                  selectedEmp.activo === false
-                    ? "text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/60 dark:text-rose-300"
-                    : "text-xs font-semibold px-2.5 py-1 rounded-full border bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300"
-                }>
+                <span className={`emp-badge ${selectedEmp.activo === false ? 'emp-badge--inactivo' : 'emp-badge--activo'}`}>
                   {selectedEmp.activo === false ? 'Inactivo' : 'Activo'}
                 </span>
 
@@ -180,16 +181,18 @@ export default function EmpleadoHistorialModal({
                     <span
                       onClick={() => { if (onLiquidar) { onClose(); onLiquidar(selectedEmp) } }}
                       title={obsLiq ? `Observaciones: ${obsLiq}` : 'Liquidación registrada'}
-                      className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-700/60 dark:text-emerald-300 cursor-pointer"
+                      className="emp-badge emp-badge--liquidado"
+                      style={{ cursor: onLiquidar ? 'pointer' : 'default' }}
                     >
                       ✓ Liquidado: {fechaLiq ? String(fechaLiq).slice(0, 10) : 'Sí'}
                     </span>
                   ) : (
                     <span
                       onClick={() => { if (onLiquidar) { onClose(); onLiquidar(selectedEmp) } }}
-                      className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/40 dark:border-amber-700/60 dark:text-amber-300 cursor-pointer inline-flex items-center"
+                      className="emp-badge emp-badge--pendiente-liq"
+                      style={{ cursor: onLiquidar ? 'pointer' : 'default' }}
                     >
-                      ⚠️ Pendiente por liquidar {onLiquidar && <span className="text-amber-900 dark:text-amber-200 underline hover:text-amber-950 dark:hover:text-amber-100 font-bold ml-1">• Liquidar</span>}
+                      ⚠️ Pendiente por liquidar {onLiquidar && <span className="emp-badge-liq-link">• Liquidar</span>}
                     </span>
                   )
                 )}
@@ -214,8 +217,17 @@ export default function EmpleadoHistorialModal({
           </button>
         </div>
 
-        {/* ── BODY CON SCROLL ── */}
-        <div className="modal-body flex-1 overflow-y-auto min-h-0 pr-1" style={{ padding: '18px 24px' }}>
+        {/* ── BODY CON SCROLL SUAVE ── */}
+        <div
+          className="modal-body"
+          style={{
+            flex: '1 1 auto',
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: '20px 24px',
+          }}
+        >
 
           {/* ── 2. KPI CARDS SUPERIORES (4 TARJETAS EN FILA) ── */}
           <div style={{
@@ -700,8 +712,17 @@ export default function EmpleadoHistorialModal({
           </div>
         </div>
 
-        {/* ── FOOTER ── */}
-        <div className="emp-modal-footer flex-shrink-0 sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 p-4 flex justify-end gap-3 z-20">
+        {/* ── FOOTER FIJO ── */}
+        <div
+          className="emp-modal-footer"
+          style={{
+            flexShrink: 0,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
           <button
             className="btn btn-ghost"
             onClick={onClose}

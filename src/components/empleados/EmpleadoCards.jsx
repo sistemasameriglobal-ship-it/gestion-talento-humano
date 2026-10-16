@@ -3,8 +3,9 @@
 // -------------------------------------------------------------
 // Vista de tarjetas de empleados con acciones rápidas.
 // =============================================================
-import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale } from 'lucide-react'
+import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale, AlertTriangle, CheckCircle2, ArrowRight, FileText } from 'lucide-react'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
+import './empleados.css'
 
 function iniciales(nombre) {
   const partes = (nombre || '').trim().split(/\s+/).filter(Boolean)
@@ -63,7 +64,7 @@ export default function EmpleadoCards({
             <div
               key={emp.id}
               className="card"
-              style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, opacity: emp.activo === false ? 0.82 : 1, cursor: 'pointer' }}
+              style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, opacity: emp.activo === false ? (estaLiquidado ? 0.84 : 1) : 1, cursor: 'pointer' }}
               onClick={() => onSelect(emp)}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -88,11 +89,7 @@ export default function EmpleadoCards({
                     </div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
-                    <span className={
-                      emp.activo === false
-                        ? "text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/60 dark:text-rose-300"
-                        : "text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300"
-                    }>
+                    <span className={`emp-badge emp-badge--sm ${emp.activo === false ? 'emp-badge--inactivo' : 'emp-badge--activo'}`}>
                       {emp.activo === false ? 'Inactivo' : 'Activo'}
                     </span>
                     {esReintegrado && (
@@ -213,6 +210,71 @@ export default function EmpleadoCards({
                 </div>
               )}
 
+              {/* ── Bloque destacado de liquidación para colaboradores inactivos ── */}
+              {emp.activo === false && (
+                estaLiquidado ? (
+                  <div
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (onLiquidar) onLiquidar(emp)
+                    }}
+                    title={obsLiq ? `Liquidado el ${fechaLiq || '—'}\nObservaciones: ${obsLiq}\n(Clic para ver o editar detalle)` : `Liquidado el ${fechaLiq || '—'} (Clic para ver o editar)`}
+                    className="emp-liq-banner emp-liq-banner--done"
+                  >
+                    <div className="emp-liq-banner-left">
+                      <span className="emp-liq-icon-done">
+                        <CheckCircle2 size={13} strokeWidth={2.5} />
+                      </span>
+                      <span className="emp-liq-text-done">
+                        {fechaLiq ? `Liquidado el ${String(fechaLiq).slice(0, 10)}` : 'Liquidado'}
+                      </span>
+                      {obsLiq && (
+                        <span title={`Observaciones: ${obsLiq}`} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
+                          <FileText size={12} />
+                        </span>
+                      )}
+                    </div>
+                    {onLiquidar && (
+                      <span className="emp-liq-detail-link">
+                        Detalle
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (onLiquidar) onLiquidar(emp)
+                    }}
+                    title="Este excolaborador figura como pendiente por liquidar. Clic para registrar liquidación."
+                    className="emp-liq-banner emp-liq-banner--pending"
+                  >
+                    <div className="emp-liq-banner-left">
+                      <span className="emp-liq-icon-pending">
+                        <AlertTriangle size={13} strokeWidth={2.5} />
+                      </span>
+                      <span className="emp-liq-text-pending">
+                        Pendiente liquidar
+                      </span>
+                    </div>
+
+                    {onLiquidar && (
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation()
+                          onLiquidar(emp)
+                        }}
+                        className="emp-liq-btn"
+                      >
+                        <span>Liquidar</span>
+                        <ArrowRight size={12} strokeWidth={2.5} />
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
+
               {/* Resumen compacto del último proceso disciplinario (solo si tiene procesos) */}
               {ultimoProceso && (
                 <div
@@ -261,33 +323,9 @@ export default function EmpleadoCards({
                 </div>
               )}
 
-              {/* Chips de novedades, vacaciones/liquidación y procesos disciplinarios */}
+              {/* Chips de novedades, vacaciones y procesos disciplinarios */}
               <div style={{ display: 'flex', gap: 6, marginTop: 2, paddingTop: 8, borderTop: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
-                {emp.activo === false ? (
-                  estaLiquidado ? (
-                    <span
-                      onClick={e => {
-                        e.stopPropagation()
-                        if (onLiquidar) onLiquidar(emp)
-                      }}
-                      title={obsLiq ? `Liquidado el ${fechaLiq || '—'}\nObservaciones: ${obsLiq}\n(Clic para editar detalle)` : `Liquidado el ${fechaLiq || '—'} (Clic para ver/editar)`}
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-700/60 dark:text-emerald-300 cursor-pointer"
-                    >
-                      ✓ Liquidado: {fechaLiq ? String(fechaLiq).slice(0, 10) : 'Sí'}
-                    </span>
-                  ) : (
-                    <span
-                      onClick={e => {
-                        e.stopPropagation()
-                        if (onLiquidar) onLiquidar(emp)
-                      }}
-                      title="Este excolaborador aún figura como pendiente por liquidar en contabilidad. Clic para registrar liquidación."
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/40 dark:border-amber-700/60 dark:text-amber-300 cursor-pointer"
-                    >
-                      ⚠️ Pendiente por liquidar {onLiquidar && <span className="text-amber-900 dark:text-amber-200 underline hover:text-amber-950 dark:hover:text-amber-100 font-bold ml-1">• Liquidar</span>}
-                    </span>
-                  )
-                ) : (
+                {emp.activo !== false && (
                   <span
                     title={`Saldo de vacaciones del periodo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d${saldoVac.diasManuales ? `, Tomados histórico: ${saldoVac.diasManuales}d` : ''}, Disfrutados: ${saldoVac.diasDisfrutados}d, En dinero: ${saldoVac.diasEnDinero}d)`}
                     style={{
