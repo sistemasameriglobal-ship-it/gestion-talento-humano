@@ -98,6 +98,7 @@ create table if not exists public.empleados (
   numero_cuenta text,
   contactos_emergencia jsonb default '[]'::jsonb,
   fecha_primer_ingreso date,
+  fecha_terminacion_anterior date,
   fecha_inicio_empresa_actual date
 );
 alter table public.empleados
@@ -126,6 +127,7 @@ alter table public.empleados
   add column if not exists numero_cuenta text,
   add column if not exists contactos_emergencia jsonb default '[]'::jsonb,
   add column if not exists fecha_primer_ingreso date,
+  add column if not exists fecha_terminacion_anterior date,
   add column if not exists fecha_inicio_empresa_actual date;
 
 -- ── perfiles (1:1 con auth.users) ────────────────────────────────────

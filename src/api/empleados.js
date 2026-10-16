@@ -81,6 +81,7 @@ const CAMPOS_EXPEDIENTE_DETALLADO = [
   'numero_cuenta',
   'contactos_emergencia',
   'fecha_primer_ingreso',
+  'fecha_terminacion_anterior',
   'fecha_inicio_empresa_actual',
 ]
 
@@ -98,7 +99,7 @@ function normalizarPayloadEmpleado(payload = {}) {
   if ('tipo_documento' in out) out.tipo_documento = out.tipo_documento || 'CC'
   if ('tipo_cuenta' in out) out.tipo_cuenta = out.tipo_cuenta || 'Ahorros'
 
-  const dateFields = ['fecha_ingreso', 'fecha_retiro', 'fecha_nacimiento', 'fecha_primer_ingreso', 'fecha_inicio_empresa_actual']
+  const dateFields = ['fecha_ingreso', 'fecha_retiro', 'fecha_nacimiento', 'fecha_primer_ingreso', 'fecha_terminacion_anterior', 'fecha_inicio_empresa_actual']
   for (const k of dateFields) {
     if (k in out) {
       out[k] = out[k] ? String(out[k]).slice(0, 10) : null

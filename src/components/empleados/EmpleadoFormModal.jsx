@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import {
-  DEPENDENCIAS, DEP_ICONS, DEP_COLORS,
+  DEPENDENCIAS, DEP_ICONS,
   TIPOS_DOCUMENTO, TIPOS_SANGRE, EPS_LIST, PENSION_LIST,
   CESANTIAS_LIST, BANCOS_LIST, TIPOS_CUENTA, PARENTESCOS_SUGERIDOS,
   calcularEdad, formatCOP,
@@ -39,6 +39,26 @@ export default function EmpleadoFormModal({
 }) {
   const { currentCompany, departamentos } = useCompany()
   const [activeTab, setActiveTab] = useState('todos')
+  const [prevEmpId, setPrevEmpId] = useState(form.id)
+  const [tieneVinculoPrevio, setTieneVinculoPrevio] = useState(() =>
+    Boolean(form.fecha_primer_ingreso || form.fecha_terminacion_anterior)
+  )
+
+  if (form.id !== prevEmpId) {
+    setPrevEmpId(form.id)
+    setTieneVinculoPrevio(Boolean(form.fecha_primer_ingreso || form.fecha_terminacion_anterior))
+  }
+
+  const handleToggleVinculoPrevio = (checked) => {
+    setTieneVinculoPrevio(checked)
+    if (!checked) {
+      setForm(prev => ({
+        ...prev,
+        fecha_primer_ingreso: '',
+        fecha_terminacion_anterior: '',
+      }))
+    }
+  }
 
   const listaDepartamentos = departamentos && departamentos.length > 0 ? departamentos : DEPENDENCIAS
   const nombreEmpresaActiva = currentCompany === 'global_link' ? 'Global Link' : 'AmeriGlobal'
@@ -48,8 +68,6 @@ export default function EmpleadoFormModal({
   const iniciales = form.nombre_completo
     ? form.nombre_completo.trim().split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
     : '?'
-  const gradStart = 'var(--primary)'
-  const gradEnd = 'var(--secondary)'
 
   const edadCalculada = calcularEdad(form.fecha_nacimiento)
 
@@ -107,53 +125,47 @@ export default function EmpleadoFormModal({
 
   return (
     <div className="modal-backdrop emp-modal-wrap" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal emp-modal-box" style={{ maxWidth: 740, width: '96vw' }}>
+      <div
+        className="modal emp-modal-box"
+        style={{
+          maxWidth: 780,
+          width: '96vw',
+        }}
+      >
 
-        {/* ── Header dinámico ── */}
-        <div style={{
-          background: `linear-gradient(135deg, ${gradStart} 0%, ${gradEnd} 100%)`,
-          padding: '20px 24px 16px',
-          borderRadius: '12px 12px 0 0',
-          transition: 'background .4s ease',
-        }}>
+        {/* ── Header adaptativo ── */}
+        <div className="emp-modal-hdr">
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-            {/* Avatar con iniciales */}
-            <div style={{
-              width: 54, height: 54, borderRadius: 14, flexShrink: 0,
-              background: 'rgba(255,255,255,.2)', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: iniciales === '?' ? 22 : 20, fontWeight: 800,
-              color: '#fff', boxShadow: '0 4px 16px rgba(0,0,0,.18)',
-              letterSpacing: '-0.02em',
-              border: '2px solid rgba(255,255,255,.25)',
-            }}>
+            {/* Avatar con iniciales y acento dinámico */}
+            <div className="emp-avatar-accent" style={{ fontSize: iniciales === '?' ? 22 : 19 }}>
               {iniciales === '?' ? <User size={24} strokeWidth={2} /> : iniciales}
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
                 {modal === 'add' ? 'Nuevo Expediente de Colaborador' : 'Editando Expediente Integral'}
               </div>
-              <h2 style={{ color: '#fff', margin: '0 0 6px', fontSize: 17, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <h2 style={{ color: 'var(--text)', margin: '0 0 6px', fontSize: 17, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {form.nombre_completo || 'Nombre del colaborador'}
               </h2>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                 {form.numero_documento && (
-                  <span style={{ background: 'rgba(255,255,255,.18)', color: '#fff', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                  <span style={{ background: 'rgba(var(--secondary-rgb), 0.12)', color: 'var(--secondary)', border: '1px solid rgba(var(--secondary-rgb), 0.3)', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
                     {form.tipo_documento || 'CC'} {form.numero_documento}
                   </span>
                 )}
                 {dep && (
-                  <span style={{ background: 'rgba(255,255,255,.2)', color: '#fff', padding: '2px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)', padding: '2px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
                     {depIcon} {dep}
                   </span>
                 )}
                 {form.cargo && (
-                  <span style={{ color: 'rgba(255,255,255,.8)', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                     · {form.cargo}
                   </span>
                 )}
                 {edadCalculada !== null && (
-                  <span style={{ color: 'rgba(255,255,255,.75)', fontSize: 11 }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
                     · 🎂 {edadCalculada} años
                   </span>
                 )}
@@ -162,8 +174,7 @@ export default function EmpleadoFormModal({
 
             <button
               onClick={onClose}
-              className="modal-close-btn"
-              style={{ border: 'none', borderRadius: 10, color: '#fff', cursor: 'pointer', padding: '8px 10px', display: 'flex', alignItems: 'center', flexShrink: 0, transition: 'background .15s' }}
+              className="emp-close-btn"
             >
               <X size={16} />
             </button>
@@ -172,20 +183,17 @@ export default function EmpleadoFormModal({
           {/* Barra de progreso */}
           <div style={{ marginTop: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', fontWeight: 600 }}>PROGRESO DEL EXPEDIENTE</span>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,.85)', fontWeight: 700 }}>{pct}%</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>PROGRESO DEL EXPEDIENTE</span>
+              <span style={{ fontSize: 10, color: 'var(--secondary)', fontWeight: 700 }}>{pct}%</span>
             </div>
-            <div style={{ height: 3, background: 'rgba(255,255,255,.15)', borderRadius: 99 }}>
-              <div style={{ height: '100%', borderRadius: 99, background: 'rgba(255,255,255,.85)', width: `${pct}%`, transition: 'width .3s ease' }} />
+            <div style={{ height: 3, background: 'var(--border)', borderRadius: 99 }}>
+              <div style={{ height: '100%', borderRadius: 99, background: 'var(--secondary)', width: `${pct}%`, transition: 'width .3s ease' }} />
             </div>
           </div>
         </div>
 
-        {/* ── Pestañas de navegación rápida ── */}
-        <div style={{
-          display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 24px',
-          background: 'var(--surface, var(--bg))', borderBottom: '1px solid var(--border)',
-        }}>
+        {/* ── Pestañas de navegación rápida adaptativas ── */}
+        <div className="emp-tabs-bar">
           {TABS.map(t => {
             const active = activeTab === t.id
             return (
@@ -193,18 +201,7 @@ export default function EmpleadoFormModal({
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id)}
-                style={{
-                  padding: '5px 11px',
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: active ? 700 : 500,
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                  border: active ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                  background: active ? 'var(--primary)' : 'var(--bg)',
-                  color: active ? '#fff' : 'var(--text-muted)',
-                  transition: 'all .15s',
-                }}
+                className={`emp-tab-pill ${active ? 'active' : ''}`}
               >
                 {t.label}
               </button>
@@ -213,20 +210,20 @@ export default function EmpleadoFormModal({
         </div>
 
         {/* ── Body ── */}
-        <div className="modal-body" style={{ maxHeight: '64vh', overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <div className="modal-body" style={{ maxHeight: '66vh', overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 0 }}>
           {/* Alerta duplicado */}
           {duplicadoWarning && (
             <div style={{
               display: 'flex', alignItems: 'flex-start', gap: 10,
               padding: '11px 14px', borderRadius: 10, marginBottom: 18,
-              background: duplicadoWarning.tipo === 'exacto' ? 'var(--danger-bg)' : 'var(--warning-bg)',
-              border: `1.5px solid ${duplicadoWarning.tipo === 'exacto' ? 'color-mix(in srgb, var(--danger) 35%, transparent)' : 'color-mix(in srgb, var(--warning) 40%, transparent)'}`,
+              background: duplicadoWarning.tipo === 'exacto' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+              border: `1.5px solid ${duplicadoWarning.tipo === 'exacto' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(245, 158, 11, 0.4)'}`,
             }}>
               {duplicadoWarning.tipo === 'exacto'
-                ? <AlertCircle size={15} style={{ color: '#DC2626', flexShrink: 0, marginTop: 1 }} />
-                : <AlertTriangle size={15} style={{ color: '#D97706', flexShrink: 0, marginTop: 1 }} />
+                ? <AlertCircle size={15} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
+                : <AlertTriangle size={15} style={{ color: '#FBBF24', flexShrink: 0, marginTop: 1 }} />
               }
-              <div style={{ fontSize: 13, color: duplicadoWarning.tipo === 'exacto' ? 'var(--danger-text)' : 'var(--warning-text)' }}>
+              <div style={{ fontSize: 13, color: duplicadoWarning.tipo === 'exacto' ? '#FCA5A5' : '#FDE68A' }}>
                 {duplicadoWarning.tipo === 'exacto'
                   ? (duplicadoWarning.empleado?.activo === false
                     ? <><strong>Colaborador inactivo encontrado:</strong> Ya existe "{duplicadoWarning.nombre}" como inactivo. Puedes usar la opción <strong>Reintegrar</strong> en la lista para iniciar su nuevo contrato manteniendo su historial protegido.</>
@@ -243,10 +240,10 @@ export default function EmpleadoFormModal({
           {showSection('identidad') && (
             <div className="emp-section">
               <div className="emp-section-hdr">
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <IdCard size={13} style={{ color: '#2563EB' }} />
+                <div style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <IdCard size={13} style={{ color: '#38BDF8' }} />
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text)' }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#F1F5F9' }}>
                   1. Identificación y Datos Personales
                 </span>
               </div>
@@ -297,9 +294,9 @@ export default function EmpleadoFormModal({
                       <label className="emp-form-label">Fecha de nacimiento</label>
                       {edadCalculada !== null && (
                         <span style={{
-                          fontSize: 11, fontWeight: 700, color: '#2563EB',
-                          background: 'var(--info-bg)', padding: '1px 8px',
-                          borderRadius: 999, marginBottom: 4,
+                          fontSize: 11, fontWeight: 700, color: 'var(--secondary)',
+                          background: 'rgba(var(--secondary-rgb), 0.12)', padding: '1px 8px',
+                          borderRadius: 999, marginBottom: 4, border: '1px solid rgba(var(--secondary-rgb), 0.3)',
                         }}>
                           Edad: {edadCalculada} años
                         </span>
@@ -315,7 +312,7 @@ export default function EmpleadoFormModal({
                   <div>
                     <label className="emp-form-label">Tipo de sangre (RH)</label>
                     <div style={{ position: 'relative' }}>
-                      <Droplet size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#DC2626', pointerEvents: 'none' }} />
+                      <Droplet size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#EF4444', pointerEvents: 'none' }} />
                       <select
                         className="emp-form-input"
                         style={{ paddingLeft: 30 }}
@@ -340,8 +337,8 @@ export default function EmpleadoFormModal({
           {showSection('contacto') && (
             <div className="emp-section">
               <div className="emp-section-hdr">
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <MapPin size={13} style={{ color: '#059669' }} />
+                <div style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(52, 211, 153, 0.15)', border: '1px solid rgba(52, 211, 153, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MapPin size={13} style={{ color: '#34D399' }} />
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text)' }}>
                   2. Ubicación y Contacto
@@ -436,8 +433,8 @@ export default function EmpleadoFormModal({
           {showSection('laboral') && (
             <div className="emp-section">
               <div className="emp-section-hdr">
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: '#F5F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Briefcase size={13} style={{ color: '#7C3AED' }} />
+                <div style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(167, 139, 250, 0.15)', border: '1px solid rgba(167, 139, 250, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Briefcase size={13} style={{ color: '#A78BFA' }} />
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text)' }}>
                   3. Información Laboral y Contrato
@@ -464,36 +461,26 @@ export default function EmpleadoFormModal({
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 7 }}>
                     {listaDepartamentos.map(d => {
                       const sel = form.dependencia === d
-                      const [bg, text, border] = DEP_COLORS[d] || ['var(--info-bg)', 'var(--info-text)', 'color-mix(in srgb, var(--info) 30%, transparent)']
                       return (
                         <button
                           key={d} type="button"
                           className={`emp-dep-btn ${sel ? 'active' : ''}`}
-                          style={sel ? { background: bg, borderColor: border, color: text, boxShadow: `0 0 0 2px ${border}` } : {}}
                           onClick={() => { setForm(p => ({ ...p, dependencia: d })) }}
                         >
                           <span style={{ fontSize: 15 }}>{DEP_ICONS[d] || '🏢'}</span>
-                          <span style={{ fontSize: 11, fontWeight: sel ? 800 : 600, color: sel ? text : 'var(--text)' }}>{d}</span>
-                          {sel && <CheckCircle2 size={13} style={{ color: text, marginLeft: 'auto', flexShrink: 0 }} />}
+                          <span style={{ fontSize: 11, fontWeight: sel ? 800 : 600 }}>{d}</span>
+                          {sel && <CheckCircle2 size={13} style={{ color: 'var(--secondary)', marginLeft: 'auto', flexShrink: 0 }} />}
                         </button>
                       )
                     })}
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label className="emp-form-label">Primer ingreso (Subsidiaria)</label>
-                    <input
-                      className="emp-form-input"
-                      type="date"
-                      value={form.fecha_primer_ingreso || ''}
-                      onChange={f('fecha_primer_ingreso')}
-                    />
-                  </div>
+                {/* Fecha principal de ingreso y opción condicional de vínculo previo */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div>
                     <label className="emp-form-label">
-                      Inicio en {nombreEmpresaActiva} (Contrato actual)
+                      Inicio en {nombreEmpresaActiva} <span style={{ color: '#EF4444' }}>*</span>
                     </label>
                     <input
                       className="emp-form-input"
@@ -502,6 +489,72 @@ export default function EmpleadoFormModal({
                       onChange={handleFechaInicioEmpresaChange}
                     />
                   </div>
+
+                  {/* Checkbox condicional: ¿Viene de empresa anterior o registra vínculo previo? */}
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '9px 12px',
+                      borderRadius: 10,
+                      border: tieneVinculoPrevio ? '1px solid rgba(var(--secondary-rgb), 0.45)' : '1px solid var(--border)',
+                      background: tieneVinculoPrevio ? 'rgba(var(--secondary-rgb), 0.08)' : 'var(--bg)',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      transition: 'all .18s ease',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={tieneVinculoPrevio}
+                      onChange={e => handleToggleVinculoPrevio(e.target.checked)}
+                      style={{
+                        width: 16,
+                        height: 16,
+                        accentColor: 'var(--secondary)',
+                        cursor: 'pointer',
+                        margin: 0,
+                      }}
+                    />
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>
+                      ¿Viene de empresa anterior o registra vínculo previo?
+                    </span>
+                  </label>
+
+                  {tieneVinculoPrevio && (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: 10,
+                        padding: '12px 14px',
+                        borderRadius: 10,
+                        background: 'var(--bg)',
+                        border: '1px solid var(--border)',
+                        animation: 'empFadeInUp .2s ease forwards',
+                      }}
+                    >
+                      <div>
+                        <label className="emp-form-label">Primer ingreso (empresa anterior)</label>
+                        <input
+                          className="emp-form-input"
+                          type="date"
+                          value={form.fecha_primer_ingreso || ''}
+                          onChange={f('fecha_primer_ingreso')}
+                        />
+                      </div>
+                      <div>
+                        <label className="emp-form-label">Fecha de terminación anterior</label>
+                        <input
+                          className="emp-form-input"
+                          type="date"
+                          value={form.fecha_terminacion_anterior || ''}
+                          onChange={f('fecha_terminacion_anterior')}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -509,7 +562,7 @@ export default function EmpleadoFormModal({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <label className="emp-form-label">Salario mensual</label>
                       {Number(form.salario) > 0 && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#059669', marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981', marginBottom: 4 }}>
                           {formatCOP(form.salario)}
                         </span>
                       )}
@@ -532,7 +585,7 @@ export default function EmpleadoFormModal({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <label className="emp-form-label">Auxilio de transporte</label>
                       {Number(form.auxilio_transporte) > 0 && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#059669', marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981', marginBottom: 4 }}>
                           {formatCOP(form.auxilio_transporte)}
                         </span>
                       )}
@@ -577,7 +630,7 @@ export default function EmpleadoFormModal({
                     <button
                       type="button"
                       className="emp-status-btn"
-                      style={form.activo ? { border: '2px solid #16A34A', background: 'var(--success-bg)', color: 'var(--success-text)', boxShadow: '0 0 0 3px rgba(22,163,74,.12)' } : {}}
+                      style={form.activo ? { border: '1.5px solid #10B981', background: 'rgba(16, 185, 129, 0.16)', color: 'var(--text)', boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)' } : {}}
                       onClick={() => setForm(p => ({ ...p, activo: true }))}
                     >
                       <span style={{ fontSize: 22 }}>✅</span>
@@ -586,7 +639,7 @@ export default function EmpleadoFormModal({
                     <button
                       type="button"
                       className="emp-status-btn"
-                      style={!form.activo ? { border: '2px solid #DC2626', background: 'var(--danger-bg)', color: 'var(--danger-text)', boxShadow: '0 0 0 3px rgba(220,38,38,.12)' } : {}}
+                      style={!form.activo ? { border: '1.5px solid #EF4444', background: 'rgba(239, 68, 68, 0.16)', color: 'var(--text)', boxShadow: '0 0 0 2px rgba(239, 68, 68, 0.25)' } : {}}
                       onClick={() => setForm(p => ({ ...p, activo: false, fecha_retiro: p.fecha_retiro || hoyISO() }))}
                     >
                       <span style={{ fontSize: 22 }}>🔴</span>
@@ -615,8 +668,8 @@ export default function EmpleadoFormModal({
           {showSection('segsocial') && (
             <div className="emp-section">
               <div className="emp-section-hdr">
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ShieldCheck size={13} style={{ color: '#1D4ED8' }} />
+                <div style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(96, 165, 250, 0.15)', border: '1px solid rgba(96, 165, 250, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldCheck size={13} style={{ color: '#60A5FA' }} />
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text)' }}>
                   4. Seguridad Social y Datos Bancarios
@@ -721,8 +774,8 @@ export default function EmpleadoFormModal({
             <div className="emp-section" style={{ marginBottom: 4 }}>
               <div className="emp-section-hdr" style={{ justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 7, background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <HeartPulse size={13} style={{ color: '#DC2626' }} />
+                  <div style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(248, 113, 113, 0.15)', border: '1px solid rgba(248, 113, 113, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <HeartPulse size={13} style={{ color: '#F87171' }} />
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text)' }}>
                     5. Contactos de Emergencia ({contactos.length})
@@ -731,12 +784,11 @@ export default function EmpleadoFormModal({
                 <button
                   type="button"
                   onClick={agregarContacto}
-                  className="btn btn-sm"
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
-                    fontSize: 11.5, fontWeight: 700, padding: '5px 11px',
-                    borderRadius: 8, background: 'var(--primary-light)', color: 'var(--primary)',
-                    border: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
+                    fontSize: 11.5, fontWeight: 700, padding: '5px 12px',
+                    borderRadius: 8, background: 'rgba(var(--secondary-rgb), 0.12)', color: 'var(--secondary)',
+                    border: '1px solid rgba(var(--secondary-rgb), 0.35)',
                     cursor: 'pointer',
                   }}
                 >
@@ -747,7 +799,7 @@ export default function EmpleadoFormModal({
               {contactos.length === 0 ? (
                 <div style={{
                   padding: '16px', borderRadius: 10, border: '1.5px dashed var(--border)',
-                  textAlign: 'center', color: 'var(--text-muted)', fontSize: 12,
+                  background: 'var(--bg)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12,
                 }}>
                   No hay contactos de emergencia registrados. Haz clic en <strong>"+ Agregar contacto"</strong> para añadir uno o más contactos.
                 </div>
@@ -763,7 +815,7 @@ export default function EmpleadoFormModal({
                         alignItems: 'end',
                         padding: '10px 12px',
                         borderRadius: 10,
-                        background: 'var(--surface, var(--bg))',
+                        background: 'var(--bg)',
                         border: '1px solid var(--border)',
                       }}
                     >
@@ -820,12 +872,8 @@ export default function EmpleadoFormModal({
           {msg && modal && <div className={`alert alert-${msg.type}`} style={{ marginTop: 8 }}>{msg.text}</div>}
         </div>
 
-        {/* ── Footer ── */}
-        <div style={{
-          borderTop: '1px solid var(--border)', padding: '14px 24px',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-          background: 'var(--bg)', borderRadius: '0 0 12px 12px',
-        }}>
+        {/* ── Footer adaptativo ── */}
+        <div className="emp-modal-footer">
           <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
             {[
               form.nombre_completo && '👤 ' + form.nombre_completo.split(' ')[0],
@@ -837,11 +885,20 @@ export default function EmpleadoFormModal({
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+            <button
+              className="btn btn-ghost"
+              onClick={onClose}
+            >
+              Cancelar
+            </button>
 
             {duplicadoWarning?.tipo === 'exacto' ? (
               <button
-                style={{ padding: '10px 18px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', background: '#D97706', color: '#fff', display: 'flex', alignItems: 'center', gap: 6, transition: 'all .15s' }}
+                style={{
+                  padding: '10px 18px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13,
+                  cursor: saving ? 'not-allowed' : 'pointer', background: '#D97706', color: '#fff',
+                  display: 'flex', alignItems: 'center', gap: 6, transition: 'all .15s',
+                }}
                 onClick={() => save(true)} disabled={saving}>
                 {saving
                   ? <><span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid rgba(255,255,255,.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'empSpin .7s linear infinite' }} /> Guardando...</>
@@ -849,15 +906,12 @@ export default function EmpleadoFormModal({
               </button>
             ) : (
               <button
+                className="btn btn-primary"
                 disabled={saving || !form.nombre_completo}
                 onClick={() => save(false)}
                 style={{
-                  padding: '10px 22px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13,
-                  cursor: (saving || !form.nombre_completo) ? 'not-allowed' : 'pointer',
-                  background: (saving || !form.nombre_completo) ? '#E5E7EB' : `linear-gradient(135deg,${gradStart},${gradEnd})`,
-                  color: (saving || !form.nombre_completo) ? '#6B7280' : '#fff',
-                  display: 'flex', alignItems: 'center', gap: 6, transition: 'all .15s',
-                  boxShadow: (saving || !form.nombre_completo) ? 'none' : '0 4px 14px rgba(37,99,235,.3)',
+                  padding: '10px 22px', borderRadius: 10, fontSize: 13,
+                  boxShadow: (saving || !form.nombre_completo) ? 'none' : '0 4px 14px rgba(var(--primary-rgb),.35)',
                 }}>
                 {saving
                   ? <><span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid rgba(255,255,255,.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'empSpin .7s linear infinite' }} /> Guardando...</>

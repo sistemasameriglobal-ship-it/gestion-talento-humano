@@ -124,6 +124,7 @@ export const EMPTY = {
   cargo: '',
   activo: true,
   fecha_primer_ingreso: '',
+  fecha_terminacion_anterior: '',
   fecha_inicio_empresa_actual: '',
   fecha_ingreso: '',
   fecha_retiro: '',

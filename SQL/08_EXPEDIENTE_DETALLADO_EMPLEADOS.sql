@@ -25,4 +25,5 @@ ALTER TABLE public.empleados
   ADD COLUMN IF NOT EXISTS numero_cuenta TEXT,
   ADD COLUMN IF NOT EXISTS contactos_emergencia JSONB DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS fecha_primer_ingreso DATE,
+  ADD COLUMN IF NOT EXISTS fecha_terminacion_anterior DATE,
   ADD COLUMN IF NOT EXISTS fecha_inicio_empresa_actual DATE;

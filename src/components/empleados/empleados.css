@@ -1,7 +1,7 @@
 /* =============================================================
    src/components/empleados/empleados.css
-   Estilos del formulario de empleados (antes se inyectaban como
-   un <style> con template literal desde Empleados.jsx).
+   Estilos adaptativos al tema (Modo Claro y Modo Oscuro)
+   y sincronizados con el color de acento (--secondary).
    ============================================================= */
 
 @keyframes empFadeInUp {
@@ -19,75 +19,377 @@
 @keyframes empSpin {
   to { transform: rotate(360deg); }
 }
+
 .emp-modal-wrap {
   animation: empBackdropIn .18s ease forwards;
 }
+
+/* ── Modal Box Adaptativo ─────────────────────────────────── */
 .emp-modal-box {
   animation: empModalIn .22s cubic-bezier(.16,1,.3,1) forwards;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--shadow-md), 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+  overflow: hidden;
 }
-.emp-form-label {
-  font-size: 11px; font-weight: 800; letter-spacing: .07em;
-  text-transform: uppercase; color: var(--text); margin-bottom: 6px; display: block;
-}
-.emp-form-input {
-  width: 100%; padding: 11px 14px; border-radius: 10px;
-  border: 1.5px solid var(--border); font-size: 14px; background: var(--bg);
-  transition: border-color .15s, box-shadow .15s, background .15s;
-  outline: none; color: var(--text); box-sizing: border-box;
-}
-.emp-form-input:focus {
-  border-color: var(--secondary); background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(var(--secondary-rgb),.15);
-}
-.emp-form-input::placeholder { color: var(--text-muted); }
-.emp-form-input:disabled { opacity: .45; cursor: not-allowed; }
-/* El selector nativo de fecha (icono de calendario) es negro por defecto
-   y se pierde sobre fondos oscuros; en modo oscuro se invierte a blanco. */
-:root[data-theme="dark"] .emp-form-input::-webkit-calendar-picker-indicator { filter: invert(1); }
-.emp-dep-btn {
-  display: flex; align-items: center; gap: 7px; padding: 9px 12px; border-radius: 10px;
-  border: 1.5px solid var(--border); background: var(--bg); cursor: pointer;
-  font-size: 12px; font-weight: 600; color: var(--text); transition: all .15s; text-align: left;
-}
-.emp-dep-btn:hover { border-color: var(--secondary); background: rgba(var(--secondary-rgb), 0.12); color: var(--secondary-dark); }
-:root[data-theme="dark"] .emp-dep-btn:hover { color: var(--secondary); }
-.emp-dep-btn.active { border-color: var(--secondary); background: rgba(var(--secondary-rgb), 0.16); color: var(--secondary-dark); font-weight: 800; }
-:root[data-theme="dark"] .emp-dep-btn.active { color: var(--secondary); }
 
-.emp-status-btn {
-  flex: 1; padding: 13px 10px; border-radius: 12px; border: 2px solid var(--border);
-  background: var(--bg); cursor: pointer; display: flex; flex-direction: column;
-  align-items: center; gap: 6px; transition: all .18s; font-size: 12px; font-weight: 700; color: var(--text);
+:root[data-theme="dark"] .emp-modal-box {
+  background: #0F172A !important;
+  color: #F8FAFC !important;
+  border-color: #1E293B !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55) !important;
 }
-.emp-status-btn:hover { border-color: var(--secondary); background: rgba(var(--secondary-rgb), 0.12); color: var(--secondary-dark); }
-:root[data-theme="dark"] .emp-status-btn:hover { color: var(--secondary); }
-.emp-status-btn.active { border-color: var(--secondary); background: rgba(var(--secondary-rgb), 0.16); color: var(--secondary-dark); }
-:root[data-theme="dark"] .emp-status-btn.active { color: var(--secondary); }
+
+/* ── Cabecera de modal ────────────────────────────────────── */
+.emp-modal-hdr {
+  padding: 20px 24px 16px;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--border);
+  transition: background .3s ease;
+}
+
+:root[data-theme="dark"] .emp-modal-hdr {
+  background: linear-gradient(180deg, #1E293B 0%, #0F172A 100%);
+  border-bottom-color: #1E293B;
+}
+
+/* ── Avatar en cabecera con acento dinámico ────────────────── */
+.emp-avatar-accent {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: rgba(var(--secondary-rgb), 0.12);
+  border: 1.5px solid rgba(var(--secondary-rgb), 0.35);
+  color: var(--secondary);
+}
+
+:root[data-theme="dark"] .emp-avatar-accent {
+  background: rgba(var(--secondary-rgb), 0.18);
+  border-color: rgba(var(--secondary-rgb), 0.45);
+  color: var(--secondary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* ── Botón cerrar modal ───────────────────────────────────── */
+.emp-close-btn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-muted);
+  background: var(--bg);
+  cursor: pointer;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: all .15s ease;
+}
+
+.emp-close-btn:hover {
+  color: var(--text);
+  border-color: var(--secondary);
+}
+
+:root[data-theme="dark"] .emp-close-btn {
+  border-color: rgba(148, 163, 184, 0.2);
+  color: #CBD5E1;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+:root[data-theme="dark"] .emp-close-btn:hover {
+  background: rgba(148, 163, 184, 0.22);
+}
+
+/* ── Barra de Pestañas de Navegación ──────────────────────── */
+.emp-tabs-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 10px 24px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+:root[data-theme="dark"] .emp-tabs-bar {
+  background: rgba(30, 41, 59, 0.55);
+  border-bottom-color: #1E293B;
+}
+
+.emp-tab-pill {
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all .16s ease;
+}
+
+.emp-tab-pill:hover {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.emp-tab-pill.active {
+  background: var(--surface);
+  color: var(--secondary-dark, var(--secondary));
+  font-weight: 700;
+  border-color: var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="dark"] .emp-tab-pill:hover {
+  background: rgba(30, 41, 59, 0.8);
+  color: #E2E8F0;
+  border-color: transparent;
+}
+
+:root[data-theme="dark"] .emp-tab-pill.active {
+  background: #1E293B;
+  color: #F8FAFC;
+  border-color: rgba(var(--secondary-rgb), 0.45);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* ── Formulario e Inputs ─────────────────────────────────── */
+.emp-form-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  display: block;
+}
+
+:root[data-theme="dark"] .emp-form-label {
+  color: #94A3B8;
+}
+
+.emp-form-input {
+  width: 100%;
+  padding: 10px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.emp-form-input:focus {
+  border-color: var(--secondary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(var(--secondary-rgb), 0.15);
+}
+
+.emp-form-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.65;
+}
+
+.emp-form-input:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+:root[data-theme="dark"] .emp-form-input {
+  background: #1E293B;
+  border-color: #334155;
+  color: #F8FAFC;
+}
+
+:root[data-theme="dark"] .emp-form-input:focus {
+  border-color: var(--secondary);
+  background: #0F172A;
+  box-shadow: 0 0 0 3px rgba(var(--secondary-rgb), 0.2);
+}
+
+:root[data-theme="dark"] .emp-form-input option {
+  background: #1E293B;
+  color: #F8FAFC;
+}
+
+:root[data-theme="dark"] .emp-form-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+/* ── Botones de área / dependencia ───────────────────────── */
+.emp-dep-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  transition: all .15s ease;
+  text-align: left;
+}
+
+.emp-dep-btn:hover {
+  border-color: var(--secondary);
+  background: var(--bg);
+  color: var(--secondary-dark);
+}
+
+.emp-dep-btn.active {
+  border-color: var(--secondary);
+  background: rgba(var(--secondary-rgb), 0.12);
+  color: var(--secondary-dark);
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--secondary);
+}
+
+:root[data-theme="dark"] .emp-dep-btn {
+  border-color: #334155;
+  background: rgba(30, 41, 59, 0.6);
+  color: #CBD5E1;
+}
+
+:root[data-theme="dark"] .emp-dep-btn:hover {
+  border-color: #475569;
+  background: rgba(30, 41, 59, 0.95);
+  color: #F8FAFC;
+}
+
+:root[data-theme="dark"] .emp-dep-btn.active {
+  border-color: var(--secondary);
+  background: rgba(var(--secondary-rgb), 0.2);
+  color: var(--secondary);
+  box-shadow: 0 0 0 1px var(--secondary);
+}
+
+/* ── Botones de estado (Activo / Inactivo) ─────────────────── */
+.emp-status-btn {
+  flex: 1;
+  padding: 13px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: all .18s;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.emp-status-btn:hover {
+  border-color: var(--secondary);
+  background: var(--bg);
+}
+
+:root[data-theme="dark"] .emp-status-btn {
+  border-color: #334155;
+  background: rgba(30, 41, 59, 0.6);
+  color: #CBD5E1;
+}
+
+:root[data-theme="dark"] .emp-status-btn:hover {
+  border-color: #475569;
+  background: rgba(30, 41, 59, 0.9);
+  color: #F8FAFC;
+}
+
+/* ── Secciones y Encabezados internos ─────────────────────── */
 .emp-section { margin-bottom: 22px; }
 .emp-section-hdr {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
-  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
 
-/* =============================================================
-   Estilos Dark Theme para EmpleadoHistorialModal
-   Elimina fondos blancos heredados de .table-container y
-   máscaras de gradiente laterales.
-   ============================================================= */
-.emp-dark-accordion {
+:root[data-theme="dark"] .emp-section-hdr {
+  border-bottom-color: rgba(51, 65, 85, 0.5);
+}
+
+/* ── Footer de modales ────────────────────────────────────── */
+.emp-modal-footer {
+  padding: 14px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border-radius: 0 0 16px 16px;
+}
+
+:root[data-theme="dark"] .emp-modal-footer {
+  background: #0F172A;
+  border-top-color: #1E293B;
+}
+
+/* ── Tarjetas modulares y KPI en Ficha de Detalle ─────────── */
+.emp-kpi-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+:root[data-theme="dark"] .emp-kpi-card {
+  background: #1E293B;
+  border-color: #334155;
+}
+
+.emp-block-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+:root[data-theme="dark"] .emp-block-card {
+  background: #1E293B;
+  border-color: #334155;
+}
+
+/* ── Acordeones y Pestañas en Historial ───────────────────── */
+.emp-hist-accordion {
   margin-bottom: 12px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(51, 65, 85, 0.65);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
 }
 
-.emp-dark-accordion-hdr {
+:root[data-theme="dark"] .emp-hist-accordion {
+  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(51, 65, 85, 0.65);
+}
+
+.emp-hist-accordion-hdr {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(30, 41, 59, 0.55);
+  background: var(--bg);
   border: none;
-  color: #F8FAFC;
+  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -97,22 +399,36 @@
   transition: background 0.18s ease;
 }
 
-.emp-dark-accordion-hdr:hover {
+.emp-hist-accordion-hdr:hover {
+  background: color-mix(in srgb, var(--bg) 85%, var(--text-muted));
+}
+
+:root[data-theme="dark"] .emp-hist-accordion-hdr {
+  background: rgba(30, 41, 59, 0.55);
+  color: #F8FAFC;
+}
+
+:root[data-theme="dark"] .emp-hist-accordion-hdr:hover {
   background: rgba(30, 41, 59, 0.85);
 }
 
-.emp-dark-tabs-bar {
+.emp-hist-tabs-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
   padding: 10px 14px;
-  background: rgba(30, 41, 59, 0.55);
-  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
 }
 
-.emp-dark-tab-btn {
+:root[data-theme="dark"] .emp-hist-tabs-bar {
+  background: rgba(30, 41, 59, 0.55);
+  border-bottom-color: rgba(51, 65, 85, 0.6);
+}
+
+.emp-hist-tab-btn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -123,40 +439,64 @@
   letter-spacing: 0.02em;
   border: 1px solid transparent;
   background: transparent;
-  color: #94A3B8;
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
-.emp-dark-tab-btn:hover {
+.emp-hist-tab-btn:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.emp-hist-tab-btn.active {
+  background: var(--surface);
+  color: var(--secondary-dark, var(--secondary));
+  border-color: var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="dark"] .emp-hist-tab-btn:hover {
   background: rgba(30, 41, 59, 0.8);
   color: #E2E8F0;
 }
 
-.emp-dark-tab-btn.active {
+:root[data-theme="dark"] .emp-hist-tab-btn.active {
   background: #1E293B;
   color: #F8FAFC;
   border-color: rgba(71, 85, 105, 0.75);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
-.emp-dark-tab-count {
+.emp-hist-tab-count {
   font-size: 11px;
   font-weight: 700;
   padding: 1px 7px;
   border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.emp-hist-tab-btn.active .emp-hist-tab-count {
+  background: rgba(var(--secondary-rgb), 0.12);
+  color: var(--secondary);
+  border-color: rgba(var(--secondary-rgb), 0.3);
+}
+
+:root[data-theme="dark"] .emp-hist-tab-count {
   background: rgba(15, 23, 42, 0.75);
   color: #94A3B8;
-  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-color: rgba(51, 65, 85, 0.6);
 }
 
-.emp-dark-tab-btn.active .emp-dark-tab-count {
-  background: rgba(56, 189, 248, 0.16);
-  color: #38BDF8;
-  border-color: rgba(56, 189, 248, 0.35);
+:root[data-theme="dark"] .emp-hist-tab-btn.active .emp-hist-tab-count {
+  background: rgba(var(--secondary-rgb), 0.2);
+  color: var(--secondary);
+  border-color: rgba(var(--secondary-rgb), 0.4);
 }
 
-.emp-dark-action-btn {
+.emp-hist-action-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -164,92 +504,124 @@
   font-weight: 600;
   padding: 6px 12px;
   border-radius: 9px;
-  background: rgba(56, 189, 248, 0.1);
-  color: #38BDF8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: rgba(var(--secondary-rgb), 0.1);
+  color: var(--secondary);
+  border: 1px solid rgba(var(--secondary-rgb), 0.3);
   cursor: pointer;
   transition: all 0.16s ease;
 }
 
-.emp-dark-action-btn:hover {
-  background: rgba(56, 189, 248, 0.2);
-  border-color: rgba(56, 189, 248, 0.55);
-  color: #7DD3FC;
+.emp-hist-action-btn:hover {
+  background: rgba(var(--secondary-rgb), 0.18);
+  border-color: var(--secondary);
 }
 
-/* Contenedor de tabla oscura SIN máscaras blancas ni columnas sticky blancas */
-.emp-dark-table-wrap {
+/* ── Tablas Adaptativas en Detalle e Historial ─────────────── */
+.emp-hist-table-wrap {
   width: 100%;
   overflow-x: auto;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(51, 65, 85, 0.6);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 
-.emp-dark-table {
+:root[data-theme="dark"] .emp-hist-table-wrap {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(51, 65, 85, 0.6);
+}
+
+.emp-hist-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12.5px;
-  color: #E2E8F0;
+  color: var(--text);
 }
 
-.emp-dark-table thead th {
-  background: rgba(30, 41, 59, 0.65);
-  color: #94A3B8;
+.emp-hist-table thead th {
+  background: var(--bg);
+  color: var(--text-muted);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 10px 12px;
   text-align: left;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.65);
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
-.emp-dark-table tbody tr {
+:root[data-theme="dark"] .emp-hist-table thead th {
+  background: rgba(30, 41, 59, 0.65);
+  color: #94A3B8;
+  border-bottom-color: rgba(51, 65, 85, 0.65);
+}
+
+.emp-hist-table tbody tr {
   background: transparent;
-  border-bottom: 1px solid rgba(30, 41, 59, 0.75);
+  border-bottom: 1px solid var(--border);
   transition: background 0.15s ease;
 }
 
-.emp-dark-table tbody tr:last-child {
+:root[data-theme="dark"] .emp-hist-table tbody tr {
+  border-bottom-color: rgba(30, 41, 59, 0.75);
+}
+
+.emp-hist-table tbody tr:last-child {
   border-bottom: none;
 }
 
-.emp-dark-table tbody tr:hover {
+.emp-hist-table tbody tr:hover {
+  background: rgba(var(--secondary-rgb), 0.05);
+}
+
+:root[data-theme="dark"] .emp-hist-table tbody tr:hover {
   background: rgba(30, 41, 59, 0.45);
 }
 
-.emp-dark-table tbody td {
+.emp-hist-table tbody td {
   padding: 10px 12px;
-  color: #E2E8F0;
+  color: var(--text);
   background: transparent !important;
   position: static !important;
   vertical-align: middle;
 }
 
-.emp-dark-table .emp-cell-date {
-  color: #CBD5E1;
+:root[data-theme="dark"] .emp-hist-table tbody td {
+  color: #E2E8F0;
+}
+
+.emp-hist-cell-date {
+  color: var(--text);
   font-weight: 500;
   white-space: nowrap;
 }
 
+:root[data-theme="dark"] .emp-hist-cell-date {
+  color: #CBD5E1;
+}
+
 /* Badge #1 de periodo laboral */
-.emp-period-badge {
+.emp-hist-period-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #1E293B;
-  color: #CBD5E1;
+  background: var(--bg);
+  color: var(--text);
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 3px 9px;
   border-radius: 8px;
-  border: 1px solid #334155;
+  border: 1px solid var(--border);
 }
 
-/* Etiquetas de concepto en tema oscuro permanente */
-.emp-dark-tag {
+:root[data-theme="dark"] .emp-hist-period-badge {
+  background: #1E293B;
+  color: #CBD5E1;
+  border-color: #334155;
+}
+
+/* Etiquetas de concepto adaptativas */
+.emp-concept-tag {
   display: inline-flex;
   align-items: center;
   padding: 3px 10px;
@@ -258,7 +630,14 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  background: color-mix(in srgb, var(--tag, #38BDF8) 20%, rgba(15, 23, 42, 0.6));
-  color: color-mix(in srgb, var(--tag, #38BDF8) 38%, #ffffff);
-  border: 1px solid color-mix(in srgb, var(--tag, #38BDF8) 38%, transparent);
-}
+  background: color-mix(in srgb, var(--tag, var(--secondary)) 14%, transparent);
+  color: color-mix(in srgb, var(--tag, var(--secondary)) 80%, #000);
+  border: 1px solid color-mix(in srgb, var(--tag, var(--secondary)) 35%, transparent);
+}
+
+:root[data-theme="dark"] .emp-concept-tag {
+  background: color-mix(in srgb, var(--tag, var(--secondary)) 20%, rgba(15, 23, 42, 0.6));
+  color: color-mix(in srgb, var(--tag, var(--secondary)) 40%, #ffffff);
+  border-color: color-mix(in srgb, var(--tag, var(--secondary)) 38%, transparent);
+}
+

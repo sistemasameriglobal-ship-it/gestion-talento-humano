@@ -36,9 +36,9 @@ function DataRow({ label, value, badge, badgeColor }) {
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      gap: 10, padding: '6px 0', borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+      gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)',
     }}>
-      <span style={{ fontSize: 12, color: '#94A3B8' }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
       {badge ? (
         <span style={{
           fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 999,
@@ -49,7 +49,7 @@ function DataRow({ label, value, badge, badgeColor }) {
           {value || '—'}
         </span>
       ) : (
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: '#F1F5F9', textAlign: 'right', wordBreak: 'break-word' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textAlign: 'right', wordBreak: 'break-word' }}>
           {value || '—'}
         </span>
       )}
@@ -119,11 +119,9 @@ export default function EmpleadoHistorialModal({
 
   // Fechas contractuales y edad
   const fechaInicioActual = selectedEmp.fecha_inicio_empresa_actual || periodoActivo?.fecha_ingreso || selectedEmp.fecha_ingreso || ''
-  const fechaPrimerIngreso = selectedEmp.fecha_primer_ingreso || listaPeriodos[0]?.fecha_ingreso || selectedEmp.fecha_ingreso || ''
-  const periodoAnteriorCerrado = listaPeriodos.length > 1
-    ? listaPeriodos[listaPeriodos.length - 2]
-    : (selectedEmp.activo === false ? listaPeriodos[0] : null)
-  const fechaTerminacionAnterior = periodoAnteriorCerrado?.fecha_retiro || (selectedEmp.activo === false ? selectedEmp.fecha_retiro : null)
+  const fechaPrimerIngreso = selectedEmp.fecha_primer_ingreso || ''
+  const fechaTerminacionAnterior = selectedEmp.fecha_terminacion_anterior || ''
+  const tieneHistorialPrevio = Boolean(fechaPrimerIngreso || fechaTerminacionAnterior)
 
   const edad = calcularEdad(selectedEmp.fecha_nacimiento)
   const contactosEmergencia = Array.isArray(selectedEmp.contactos_emergencia)
@@ -139,25 +137,16 @@ export default function EmpleadoHistorialModal({
   }[selectedEmp.tipo_documento] || (selectedEmp.tipo_documento || 'Documento')
 
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop emp-modal-wrap" onClick={e => e.target === e.currentTarget && onClose()}>
       <div
-        className="modal"
+        className="modal emp-modal-box"
         style={{
           maxWidth: 840,
           width: '96vw',
-          background: '#0F172A',
-          color: '#F8FAFC',
-          border: '1px solid #1E293B',
-          borderRadius: 16,
-          overflow: 'hidden',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.55)',
         }}
       >
         {/* ── 1. CABECERA PRINCIPAL ── */}
-        <div style={{
-          padding: '20px 24px 16px',
-          background: 'linear-gradient(180deg, #1E293B 0%, #0F172A 100%)',
-          borderBottom: '1px solid #1E293B',
+        <div className="emp-modal-hdr" style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -166,20 +155,16 @@ export default function EmpleadoHistorialModal({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1 }}>
             {/* Avatar circular */}
-            <div style={{
-              width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
-              background: 'rgba(56, 189, 248, 0.15)',
-              border: '1.5px solid rgba(56, 189, 248, 0.4)',
-              color: '#38BDF8',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 17, fontWeight: 800, letterSpacing: '.02em',
+            <div className="emp-avatar-accent" style={{
+              borderRadius: '50%',
+              fontSize: 17,
             }}>
               {inicialesNombre(selectedEmp.nombre_completo)}
             </div>
 
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#F8FAFC', letterSpacing: '-0.01em' }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.01em' }}>
                   {selectedEmp.nombre_completo}
                 </h2>
                 <span style={{
@@ -221,7 +206,7 @@ export default function EmpleadoHistorialModal({
                 )}
               </div>
 
-              <div style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 4 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4 }}>
                 {[
                   selectedEmp.cargo || selectedEmp.dependencia || 'Colaborador',
                   selectedEmp.dependencia && selectedEmp.cargo ? selectedEmp.dependencia : null,
@@ -234,17 +219,14 @@ export default function EmpleadoHistorialModal({
 
           <button
             onClick={onClose}
-            style={{
-              background: 'rgba(148, 163, 184, 0.12)', border: '1px solid rgba(148, 163, 184, 0.2)',
-              color: '#CBD5E1', borderRadius: 10, padding: 8, cursor: 'pointer', display: 'flex',
-            }}
+            className="emp-close-btn"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* ── BODY CON SCROLL ── */}
-        <div className="modal-body" style={{ maxHeight: '76vh', overflowY: 'auto', padding: '18px 24px', background: '#0F172A' }}>
+        <div className="modal-body" style={{ maxHeight: '76vh', overflowY: 'auto', padding: '18px 24px' }}>
 
           {/* ── 2. KPI CARDS SUPERIORES (4 TARJETAS EN FILA) ── */}
           <div style={{
@@ -253,30 +235,30 @@ export default function EmpleadoHistorialModal({
             gap: 10,
             marginBottom: 16,
           }}>
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Salario</div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: '#F8FAFC' }}>
+            <div className="emp-kpi-card">
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Salario</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text)' }}>
                 {Number(selectedEmp.salario) > 0 ? formatCOP(selectedEmp.salario) : '—'}
               </div>
             </div>
 
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Aux. transporte</div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: '#F8FAFC' }}>
+            <div className="emp-kpi-card">
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Aux. transporte</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text)' }}>
                 {Number(selectedEmp.auxilio_transporte) > 0 ? formatCOP(selectedEmp.auxilio_transporte) : '—'}
               </div>
             </div>
 
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Ingreso</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#F8FAFC' }}>
+            <div className="emp-kpi-card">
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Ingreso</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
                 {formatDDMMYYYY(fechaInicioActual)}
               </div>
             </div>
 
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Edad</div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: '#F8FAFC' }}>
+            <div className="emp-kpi-card">
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Edad</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text)' }}>
                 {edad !== null ? `${edad} años` : '—'}
               </div>
             </div>
@@ -290,8 +272,8 @@ export default function EmpleadoHistorialModal({
             marginBottom: 18,
           }}>
             {/* Bloque 1: Identificación */}
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="emp-block-card">
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <IdCard size={13} style={{ color: '#38BDF8' }} /> Identificación
               </div>
               <DataRow label={labelTipoDoc} value={selectedEmp.numero_documento || '—'} />
@@ -304,8 +286,8 @@ export default function EmpleadoHistorialModal({
             </div>
 
             {/* Bloque 2: Contacto */}
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="emp-block-card">
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <MapPin size={13} style={{ color: '#34D399' }} /> Contacto
               </div>
               <DataRow label="Celular" value={selectedEmp.celular || '—'} />
@@ -319,8 +301,8 @@ export default function EmpleadoHistorialModal({
             </div>
 
             {/* Bloque 3: Seguridad Social */}
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="emp-block-card">
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <ShieldCheck size={13} style={{ color: '#60A5FA' }} /> Seguridad Social
               </div>
               <DataRow label="EPS" value={selectedEmp.eps || '—'} />
@@ -329,12 +311,12 @@ export default function EmpleadoHistorialModal({
             </div>
 
             {/* Bloque 4: En caso de emergencia */}
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="emp-block-card">
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <HeartPulse size={13} style={{ color: '#F87171' }} /> En caso de emergencia
               </div>
               {contactosEmergencia.length === 0 ? (
-                <div style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic', padding: '10px 0' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '10px 0' }}>
                   Sin contactos de emergencia registrados.
                 </div>
               ) : (
@@ -345,7 +327,7 @@ export default function EmpleadoHistorialModal({
                       style={{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '8px 10px', borderRadius: 10,
-                        background: 'rgba(15, 23, 42, 0.55)', border: '1px solid rgba(148, 163, 184, 0.14)',
+                        background: 'var(--bg)', border: '1px solid var(--border)',
                       }}
                     >
                       <div style={{
@@ -356,15 +338,15 @@ export default function EmpleadoHistorialModal({
                         <Phone size={13} />
                       </div>
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#F1F5F9', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span>{c.nombre || 'Contacto'}</span>
                           {c.parentesco && (
-                            <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 500 }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
                               ({c.parentesco})
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: 11.5, color: '#94A3B8' }}>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
                           {c.telefono || 'Sin teléfono'}
                         </div>
                       </div>
@@ -375,8 +357,8 @@ export default function EmpleadoHistorialModal({
             </div>
 
             {/* Bloque 5: Datos bancarios */}
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="emp-block-card">
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Landmark size={13} style={{ color: '#A78BFA' }} /> Datos bancarios
               </div>
               <DataRow label="Banco" value={selectedEmp.banco || '—'} />
@@ -385,12 +367,16 @@ export default function EmpleadoHistorialModal({
             </div>
 
             {/* Bloque 6: Historial de contrato */}
-            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94A3B8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="emp-block-card">
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <FileSpreadsheet size={13} style={{ color: '#FBBF24' }} /> Historial de contrato
               </div>
-              <DataRow label="Primer ingreso (subsidiaria)" value={formatDDMMYYYY(fechaPrimerIngreso)} />
-              <DataRow label="Fecha de terminación anterior" value={formatDDMMYYYY(fechaTerminacionAnterior)} />
+              {tieneHistorialPrevio && (
+                <>
+                  <DataRow label="Primer ingreso" value={formatDDMMYYYY(fechaPrimerIngreso)} />
+                  <DataRow label="Fecha de terminación anterior" value={formatDDMMYYYY(fechaTerminacionAnterior)} />
+                </>
+              )}
               <DataRow label={`Inicio en ${nombreEmpresaActiva}`} value={formatDDMMYYYY(fechaInicioActual)} />
             </div>
           </div>
@@ -398,11 +384,11 @@ export default function EmpleadoHistorialModal({
           {/* ── 4. BLOQUES INFERIORES: VACACIONES, PROCESOS Y PESTAÑAS DE PERIODOS / NOVEDADES ── */}
 
           {/* 4A. Vacaciones y Saldo Disponible */}
-          <div className="emp-dark-accordion">
+          <div className="emp-hist-accordion">
             <button
               type="button"
               onClick={() => toggleSection('vacaciones')}
-              className="emp-dark-accordion-hdr"
+              className="emp-hist-accordion-hdr"
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span>🌴</span>
@@ -418,39 +404,39 @@ export default function EmpleadoHistorialModal({
                   </span>
                 )}
               </div>
-              {openSections.vacaciones ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+              {openSections.vacaciones ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
 
             {openSections.vacaciones && (
-              <div style={{ padding: '0 16px 14px', borderTop: '1px solid rgba(51, 65, 85, 0.5)' }}>
+              <div style={{ padding: '0 16px 14px', borderTop: '1px solid var(--border)' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: 8, marginTop: 12, marginBottom: vacaciones.length > 0 ? 12 : 0 }}>
-                  <div style={{ background: '#0F172A', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#E2E8F0' }}>{saldoVac.diasCausados}d</div>
-                    <div style={{ fontSize: 10.5, color: '#94A3B8' }}>Días causados</div>
+                  <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{saldoVac.diasCausados}d</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>Días causados</div>
                   </div>
                   {saldoVac.diasManuales > 0 && (
-                    <div style={{ background: '#0F172A', border: '1px solid rgba(249, 115, 22, 0.4)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ background: 'var(--bg)', border: '1px solid rgba(249, 115, 22, 0.4)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
                       <div style={{ fontSize: 18, fontWeight: 800, color: '#FB923C' }}>{saldoVac.diasManuales}d</div>
-                      <div style={{ fontSize: 10.5, color: '#FDBA74' }}>Tomados (histórico)</div>
+                      <div style={{ fontSize: 10.5, color: '#F97316' }}>Tomados (histórico)</div>
                     </div>
                   )}
-                  <div style={{ background: '#0F172A', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#34D399' }}>{saldoVac.diasDisfrutados}d</div>
-                    <div style={{ fontSize: 10.5, color: '#6EE7B7' }}>Disfrutados</div>
+                  <div style={{ background: 'var(--bg)', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#10B981' }}>{saldoVac.diasDisfrutados}d</div>
+                    <div style={{ fontSize: 10.5, color: '#059669' }}>Disfrutados</div>
                   </div>
-                  <div style={{ background: '#0F172A', border: '1px solid rgba(234, 179, 8, 0.35)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#FACC15' }}>{saldoVac.diasEnDinero}d</div>
-                    <div style={{ fontSize: 10.5, color: '#FDE047' }}>En dinero</div>
+                  <div style={{ background: 'var(--bg)', border: '1px solid rgba(234, 179, 8, 0.35)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#EAB308' }}>{saldoVac.diasEnDinero}d</div>
+                    <div style={{ fontSize: 10.5, color: '#CA8A04' }}>En dinero</div>
                   </div>
-                  <div style={{ background: '#0F172A', border: '1px solid rgba(56, 189, 248, 0.45)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#38BDF8' }}>{saldoVac.saldoPendiente}d</div>
-                    <div style={{ fontSize: 10.5, color: '#7DD3FC' }}>Saldo disponible</div>
+                  <div style={{ background: 'var(--bg)', border: '1px solid rgba(var(--secondary-rgb), 0.45)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--secondary)' }}>{saldoVac.saldoPendiente}d</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--secondary)' }}>Saldo disponible</div>
                   </div>
                 </div>
 
                 {vacaciones && vacaciones.length > 0 && (
-                  <div className="emp-dark-table-wrap">
-                    <table className="emp-dark-table">
+                  <div className="emp-hist-table-wrap">
+                    <table className="emp-hist-table">
                       <thead>
                         <tr>
                           <th>Rango de fechas</th>
@@ -472,7 +458,7 @@ export default function EmpleadoHistorialModal({
                           const esOk = estado === 'Aprobada' || estado === 'Disfrutadas'
                           return (
                             <tr key={v.id}>
-                              <td className="emp-cell-date">
+                              <td className="emp-hist-cell-date">
                                 {v.fecha_inicio ? `${formatFecha(v.fecha_inicio)} → ${v.fecha_fin ? formatFecha(v.fecha_fin) : '—'}` : 'Sin fecha (compensación)'}
                               </td>
                               <td style={{ textAlign: 'center', fontWeight: 600 }}>
@@ -485,13 +471,13 @@ export default function EmpleadoHistorialModal({
                                 <span style={{
                                   fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999,
                                   background: esOk ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)',
-                                  color: esOk ? '#6EE7B7' : '#FCD34D',
+                                  color: esOk ? '#10B981' : '#F59E0B',
                                   border: `1px solid ${esOk ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
                                 }}>
                                   {estado}
                                 </span>
                               </td>
-                              <td style={{ color: '#94A3B8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <td style={{ color: 'var(--text-muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {v.observacion_contable || v.observacion || '—'}
                               </td>
                             </tr>
@@ -509,7 +495,7 @@ export default function EmpleadoHistorialModal({
           {(procesos.length > 0 || initialSection === 'procesos') && (
             <div
               ref={procesosRef}
-              className="emp-dark-accordion"
+              className="emp-hist-accordion"
               style={{
                 border: initialSection === 'procesos' ? '1.5px solid #F59E0B' : undefined,
               }}
@@ -517,24 +503,24 @@ export default function EmpleadoHistorialModal({
               <button
                 type="button"
                 onClick={() => toggleSection('procesos')}
-                className="emp-dark-accordion-hdr"
-                style={{ color: '#FBBF24' }}
+                className="emp-hist-accordion-hdr"
+                style={{ color: '#F59E0B' }}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em' }}>
                   <Scale size={14} /> Procesos Disciplinarios ({procesos.length})
                 </span>
-                {openSections.procesos ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+                {openSections.procesos ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
 
               {openSections.procesos && (
-                <div style={{ padding: '12px 16px 14px', borderTop: '1px solid rgba(51, 65, 85, 0.5)' }}>
+                <div style={{ padding: '12px 16px 14px', borderTop: '1px solid var(--border)' }}>
                   {procesos.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#94A3B8', padding: '6px 0' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>
                       No registra procesos disciplinarios.
                     </div>
                   ) : (
-                    <div className="emp-dark-table-wrap">
-                      <table className="emp-dark-table">
+                    <div className="emp-hist-table-wrap">
+                      <table className="emp-hist-table">
                         <thead>
                           <tr>
                             <th>Concepto</th>
@@ -553,13 +539,13 @@ export default function EmpleadoHistorialModal({
                                 : (p.created_at ? String(p.created_at).slice(0, 10) : '—')
                             return (
                               <tr key={p.id}>
-                                <td style={{ fontWeight: 700, color: '#FBBF24', whiteSpace: 'nowrap' }}>
+                                <td style={{ fontWeight: 700, color: '#F59E0B', whiteSpace: 'nowrap' }}>
                                   {p.concepto}
                                 </td>
-                                <td className="emp-cell-date">
+                                <td className="emp-hist-cell-date">
                                   {fEvento}{p.hora ? ` (${String(p.hora).slice(0, 5)})` : ''}
                                 </td>
-                                <td style={{ color: '#E2E8F0' }}>
+                                <td style={{ color: 'var(--text)' }}>
                                   {p.observacion || '—'}
                                 </td>
                               </tr>
@@ -575,27 +561,27 @@ export default function EmpleadoHistorialModal({
           )}
 
           {/* 4C. Pestañas Conmutables: Periodos Laborales e Historial de Novedades */}
-          <div className="emp-dark-accordion" style={{ marginBottom: 0 }}>
-            <div className="emp-dark-tabs-bar">
+          <div className="emp-hist-accordion" style={{ marginBottom: 0 }}>
+            <div className="emp-hist-tabs-bar">
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => setActiveHistoryTab('periodos')}
-                  className={`emp-dark-tab-btn ${activeHistoryTab === 'periodos' ? 'active' : ''}`}
+                  className={`emp-hist-tab-btn ${activeHistoryTab === 'periodos' ? 'active' : ''}`}
                 >
                   <span>📜</span>
                   <span>Periodos Laborales</span>
-                  <span className="emp-dark-tab-count">{listaPeriodos.length}</span>
+                  <span className="emp-hist-tab-count">{listaPeriodos.length}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveHistoryTab('novedades')}
-                  className={`emp-dark-tab-btn ${activeHistoryTab === 'novedades' ? 'active' : ''}`}
+                  className={`emp-hist-tab-btn ${activeHistoryTab === 'novedades' ? 'active' : ''}`}
                 >
                   <span>📋</span>
                   <span>Historial de Novedades</span>
-                  <span className="emp-dark-tab-count">{nov ? nov.novedades.length : 0}</span>
+                  <span className="emp-hist-tab-count">{nov ? nov.novedades.length : 0}</span>
                 </button>
               </div>
 
@@ -606,7 +592,7 @@ export default function EmpleadoHistorialModal({
                     onClose()
                     onReintegrar(selectedEmp)
                   }}
-                  className="emp-dark-action-btn"
+                  className="emp-hist-action-btn"
                 >
                   <Award size={13} /> Registrar Ascenso / Movimiento
                 </button>
@@ -615,8 +601,8 @@ export default function EmpleadoHistorialModal({
 
             <div style={{ padding: '14px 16px' }}>
               {activeHistoryTab === 'periodos' ? (
-                <div className="emp-dark-table-wrap">
-                  <table className="emp-dark-table">
+                <div className="emp-hist-table-wrap">
+                  <table className="emp-hist-table">
                     <thead>
                       <tr>
                         <th>Periodo</th>
@@ -631,13 +617,13 @@ export default function EmpleadoHistorialModal({
                       {listaPeriodos.map(p => (
                         <tr key={p.id || p.numero_periodo}>
                           <td>
-                            <span className="emp-period-badge">#{p.numero_periodo}</span>
+                            <span className="emp-hist-period-badge">#{p.numero_periodo}</span>
                           </td>
-                          <td className="emp-cell-date">{p.fecha_ingreso || '—'}</td>
-                          <td className="emp-cell-date" style={{ color: p.fecha_retiro ? '#FCA5A5' : undefined }}>
+                          <td className="emp-hist-cell-date">{p.fecha_ingreso || '—'}</td>
+                          <td className="emp-hist-cell-date" style={{ color: p.fecha_retiro ? '#EF4444' : undefined }}>
                             {p.fecha_retiro || '—'}
                           </td>
-                          <td style={{ color: '#CBD5E1' }}>
+                          <td style={{ color: 'var(--text)' }}>
                             {[p.dependencia, p.cargo].filter(Boolean).join(' · ') || '—'}
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -647,13 +633,13 @@ export default function EmpleadoHistorialModal({
                               padding: '3px 9px',
                               borderRadius: 999,
                               background: p.es_periodo_actual ? 'rgba(16, 185, 129, 0.16)' : 'rgba(148, 163, 184, 0.14)',
-                              color: p.es_periodo_actual ? '#6EE7B7' : '#94A3B8',
+                              color: p.es_periodo_actual ? '#10B981' : 'var(--text-muted)',
                               border: `1px solid ${p.es_periodo_actual ? 'rgba(16, 185, 129, 0.35)' : 'rgba(148, 163, 184, 0.28)'}`,
                             }}>
                               {p.es_periodo_actual ? 'Vigente' : 'Cerrado'}
                             </span>
                           </td>
-                          <td style={{ fontSize: 12, color: '#94A3B8' }}>
+                          <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                             {p.observaciones || '—'}
                           </td>
                         </tr>
@@ -663,31 +649,31 @@ export default function EmpleadoHistorialModal({
                 </div>
               ) : (
                 !nov || nov.novedades.length === 0 ? (
-                  <div style={{ fontSize: 12.5, color: '#94A3B8', textAlign: 'center', padding: '14px 0' }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)', textAlign: 'center', padding: '14px 0' }}>
                     Este empleado no tiene novedades registradas.
                   </div>
                 ) : (
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
-                      <div style={{ background: '#0F172A', borderRadius: 8, padding: '8px 10px', textAlign: 'center', border: '1px solid #334155' }}>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#38BDF8' }}>{nov.novedades.length}</div>
-                        <div style={{ fontSize: 11, color: '#94A3B8' }}>Total novedades</div>
+                      <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--secondary)' }}>{nov.novedades.length}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total novedades</div>
                       </div>
                       {CONCEPTOS_CON_FECHA.filter(c => nov.porConcepto[c]).map(concepto => {
                         const data = nov.porConcepto[concepto]
                         const color = CONCEPTO_COLORS[concepto] || '#60A5FA'
                         return (
-                          <div key={concepto} style={{ background: '#0F172A', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                          <div key={concepto} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
                             <div style={{ fontSize: 18, fontWeight: 800, color }}>{data.episodios}</div>
-                            <div style={{ fontSize: 11, color: '#E2E8F0', fontWeight: 600 }}>{concepto}</div>
-                            <div style={{ fontSize: 10, color: '#94A3B8' }}>{data.dias.toFixed(0)} día{data.dias !== 1 ? 's' : ''}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text)', fontWeight: 600 }}>{concepto}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{data.dias.toFixed(0)} día{data.dias !== 1 ? 's' : ''}</div>
                           </div>
                         )
                       })}
                     </div>
 
-                    <div className="emp-dark-table-wrap">
-                      <table className="emp-dark-table">
+                    <div className="emp-hist-table-wrap">
+                      <table className="emp-hist-table">
                         <thead>
                           <tr>
                             <th>Concepto</th>
@@ -704,14 +690,14 @@ export default function EmpleadoHistorialModal({
                             return (
                               <tr key={r.id}>
                                 <td>
-                                  <span className="emp-dark-tag" style={{ '--tag': color }}>
+                                  <span className="emp-concept-tag" style={{ '--tag': color }}>
                                     {r.concepto}
                                   </span>
                                 </td>
-                                <td className="emp-cell-date">{r.fecha_inicio || '—'}</td>
-                                <td className="emp-cell-date">{r.fecha_fin || '—'}</td>
+                                <td className="emp-hist-cell-date">{r.fecha_inicio || '—'}</td>
+                                <td className="emp-hist-cell-date">{r.fecha_fin || '—'}</td>
                                 <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.total_dias ?? '—'}</td>
-                                <td style={{ color: '#CBD5E1' }}>{r.periodo || '—'}</td>
+                                <td style={{ color: 'var(--text-muted)' }}>{r.periodo || '—'}</td>
                               </tr>
                             )
                           })}
@@ -726,18 +712,10 @@ export default function EmpleadoHistorialModal({
         </div>
 
         {/* ── FOOTER ── */}
-        <div style={{
-          padding: '14px 24px',
-          background: '#0F172A',
-          borderTop: '1px solid #1E293B',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: 10,
-        }}>
+        <div className="emp-modal-footer" style={{ justifyContent: 'flex-end' }}>
           <button
             className="btn btn-ghost"
             onClick={onClose}
-            style={{ color: '#CBD5E1', borderColor: '#334155' }}
           >
             Cerrar
           </button>
