@@ -1,4 +1,5 @@
 import { hoyISO, sumarDiasISO, mesActualISO, mesRelativoISO } from './fecha'
+import { obtenerFechaRegresoLaboral } from './diasHabiles'
 import { normalizarConcepto, CONCEPTO_COLORS } from './parseExcel'
 import { MESES_DASHBOARD as MESES } from './dashboardConstants'
 
@@ -139,12 +140,17 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
       return normalizarConcepto(r.concepto) === concepto && (v === '' || v === 'validar')
     })
 
-    // Próximos vencimientos (7 días) — datos globales
+    // Próximos vencimientos (7 días) — datos globales (basado en fecha real de regreso laboral)
     const hoy = hoyISO()
     const hasta7 = sumarDiasISO(hoy, 7)
-    const proxVencimientos = allData.filter(r =>
-      normalizarConcepto(r.concepto) === concepto && r.fecha_fin && r.fecha_fin >= hoy && r.fecha_fin <= hasta7
-    ).sort((a, b) => a.fecha_fin.localeCompare(b.fecha_fin))
+    const proxVencimientos = allData
+      .filter(r => normalizarConcepto(r.concepto) === concepto && r.fecha_fin)
+      .map(r => ({
+        ...r,
+        fecha_regreso: obtenerFechaRegresoLaboral(r.fecha_fin),
+      }))
+      .filter(r => r.fecha_regreso >= hoy && (r.fecha_regreso <= hasta7 || r.fecha_fin <= hasta7))
+      .sort((a, b) => (a.fecha_regreso || a.fecha_fin).localeCompare(b.fecha_regreso || b.fecha_fin))
 
     // Activos hoy
     const activasHoy = allData.filter(r =>

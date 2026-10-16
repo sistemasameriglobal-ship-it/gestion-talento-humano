@@ -3,7 +3,7 @@
 // -------------------------------------------------------------
 // Vista de tarjetas de empleados con acciones rápidas.
 // =============================================================
-import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar } from 'lucide-react'
+import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale, CheckCircle2 } from 'lucide-react'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 
 function iniciales(nombre) {
@@ -13,8 +13,29 @@ function iniciales(nombre) {
   return (partes[0][0] + partes[1][0]).toUpperCase()
 }
 
+function obtenerFechaProceso(p) {
+  if (!p) return ''
+  if (p.fecha) return String(p.fecha).slice(0, 10)
+  if (p.fecha_inicio) {
+    const ini = String(p.fecha_inicio).slice(0, 10)
+    const fin = p.fecha_fin ? String(p.fecha_fin).slice(0, 10) : ''
+    return fin && fin !== ini ? `${ini} → ${fin}` : ini
+  }
+  return p.created_at ? String(p.created_at).slice(0, 10) : ''
+}
+
 export default function EmpleadoCards({
-  paged, novedadesPorEmpleado, periodosPorEmpleado = {}, vacacionesPorEmpleado = {}, onSelect, openEdit, onRetirar, onReintegrar, setDeleteId,
+  paged,
+  novedadesPorEmpleado,
+  periodosPorEmpleado = {},
+  vacacionesPorEmpleado = {},
+  procesosPorEmpleado = {},
+  onSelect,
+  openEdit,
+  onRetirar,
+  onReintegrar,
+  onLiquidar,
+  setDeleteId,
 }) {
   return (
     <>
@@ -26,14 +47,23 @@ export default function EmpleadoCards({
           const antig = calcAntiguedadEmpleado(emp, periodosEmp)
           const normNombre = (emp.nombre_completo || '').trim().toLowerCase()
           const vacsEmp = vacacionesPorEmpleado[emp.id] || vacacionesPorEmpleado[normNombre] || []
+          const procesosEmp = procesosPorEmpleado[emp.id] || procesosPorEmpleado[normNombre] || []
+          const ultimoProceso = procesosEmp.length > 0 ? procesosEmp[0] : null
           const vacacionActiva = getEstadoVacacionActual(emp, vacsEmp, nov?.novedades)
           const periodoActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || (emp.fecha_ingreso ? { fecha_ingreso: emp.fecha_ingreso, es_periodo_actual: true } : null)
           const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp, emp)
+
+          // Estado de liquidación para empleados inactivos
+          const ultimoPeriodoCerrado = [...periodosEmp].reverse().find(p => !p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1]
+          const estaLiquidado = Boolean(emp.liquidado || ultimoPeriodoCerrado?.liquidado)
+          const fechaLiq = emp.fecha_liquidacion || ultimoPeriodoCerrado?.fecha_liquidacion || null
+          const obsLiq = emp.observacion_liquidacion || ultimoPeriodoCerrado?.observacion_liquidacion || ''
+
           return (
             <div
               key={emp.id}
               className="card"
-              style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, opacity: emp.activo === false ? 0.6 : 1, cursor: 'pointer' }}
+              style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, opacity: emp.activo === false ? 0.82 : 1, cursor: 'pointer' }}
               onClick={() => onSelect(emp)}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -175,25 +205,173 @@ export default function EmpleadoCards({
                   <span>Retiro: {emp.fecha_retiro}</span>
                 </div>
               )}
-              {/* Chips de novedades y vacaciones */}
-              <div style={{ display: 'flex', gap: 6, marginTop: 2, paddingTop: 8, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                <span
-                  title={`Saldo de vacaciones del periodo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d${saldoVac.diasManuales ? `, Tomados histórico: ${saldoVac.diasManuales}d` : ''}, Disfrutados: ${saldoVac.diasDisfrutados}d, En dinero: ${saldoVac.diasEnDinero}d)`}
+
+              {/* Resumen compacto del último proceso disciplinario (solo si tiene procesos) */}
+              {ultimoProceso && (
+                <div
+                  onClick={e => {
+                    e.stopPropagation()
+                    onSelect(emp, 'procesos')
+                  }}
+                  title={
+                    `Último proceso disciplinario (${obtenerFechaProceso(ultimoProceso)}): ${ultimoProceso.concepto}` +
+                    (ultimoProceso.observacion ? `\nMotivo: ${ultimoProceso.observacion}` : '') +
+                    '\nClic para ver todos los procesos en el historial.'
+                  }
                   style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    fontSize: 10,
-                    fontWeight: 600,
-                    background: saldoVac.saldoPendiente > 0 ? '#ECFDF5' : 'var(--bg)',
-                    color: saldoVac.saldoPendiente > 0 ? '#047857' : 'var(--text-muted)',
-                    border: `0.5px solid ${saldoVac.saldoPendiente > 0 ? '#A7F3D0' : 'var(--border)'}`,
+                    marginTop: 2,
+                    padding: '6px 9px',
+                    borderRadius: 7,
+                    background: '#FFF7ED',
+                    border: '1px solid #FED7AA',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    cursor: 'pointer',
+                    transition: 'background .15s',
                   }}
                 >
-                  🌴 Saldo vac.: {saldoVac.saldoPendiente}d
-                </span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#9A3412', display: 'inline-flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <Scale size={11} style={{ flexShrink: 0, color: '#EA580C' }} />
+                      {ultimoProceso.concepto}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#C2410C', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {obtenerFechaProceso(ultimoProceso)}
+                    </span>
+                  </div>
+                  {ultimoProceso.observacion && (
+                    <div style={{
+                      fontSize: 10.5,
+                      color: '#7C2D12',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {ultimoProceso.observacion}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Chips de novedades, vacaciones/liquidación y procesos disciplinarios */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 2, paddingTop: 8, borderTop: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
+                {emp.activo === false ? (
+                  estaLiquidado ? (
+                    <span
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (onLiquidar) onLiquidar(emp)
+                      }}
+                      title={obsLiq ? `Liquidado el ${fechaLiq || '—'}\nObservaciones: ${obsLiq}\n(Clic para editar detalle)` : `Liquidado el ${fechaLiq || '—'} (Clic para ver/editar)`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: '#ECFDF5',
+                        color: '#047857',
+                        border: '1px solid #6EE7B7',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✓ Liquidado: {fechaLiq ? String(fechaLiq).slice(0, 10) : 'Sí'}
+                    </span>
+                  ) : (
+                    <div
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <span
+                        title="Este excolaborador aún figura como pendiente por liquidar en contabilidad."
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          background: '#FEF3C7',
+                          color: '#B45309',
+                          border: '1px solid #F59E0B',
+                        }}
+                      >
+                        ⚠️ Pendiente por liquidar
+                      </span>
+                      {onLiquidar && (
+                        <button
+                          type="button"
+                          onClick={() => onLiquidar(emp)}
+                          title="Registrar fecha y comprobante de liquidación"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            background: '#059669',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+                          }}
+                        >
+                          <CheckCircle2 size={10} /> Liquidar
+                        </button>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <span
+                    title={`Saldo de vacaciones del periodo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d${saldoVac.diasManuales ? `, Tomados histórico: ${saldoVac.diasManuales}d` : ''}, Disfrutados: ${saldoVac.diasDisfrutados}d, En dinero: ${saldoVac.diasEnDinero}d)`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      background: saldoVac.saldoPendiente > 0 ? '#ECFDF5' : 'var(--bg)',
+                      color: saldoVac.saldoPendiente > 0 ? '#047857' : 'var(--text-muted)',
+                      border: `0.5px solid ${saldoVac.saldoPendiente > 0 ? '#A7F3D0' : 'var(--border)'}`,
+                    }}
+                  >
+                    🌴 Saldo vac.: {saldoVac.saldoPendiente}d
+                  </span>
+                )}
+
+                {procesosEmp.length > 0 && (
+                  <span
+                    onClick={e => {
+                      e.stopPropagation()
+                      onSelect(emp, 'procesos')
+                    }}
+                    title="Clic para abrir directamente la sección de procesos disciplinarios en el historial"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: '#FFEDD5',
+                      color: '#C2410C',
+                      border: '1px solid #FDBA74',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Scale size={10} /> {procesosEmp.length} proc. disc.
+                  </span>
+                )}
+
                 {nov && nov.novedades.length > 0 ? (
                   <>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600, background: '#E6F1FB', color: '#0C447C', border: '0.5px solid #B5D4F4' }}>
@@ -206,7 +384,9 @@ export default function EmpleadoCards({
                     )}
                   </>
                 ) : (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sin novedades</span>
+                  procesosEmp.length === 0 && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sin novedades</span>
+                  )
                 )}
               </div>
             </div>
@@ -215,4 +395,4 @@ export default function EmpleadoCards({
       </div>
     </>
   )
-}
+}

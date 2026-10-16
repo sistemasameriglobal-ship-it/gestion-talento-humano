@@ -4,14 +4,36 @@
 // Modal con el historial de novedades de un empleado (KPIs por
 // concepto + tabla de registros).
 // =============================================================
-import { X, Edit2, Award } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { X, Edit2, Award, Scale, CheckCircle2 } from 'lucide-react'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { CONCEPTOS_CON_FECHA } from './empleadosConstants'
 import { formatFecha, calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
 
-export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmpleado, periodos = [], vacaciones = [], onClose, onEdit, onReintegrar }) {
+export default function EmpleadoHistorialModal({
+  selectedEmp,
+  novedadesPorEmpleado,
+  periodos = [],
+  vacaciones = [],
+  procesos = [],
+  initialSection = null,
+  onClose,
+  onEdit,
+  onReintegrar,
+  onLiquidar,
+}) {
   const nov = novedadesPorEmpleado[selectedEmp.nombre_completo]
+  const procesosRef = useRef(null)
+
+  useEffect(() => {
+    if (initialSection === 'procesos' && procesosRef.current) {
+      const t = setTimeout(() => {
+        procesosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 80)
+      return () => clearTimeout(t)
+    }
+  }, [initialSection])
 
   // Si no hay lista de periodos de la BD, armar periodo base con los datos del empleado
   const listaPeriodos = (periodos && periodos.length > 0)
@@ -31,6 +53,10 @@ export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmplea
   const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacaciones, listaPeriodos, selectedEmp)
   const vacacionActiva = getEstadoVacacionActual(selectedEmp, vacaciones, nov?.novedades)
   const antig = calcAntiguedadEmpleado(selectedEmp, listaPeriodos)
+  const ultimoPeriodoCerrado = [...listaPeriodos].reverse().find(p => !p.es_periodo_actual) || listaPeriodos[listaPeriodos.length - 1]
+  const estaLiquidado = Boolean(selectedEmp.liquidado || ultimoPeriodoCerrado?.liquidado)
+  const fechaLiq = selectedEmp.fecha_liquidacion || ultimoPeriodoCerrado?.fecha_liquidacion || null
+  const obsLiq = selectedEmp.observacion_liquidacion || ultimoPeriodoCerrado?.observacion_liquidacion || ''
 
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -39,6 +65,33 @@ export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmplea
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h2 style={{ margin: 0 }}>{selectedEmp.nombre_completo}</h2>
+              {selectedEmp.activo === false && (
+                estaLiquidado ? (
+                  <span
+                    onClick={() => { if (onLiquidar) { onClose(); onLiquidar(selectedEmp) } }}
+                    title={obsLiq ? `Observaciones: ${obsLiq}` : 'Liquidación registrada'}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 999,
+                      background: '#ECFDF5', color: '#047857', border: '1px solid #6EE7B7',
+                      cursor: onLiquidar ? 'pointer' : 'default',
+                    }}
+                  >
+                    ✓ Liquidado: {fechaLiq ? String(fechaLiq).slice(0, 10) : 'Sí'}
+                  </span>
+                ) : (
+                  <span
+                    onClick={() => { if (onLiquidar) { onClose(); onLiquidar(selectedEmp) } }}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 999,
+                      background: '#FEF3C7', color: '#B45309', border: '1px solid #F59E0B',
+                      cursor: onLiquidar ? 'pointer' : 'default',
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    ⚠️ Pendiente por liquidar {onLiquidar && <strong style={{ textDecoration: 'underline', marginLeft: 3 }}>• Liquidar</strong>}
+                  </span>
+                )
+              )}
               {vacacionActiva && (
                 <span style={{
                   fontSize: 11,
@@ -387,6 +440,70 @@ export default function EmpleadoHistorialModal({ selectedEmp, novedadesPorEmplea
               </div>
             </div>
           )}
+
+          {/* Historial de Procesos Disciplinarios */}
+          {(procesos && procesos.length > 0) || initialSection === 'procesos' ? (
+            <div
+              ref={procesosRef}
+              style={{
+                marginBottom: 18,
+                background: initialSection === 'procesos' ? '#FFFBEB' : 'var(--surface)',
+                borderRadius: 10,
+                border: initialSection === 'procesos' ? '1.5px solid #F59E0B' : '1px solid var(--border)',
+                padding: '12px 14px',
+                transition: 'all .3s ease',
+              }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9A3412', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Scale size={13} style={{ color: '#EA580C' }} />
+                  Procesos Disciplinarios ({procesos.length})
+                </span>
+              </div>
+              {procesos.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 0' }}>
+                  No registra procesos disciplinarios.
+                </div>
+              ) : (
+                <div className="table-container" style={{ border: 'none', margin: 0 }}>
+                  <table style={{ fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ padding: '6px 8px' }}>Concepto</th>
+                        <th style={{ padding: '6px 8px' }}>Fecha</th>
+                        <th style={{ padding: '6px 8px' }}>Motivo / Observación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {procesos.map(p => {
+                        const fEvento = p.fecha
+                          ? String(p.fecha).slice(0, 10)
+                          : p.fecha_inicio
+                            ? (p.fecha_fin && p.fecha_fin !== p.fecha_inicio
+                                ? `${String(p.fecha_inicio).slice(0, 10)} → ${String(p.fecha_fin).slice(0, 10)}`
+                                : String(p.fecha_inicio).slice(0, 10))
+                            : (p.created_at ? String(p.created_at).slice(0, 10) : '—')
+                        return (
+                          <tr key={p.id}>
+                            <td style={{ padding: '6px 8px', fontWeight: 700, color: '#9A3412', whiteSpace: 'nowrap' }}>
+                              {p.concepto}
+                            </td>
+                            <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
+                              {fEvento}{p.hora ? ` (${String(p.hora).slice(0, 5)})` : ''}
+                            </td>
+                            <td style={{ padding: '6px 8px', color: 'var(--text)' }}>
+                              {p.observacion || '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : null}
+
           {!nov || nov.novedades.length === 0 ? (
             <div className="empty-state"><p>Este empleado no tiene novedades registradas.</p></div>
           ) : (

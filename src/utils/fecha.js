@@ -86,3 +86,6 @@ export function formatDuracion(iso1, iso2) {
   if (restDias > 0) parts.push(`${restDias} día${restDias !== 1 ? 's' : ''}`)
   return parts.join(' y ')
 }
+
+export { obtenerFechaRegresoLaboral } from './diasHabiles'
+

@@ -75,12 +75,18 @@ create table if not exists public.empleados (
   fecha_retiro date,
   tiene_vehiculo boolean not null default false,
   empresa text default 'ameriglobal',
-  dias_vacaciones_tomados_manual numeric default 0
+  dias_vacaciones_tomados_manual numeric default 0,
+  liquidado boolean not null default false,
+  fecha_liquidacion date,
+  observacion_liquidacion text
 );
 alter table public.empleados
   add column if not exists departamento_id uuid references public.departamentos(id),
   add column if not exists empresa_id uuid references public.empresas(id),
-  add column if not exists dias_vacaciones_tomados_manual numeric default 0;
+  add column if not exists dias_vacaciones_tomados_manual numeric default 0,
+  add column if not exists liquidado boolean not null default false,
+  add column if not exists fecha_liquidacion date,
+  add column if not exists observacion_liquidacion text;
 
 -- ── perfiles (1:1 con auth.users) ────────────────────────────────────
 create table if not exists public.perfiles (

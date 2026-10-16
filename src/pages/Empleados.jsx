@@ -5,6 +5,7 @@ import { useCompany } from '../context/CompanyContext'
 import * as empleadosApi from '../api/empleados'
 import * as novedadesApi from '../api/novedades'
 import * as vacacionesApi from '../api/vacaciones'
+import * as procesosApi from '../api/procesosDisciplinarios'
 import { hoyISO } from '../utils/fecha'
 import { normalizarConcepto, mapearFilaEmpleadoExcel } from '../utils/parseExcel'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo } from '../utils/vacacionesHelpers'
@@ -20,6 +21,7 @@ import EmpleadoFormModal from '../components/empleados/EmpleadoFormModal'
 import EmpleadoHistorialModal from '../components/empleados/EmpleadoHistorialModal'
 import ModalRetiroEmpleado from '../components/empleados/ModalRetiroEmpleado'
 import ModalReintegroEmpleado from '../components/empleados/ModalReintegroEmpleado'
+import ModalLiquidarEmpleado from '../components/empleados/ModalLiquidarEmpleado'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
 import Paginacion from '../components/ui/Paginacion'
 
@@ -53,6 +55,7 @@ export default function Empleados() {
   const [novedades, setNovedades] = useState([])
   const [periodos, setPeriodos] = useState([])
   const [vacaciones, setVacaciones] = useState([])
+  const [procesos, setProcesos] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -67,23 +70,31 @@ export default function Empleados() {
   const [sortBy, setSortBy] = useState('nombre_asc')
   const [vista, setVista] = useState('tarjetas')
   const [selectedEmp, setSelectedEmp] = useState(null)
+  const [historialSection, setHistorialSection] = useState(null)
   const [duplicadoWarning, setDuplicadoWarning] = useState(null)
   const [fileInputKey, setFileInputKey] = useState(0)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
 
-  // Estados para modales dedicados de Retiro y Reintegro
+  // Estados para modales dedicados de Retiro, Reintegro y Liquidación
   const [retiroEmp, setRetiroEmp] = useState(null)
   const [reintegroEmp, setReintegroEmp] = useState(null)
+  const [liquidarEmp, setLiquidarEmp] = useState(null)
   const [actionSaving, setActionSaving] = useState(false)
+
+  const handleSelectEmp = useCallback((emp, section = null) => {
+    setSelectedEmp(emp)
+    setHistorialSection(section)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
-    let [{ data }, { data: novData }, { data: periodosData }, { data: vacData }] = await Promise.all([
+    let [{ data }, { data: novData }, { data: periodosData }, { data: vacData }, { data: procData }] = await Promise.all([
       empleadosApi.listarEmpleados(currentCompany),
       novedadesApi.listarNovedadesCompleto(currentCompany),
       empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
       Promise.resolve(vacacionesApi.listarVacaciones(currentCompany)).catch(() => ({ data: [] })),
+      Promise.resolve(procesosApi.listarProcesosDisciplinarios(currentCompany)).catch(() => ({ data: [] })),
     ])
 
     // Detectar y auto-sincronizar colaboradores recientes que no tengan su novedad de Ingreso registrada
@@ -131,6 +142,7 @@ export default function Empleados() {
     setNovedades(novData || [])
     setPeriodos(periodosData || [])
     setVacaciones(vacData || [])
+    setProcesos(procData || [])
     setLoading(false)
   }, [currentCompany])
 
@@ -162,6 +174,29 @@ export default function Empleados() {
     return acc
   }, [vacaciones])
 
+  const procesosPorEmpleado = useMemo(() => {
+    const acc = {}
+    const addUnique = (key, p) => {
+      if (!key) return
+      if (!acc[key]) acc[key] = []
+      if (!acc[key].some(item => item.id === p.id)) {
+        acc[key].push(p)
+      }
+    }
+    ;(procesos || []).forEach(p => {
+      if (p.empleado_id) addUnique(p.empleado_id, p)
+      if (p.nombre_empleado) {
+        addUnique(p.nombre_empleado.trim().toLowerCase(), p)
+        addUnique(normalizarNombre(p.nombre_empleado), p)
+      }
+    })
+    const fechaSort = (p) => p.fecha || p.fecha_inicio || (p.created_at ? p.created_at.slice(0, 10) : '')
+    Object.values(acc).forEach(list => {
+      list.sort((a, b) => fechaSort(b).localeCompare(fechaSort(a)))
+    })
+    return acc
+  }, [procesos])
+
   const novedadesPorEmpleado = useMemo(() => {
     const acc = {}
     novedades.forEach(r => {
@@ -192,9 +227,14 @@ export default function Empleados() {
       const matchEstado = !filterEstado || (filterEstado === 'activos' ? r.activo !== false : r.activo === false)
       // Tabs rápidos
       const nov = novedadesPorEmpleado[r.nombre_completo]
+      const periodosEmp = periodosPorEmpleado[r.id] || []
+      const ultimoPeriodoCerrado = [...periodosEmp].reverse().find(p => !p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1]
+      const estaLiquidado = Boolean(r.liquidado || ultimoPeriodoCerrado?.liquidado)
+
       const matchTab = !filterTab ||
         (filterTab === 'activos' && r.activo !== false) ||
         (filterTab === 'inactivos' && r.activo === false) ||
+        (filterTab === 'pend_liquidar' && r.activo === false && !estaLiquidado) ||
         (filterTab === 'con_inc' && nov && nov.episodiosInc > 0) ||
         (filterTab === 'sin_correo' && !r.correo)
       return matchSearch && matchDep && matchEstado && matchTab
@@ -213,7 +253,7 @@ export default function Empleados() {
       }
     })
     return res
-  }, [rows, search, filterDep, filterEstado, filterTab, sortBy, novedadesPorEmpleado])
+  }, [rows, search, filterDep, filterEstado, filterTab, sortBy, novedadesPorEmpleado, periodosPorEmpleado])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -349,6 +389,9 @@ export default function Empleados() {
       const { error } = await empleadosApi.actualizarEmpleado(retiroEmp.id, {
         activo: false,
         fecha_retiro: fRetiroFinal,
+        liquidado: false,
+        fecha_liquidacion: null,
+        observacion_liquidacion: null,
       })
       if (error) throw error
 
@@ -504,6 +547,42 @@ export default function Empleados() {
     }
   }
 
+  const handleConfirmLiquidacion = async ({ liquidado, fecha_liquidacion, observacion_liquidacion }) => {
+    if (!liquidarEmp) return
+    setActionSaving(true)
+    try {
+      const periodosEmp = periodosPorEmpleado[liquidarEmp.id] || []
+      const ultimoPeriodoCerrado = [...periodosEmp].reverse().find(p => !p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1]
+      const { error } = await empleadosApi.marcarLiquidado(liquidarEmp.id, {
+        periodoId: ultimoPeriodoCerrado?.id || null,
+        fecha_liquidacion,
+        observacion_liquidacion,
+        liquidado,
+      })
+      if (error) throw error
+
+      logAccion('LIQUIDAR', 'empleados', liquidarEmp.id, currentCompany, {
+        liquidado,
+        fecha_liquidacion,
+        observacion_liquidacion,
+      })
+
+      setMsg({
+        type: 'success',
+        text: liquidado
+          ? `Liquidación de ${liquidarEmp.nombre_completo} registrada exitosamente (${fecha_liquidacion}).`
+          : `Colaborador ${liquidarEmp.nombre_completo} marcado nuevamente como pendiente por liquidar.`,
+      })
+      setLiquidarEmp(null)
+      await load()
+      setTimeout(() => setMsg(null), 3500)
+    } catch (e) {
+      setMsg({ type: 'error', text: 'Error al registrar liquidación: ' + e.message })
+    } finally {
+      setActionSaving(false)
+    }
+  }
+
   const f = (k) => (e) => {
     const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value
     setForm(p => ({ ...p, [k]: val }))
@@ -637,13 +716,21 @@ export default function Empleados() {
     }
   }
 
-  // Tabs rápidos de estado (dependen de rows + novedades)
+  // Tabs rápidos de estado (dependen de rows + novedades + liquidación)
   const conInc = rows.filter(r => (novedadesPorEmpleado[r.nombre_completo]?.episodiosInc || 0) > 0).length
   const sinCorreo = rows.filter(r => !r.correo).length
+  const pendLiquidar = rows.filter(r => {
+    if (r.activo !== false) return false
+    const periodosEmp = periodosPorEmpleado[r.id] || []
+    const ultimoCerrado = [...periodosEmp].reverse().find(p => !p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1]
+    return !r.liquidado && !ultimoCerrado?.liquidado
+  }).length
+
   const tabs = [
     { val: '', label: `Todos (${rows.length})` },
     { val: 'activos', label: `Activos (${rows.filter(r => r.activo !== false).length})` },
     { val: 'inactivos', label: `Inactivos (${rows.filter(r => r.activo === false).length})` },
+    ...(pendLiquidar > 0 ? [{ val: 'pend_liquidar', label: `⚠️ Pendientes por liquidar (${pendLiquidar})` }] : []),
     ...(conInc > 0 ? [{ val: 'con_inc', label: `Con incapacidades (${conInc})` }] : []),
     ...(sinCorreo > 0 ? [{ val: 'sin_correo', label: `Sin correo (${sinCorreo})` }] : []),
   ]
@@ -773,10 +860,12 @@ export default function Empleados() {
               novedadesPorEmpleado={novedadesPorEmpleado}
               periodosPorEmpleado={periodosPorEmpleado}
               vacacionesPorEmpleado={vacacionesPorEmpleado}
-              onSelect={setSelectedEmp}
+              procesosPorEmpleado={procesosPorEmpleado}
+              onSelect={handleSelectEmp}
               openEdit={openEdit}
               onRetirar={setRetiroEmp}
               onReintegrar={setReintegroEmp}
+              onLiquidar={setLiquidarEmp}
               setDeleteId={setDeleteId}
             />
             {pagination}
@@ -788,10 +877,12 @@ export default function Empleados() {
               novedadesPorEmpleado={novedadesPorEmpleado}
               periodosPorEmpleado={periodosPorEmpleado}
               vacacionesPorEmpleado={vacacionesPorEmpleado}
-              onSelect={setSelectedEmp}
+              procesosPorEmpleado={procesosPorEmpleado}
+              onSelect={handleSelectEmp}
               openEdit={openEdit}
               onRetirar={setRetiroEmp}
               onReintegrar={setReintegroEmp}
+              onLiquidar={setLiquidarEmp}
               setDeleteId={setDeleteId}
             />
             {pagination}
@@ -833,6 +924,15 @@ export default function Empleados() {
         />
       )}
 
+      {liquidarEmp && (
+        <ModalLiquidarEmpleado
+          emp={liquidarEmp}
+          onClose={() => setLiquidarEmp(null)}
+          onConfirm={handleConfirmLiquidacion}
+          saving={actionSaving}
+        />
+      )}
+
       <DeleteConfirmModal
         deleteId={deleteId}
         onClose={() => setDeleteId(null)}
@@ -847,9 +947,12 @@ export default function Empleados() {
           novedadesPorEmpleado={novedadesPorEmpleado}
           periodos={selectedEmp ? periodosPorEmpleado[selectedEmp.id] || [] : []}
           vacaciones={selectedEmp ? (vacacionesPorEmpleado[selectedEmp.id] || vacacionesPorEmpleado[normalizarNombre(selectedEmp.nombre_completo)] || []) : []}
-          onClose={() => setSelectedEmp(null)}
-          onEdit={() => { setSelectedEmp(null); openEdit(selectedEmp) }}
+          procesos={selectedEmp ? (procesosPorEmpleado[selectedEmp.id] || procesosPorEmpleado[normalizarNombre(selectedEmp.nombre_completo)] || []) : []}
+          initialSection={historialSection}
+          onClose={() => { setSelectedEmp(null); setHistorialSection(null) }}
+          onEdit={() => { const e = selectedEmp; setSelectedEmp(null); setHistorialSection(null); openEdit(e) }}
           onReintegrar={setReintegroEmp}
+          onLiquidar={setLiquidarEmp}
         />
       )}
     </div>

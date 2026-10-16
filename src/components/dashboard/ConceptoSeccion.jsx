@@ -1,6 +1,8 @@
 import { ArrowUpDown } from 'lucide-react'
 import StatCard from './StatCard'
 import BarChart from './BarChart'
+import { hoyISO } from '../../utils/fecha'
+import { obtenerFechaRegresoLaboral } from '../../utils/diasHabiles'
 
 function Th({ col, children, center, sortBy, tieneDias, color, onSort }) {
   return (
@@ -97,21 +99,30 @@ export default function ConceptoSeccion({
                 <thead>
                   <tr>
                     <th>Colaborador</th>
-                    <th style={{ textAlign: 'center' }}>Fecha fin</th>
+                    <th style={{ textAlign: 'center' }}>Fin incapacidad / Regreso</th>
                     <th style={{ textAlign: 'center' }}>Días</th>
                   </tr>
                 </thead>
                 <tbody>
                   {d.proxVencimientos.slice(0, 6).map((r, i) => {
-                    const ahoraVenc = new Date()
-                    const hoyVencUTC = Date.UTC(ahoraVenc.getFullYear(), ahoraVenc.getMonth(), ahoraVenc.getDate())
-                    const diasRest = Math.round((new Date(r.fecha_fin).getTime() - hoyVencUTC) / 86400000)
+                    const fechaRegreso = r.fecha_regreso || obtenerFechaRegresoLaboral(r.fecha_fin)
+                    const hoyStr = hoyISO()
+                    const hoyUTC = new Date(hoyStr + 'T00:00:00Z').getTime()
+                    const regUTC = new Date(fechaRegreso + 'T00:00:00Z').getTime()
+                    const diasRest = Math.max(0, Math.round((regUTC - hoyUTC) / 86400000))
                     return (
                       <tr key={i}>
                         <td style={{ fontWeight: 600, fontSize: 12 }}>{r.nombre_empleado}</td>
-                        <td style={{ textAlign: 'center', fontSize: 12 }}>{r.fecha_fin}</td>
+                        <td style={{ textAlign: 'center', fontSize: 11.5 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Fecha Fin: {r.fecha_fin}</span>
+                          <span style={{ margin: '0 4px', color: 'var(--text-muted)' }}>•</span>
+                          <strong style={{ color: 'var(--text)' }}>Regresa: {fechaRegreso}</strong>
+                        </td>
                         <td style={{ textAlign: 'center' }}>
-                          <span style={{ background: diasRest <= 2 ? 'rgba(220,38,38,.14)' : 'rgba(217,119,6,.14)', color: diasRest <= 2 ? 'var(--danger-text)' : 'var(--warning-text)', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                          <span
+                            title={`Regresa a laborar el día hábil ${fechaRegreso} (fin de reposo: ${r.fecha_fin})`}
+                            style={{ background: diasRest <= 2 ? 'rgba(220,38,38,.14)' : 'rgba(217,119,6,.14)', color: diasRest <= 2 ? 'var(--danger-text)' : 'var(--warning-text)', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}
+                          >
                             {diasRest === 0 ? 'Hoy' : `${diasRest}d`}
                           </span>
                         </td>

@@ -269,3 +269,53 @@ export async function listarTodosLosPeriodos(empresa) {
     return { data: [], error: err }
   }
 }
+
+/**
+ * Marca a un empleado inactivo (y su periodo cerrado correspondiente) como liquidado
+ * o actualiza el estado de su liquidación contable.
+ */
+export async function marcarLiquidado(
+  empleadoId,
+  { periodoId = null, fecha_liquidacion = null, observacion_liquidacion = null, liquidado = true } = {}
+) {
+  const payload = {
+    liquidado: Boolean(liquidado),
+    fecha_liquidacion: liquidado ? (fecha_liquidacion || null) : null,
+    observacion_liquidacion: observacion_liquidacion?.trim() || null,
+  }
+
+  // 1. Actualizar tabla principal public.empleados
+  const resEmp = await supabase
+    .from(TABLA)
+    .update(payload)
+    .eq('id', empleadoId)
+    .select()
+
+  // 2. Sincronizar también en public.empleado_periodos (si existe periodo cerrado o se indicó periodoId)
+  try {
+    if (periodoId) {
+      await supabase
+        .from(TABLA_PERIODOS)
+        .update(payload)
+        .eq('id', periodoId)
+    } else {
+      const { data: periodos } = await supabase
+        .from(TABLA_PERIODOS)
+        .select('id, numero_periodo')
+        .eq('empleado_id', empleadoId)
+        .order('numero_periodo', { ascending: false })
+        .limit(1)
+      if (periodos && periodos.length > 0) {
+        await supabase
+          .from(TABLA_PERIODOS)
+          .update(payload)
+          .eq('id', periodos[0].id)
+      }
+    }
+  } catch (err) {
+    console.warn('Nota: no se pudo actualizar liquidación en empleado_periodos:', err)
+  }
+
+  return resEmp
+}
+

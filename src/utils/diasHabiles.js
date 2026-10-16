@@ -91,3 +91,40 @@ export function diasHabilesEntre(inicio, fin) {
   }
   return count
 }
+
+/**
+ * Calcula la fecha efectiva de regreso laboral (siguiente día hábil de lunes a viernes
+ * que no sea festivo en Colombia) a partir de la fecha de finalización de una incapacidad/novedad.
+ * @param {string} fechaFin - Fecha fin en formato 'YYYY-MM-DD'
+ * @returns {string} Fecha de regreso en formato 'YYYY-MM-DD'
+ */
+export function obtenerFechaRegresoLaboral(fechaFin) {
+  if (!fechaFin) return ''
+  const clean = String(fechaFin).trim().slice(0, 10)
+  const parts = clean.split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return clean
+
+  const cur = new Date(parts[0], parts[1] - 1, parts[2])
+  // Sumar 1 día calendario a fechaFin
+  cur.setDate(cur.getDate() + 1)
+
+  const fmtISO = (dt) => {
+    const y = dt.getFullYear()
+    const m = String(dt.getMonth() + 1).padStart(2, '0')
+    const d = String(dt.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  const festivosCache = {}
+  while (true) {
+    const y = cur.getFullYear()
+    if (!festivosCache[y]) festivosCache[y] = getFestivosCol(y)
+    const dow = cur.getDay() // 0 = Domingo, 6 = Sábado
+    const iso = fmtISO(cur)
+    if (dow !== 0 && dow !== 6 && !festivosCache[y].has(iso)) {
+      return iso
+    }
+    cur.setDate(cur.getDate() + 1)
+  }
+}
+

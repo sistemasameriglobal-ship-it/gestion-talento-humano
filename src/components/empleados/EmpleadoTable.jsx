@@ -3,12 +3,22 @@
 // -------------------------------------------------------------
 // Vista de tabla de empleados con acciones rápidas.
 // =============================================================
-import { Edit2, Trash2, RotateCcw, Archive } from 'lucide-react'
+import { Edit2, Trash2, RotateCcw, Archive, CheckCircle2, Scale } from 'lucide-react'
 import PersonCell from '../ui/PersonCell'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
 
 export default function EmpleadoTable({
-  paged, novedadesPorEmpleado, periodosPorEmpleado = {}, vacacionesPorEmpleado = {}, onSelect, openEdit, onRetirar, onReintegrar, setDeleteId,
+  paged,
+  novedadesPorEmpleado,
+  periodosPorEmpleado = {},
+  vacacionesPorEmpleado = {},
+  procesosPorEmpleado = {},
+  onSelect,
+  openEdit,
+  onRetirar,
+  onReintegrar,
+  onLiquidar,
+  setDeleteId,
 }) {
   return (
     <>
@@ -18,8 +28,8 @@ export default function EmpleadoTable({
             <tr>
               <th>Nombre</th><th>Área</th><th>Cargo</th><th>Correo</th>
               <th style={{ textAlign: 'center' }}>Estado</th>
-              <th style={{ textAlign: 'center' }}>Vacaciones</th>
-              <th style={{ textAlign: 'center' }}>Novedades</th>
+              <th style={{ textAlign: 'center' }}>Vacaciones / Liquidación</th>
+              <th style={{ textAlign: 'center' }}>Novedades / Proc.</th>
               <th></th>
             </tr>
           </thead>
@@ -31,11 +41,19 @@ export default function EmpleadoTable({
               const antig = calcAntiguedadEmpleado(emp, periodosEmp)
               const normNombre = (emp.nombre_completo || '').trim().toLowerCase()
               const vacsEmp = vacacionesPorEmpleado[emp.id] || vacacionesPorEmpleado[normNombre] || []
+              const procesosEmp = procesosPorEmpleado[emp.id] || procesosPorEmpleado[normNombre] || []
+              const ultimoProc = procesosEmp.length > 0 ? procesosEmp[0] : null
               const vacacionActiva = getEstadoVacacionActual(emp, vacsEmp, nov?.novedades)
               const periodoActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || (emp.fecha_ingreso ? { fecha_ingreso: emp.fecha_ingreso, es_periodo_actual: true } : null)
               const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp, emp)
+
+              const ultimoPeriodoCerrado = [...periodosEmp].reverse().find(p => !p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1]
+              const estaLiquidado = Boolean(emp.liquidado || ultimoPeriodoCerrado?.liquidado)
+              const fechaLiq = emp.fecha_liquidacion || ultimoPeriodoCerrado?.fecha_liquidacion || null
+              const obsLiq = emp.observacion_liquidacion || ultimoPeriodoCerrado?.observacion_liquidacion || ''
+
               return (
-                <tr key={emp.id} style={{ cursor: 'pointer', opacity: emp.activo === false ? 0.55 : 1 }} onClick={() => onSelect(emp)}>
+                <tr key={emp.id} style={{ cursor: 'pointer', opacity: emp.activo === false ? 0.78 : 1 }} onClick={() => onSelect(emp)}>
                   <td style={{ maxWidth: 260 }}>
                     <PersonCell
                       nombre={emp.nombre_completo}
@@ -85,8 +103,72 @@ export default function EmpleadoTable({
                       )}
                     </div>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {vacacionActiva ? (
+                  <td style={{ textAlign: 'center' }} onClick={emp.activo === false ? e => e.stopPropagation() : undefined}>
+                    {emp.activo === false ? (
+                      estaLiquidado ? (
+                        <span
+                          onClick={() => onLiquidar && onLiquidar(emp)}
+                          title={obsLiq ? `Liquidado el ${fechaLiq || '—'}\nObservaciones: ${obsLiq}` : `Liquidado el ${fechaLiq || '—'}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            background: '#ECFDF5',
+                            color: '#047857',
+                            border: '1px solid #6EE7B7',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          ✓ Liquidado: {fechaLiq ? String(fechaLiq).slice(0, 10) : 'Sí'}
+                        </span>
+                      ) : (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', justifyContent: 'center' }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              padding: '2px 7px',
+                              borderRadius: 999,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              background: '#FEF3C7',
+                              color: '#B45309',
+                              border: '1px solid #F59E0B',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            ⚠️ Pendiente por liquidar
+                          </span>
+                          {onLiquidar && (
+                            <button
+                              type="button"
+                              onClick={() => onLiquidar(emp)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                padding: '2px 7px',
+                                borderRadius: 999,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                background: '#059669',
+                                color: '#FFFFFF',
+                                border: 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <CheckCircle2 size={10} /> Liquidar
+                            </button>
+                          )}
+                        </div>
+                      )
+                    ) : vacacionActiva ? (
                       <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                         <span
                           title={vacacionActiva.estaDeVacaciones
@@ -139,7 +221,35 @@ export default function EmpleadoTable({
                       </span>
                     )}
                   </td>
-                  <td style={{ textAlign: 'center', color: '#2563EB', fontWeight: 600 }}>{nov ? nov.novedades.length : 0}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ color: '#2563EB', fontWeight: 600, fontSize: 12 }}>{nov ? nov.novedades.length : 0}</span>
+                      {procesosEmp.length > 0 && (
+                        <span
+                          onClick={e => {
+                            e.stopPropagation()
+                            onSelect(emp, 'procesos')
+                          }}
+                          title={`Último proceso: ${ultimoProc?.concepto || ''} (${ultimoProc?.fecha || ultimoProc?.fecha_inicio || ''})${ultimoProc?.observacion ? `\nMotivo: ${ultimoProc.observacion}` : ''}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            padding: '1px 6px',
+                            borderRadius: 999,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            background: '#FFEDD5',
+                            color: '#C2410C',
+                            border: '1px solid #FDBA74',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Scale size={10} /> {procesosEmp.length}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="icon-btn" title="Editar" onClick={() => openEdit(emp)}><Edit2 size={12} /></button>
@@ -166,4 +276,4 @@ export default function EmpleadoTable({
       </div>
     </>
   )
-}
+}
