@@ -53,12 +53,20 @@ export function formatoDiasTexto(dias) {
 
 /**
  * Identifica si un colaborador es aprendiz / practicante / SENA
+ * Reconoce la palabra 'aprendiz' y variantes sin distinguir mayúsculas ni acentos.
  */
-export function esAprendizEmpleado(emp) {
+export function esAprendiz(emp) {
   if (!emp) return false
-  const cargo = String(emp.cargo || '').toLowerCase()
-  const dep = String(emp.dependencia || '').toLowerCase()
-  const tipoDoc = String(emp.tipo_documento || '').toUpperCase()
+  const norm = (str) => String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+
+  const cargo = norm(emp.cargo)
+  const dep = norm(emp.dependencia)
+  const tipoDoc = String(emp.tipo_documento || '').toUpperCase().trim()
+
   return (
     cargo.includes('aprendiz') ||
     cargo.includes('sena') ||
@@ -67,6 +75,10 @@ export function esAprendizEmpleado(emp) {
     dep.includes('sena') ||
     tipoDoc === 'TI'
   )
+}
+
+export function esAprendizEmpleado(emp) {
+  return esAprendiz(emp)
 }
 
 // ── Gestión de Continuidad Laboral (Ascensos y Cambios de Cargo) ─────────────
@@ -228,11 +240,14 @@ export function calcularAniosCumplidos(fechaIngreso, fechaCorte = null) {
 }
 
 /**
- * Calcula los días de vacaciones causados (habilitados para disfrute) por cada año cumplido de servicio (12 meses = 15 días).
+ * Calcula los días de vacaciones causados acumulados por tiempo laborado (Art. 186 CST: 15 días por cada 360 días laborados).
  */
 export function calcularDiasCausadosVacaciones(fechaIngreso, fechaCorte = null) {
-  const aniosCumplidos = calcularAniosCumplidos(fechaIngreso, fechaCorte)
-  return aniosCumplidos * 15
+  if (!fechaIngreso) return 0
+  const antig = calcAntiguedad(fechaIngreso, fechaCorte)
+  if (!antig) return 0
+  const diasTrabajados = antig.totalDiasTrabajados || 0
+  return Math.round(((diasTrabajados * 15) / 360) * 10) / 10
 }
 
 export const ESTADOS_VALIDOS_VACACIONES = ['Aprobada', 'En curso', 'Finalizada']
@@ -358,9 +373,9 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
       diasCausados = 15
       diasProporcionales = 15
     } else {
+      // Todo colaborador acumula vacaciones día a día de forma continua (Art. 186 CST: (dias_laborados * 15) / 360)
+      diasCausados = calculoProporcional
       diasProporcionales = calculoProporcional
-      // Para aprendices (y colaboradores en liquidación/inactivos), los días causados se acumulan de forma continua
-      diasCausados = (esAprendiz || empObj?.activo === false) ? calculoProporcional : 0
     }
 
     ciclos.push({
@@ -451,8 +466,8 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
       )
     )
 
-    const cicloConSaldo = ciclos.find(c => (c.es_cumplido || esAprendiz) && (c.dias_causados - c.dias_disfrutados - c.dias_en_dinero) > 0)
-    const cicloDestino = cicloConSaldo || ciclos.find(c => c.es_cumplido) || ciclos[0]
+    const cicloConSaldo = ciclos.find(c => (c.dias_causados - c.dias_disfrutados - c.dias_en_dinero) > 0)
+    const cicloDestino = cicloConSaldo || ciclos[0]
 
     if (cicloDestino) {
       cicloDestino.dias_disfrutados += tiempo
@@ -485,7 +500,7 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
   if (remanenteManual > 0) {
     for (const c of ciclos) {
       if (remanenteManual <= 0) break
-      if (!c.es_cumplido && !esAprendiz) continue
+      if (c.dias_causados <= 0) continue
       const saldoPreAjuste = Math.max(0, c.dias_causados - c.dias_disfrutados - c.dias_en_dinero - c.dias_ajuste_manual)
       const aDescontar = Math.min(remanenteManual, saldoPreAjuste)
       c.dias_ajuste_manual += aDescontar
@@ -512,9 +527,9 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
   })
 
   // 7. Calcular totales globales
-  const ciclosCumplidos = ciclos.filter(c => c.es_cumplido || (esAprendiz && c.dias_causados > 0))
-  const saldoTotal = ciclos.reduce((acc, c) => acc + (c.es_cumplido || esAprendiz ? c.saldo_restante : 0), 0)
-  const totalCausados = ciclos.reduce((acc, c) => acc + (c.es_cumplido || esAprendiz ? c.dias_causados : 0), 0)
+  const ciclosCumplidos = ciclos.filter(c => c.es_cumplido)
+  const saldoTotal = ciclos.reduce((acc, c) => acc + c.saldo_restante, 0)
+  const totalCausados = ciclos.reduce((acc, c) => acc + c.dias_causados, 0)
   const totalDisfrutados = ciclos.reduce((acc, c) => acc + c.dias_disfrutados, 0)
   const totalEnDinero = ciclos.reduce((acc, c) => acc + c.dias_en_dinero, 0)
   const totalAjusteManual = ciclos.reduce((acc, c) => acc + c.dias_ajuste_manual, 0)

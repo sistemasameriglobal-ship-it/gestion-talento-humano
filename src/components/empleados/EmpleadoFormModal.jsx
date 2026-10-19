@@ -9,7 +9,7 @@
 // 4. Seguridad Social y Datos Bancarios
 // 5. Contactos de Emergencia
 // =============================================================
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   User, Mail, X, Briefcase, CheckCircle2,
   AlertTriangle, AlertCircle, Phone, MapPin, ShieldCheck, Landmark,
@@ -21,6 +21,8 @@ import {
   TIPOS_DOCUMENTO, TIPOS_SANGRE, EPS_LIST, PENSION_LIST,
   CESANTIAS_LIST, BANCOS_LIST, TIPOS_CUENTA, PARENTESCOS_SUGERIDOS,
   calcularEdad, formatCOP,
+  SMMLV_VIGENTE, AUXILIO_TRANSPORTE_VIGENTE, APOYO_LECTIVA_75,
+  normalizarTexto, esAprendiz,
 } from './empleadosConstants'
 import { hoyISO } from '../../utils/fecha'
 import './empleados.css'
@@ -44,9 +46,18 @@ export default function EmpleadoFormModal({
     Boolean(form.fecha_primer_ingreso || form.fecha_terminacion_anterior)
   )
 
+  const detectarEtapa = (cargo) => {
+    const c = normalizarTexto(cargo)
+    if (c.includes('productiv')) return 'productiva'
+    return 'lectiva'
+  }
+
+  const [etapaAprendizaje, setEtapaAprendizaje] = useState(() => detectarEtapa(form.cargo))
+
   if (form.id !== prevEmpId) {
     setPrevEmpId(form.id)
     setTieneVinculoPrevio(Boolean(form.fecha_primer_ingreso || form.fecha_terminacion_anterior))
+    setEtapaAprendizaje(detectarEtapa(form.cargo))
   }
 
   const handleToggleVinculoPrevio = (checked) => {
@@ -60,7 +71,79 @@ export default function EmpleadoFormModal({
     }
   }
 
-  const listaDepartamentos = departamentos && departamentos.length > 0 ? departamentos : DEPENDENCIAS
+  const baseDepartamentos = departamentos && departamentos.length > 0 ? departamentos : DEPENDENCIAS
+  const listaDepartamentos = useMemo(() => {
+    if (baseDepartamentos.includes('APRENDIZ')) return baseDepartamentos
+    return [...baseDepartamentos, 'APRENDIZ']
+  }, [baseDepartamentos])
+
+  const esModoAprendiz = esAprendiz(form)
+
+  const handleSeleccionarEtapa = (etapa) => {
+    setEtapaAprendizaje(etapa)
+    setForm(prev => {
+      const next = { ...prev }
+      const cargoActual = prev.cargo || ''
+      const cargoNorm = normalizarTexto(cargoActual)
+      const esGenerico = !cargoActual.trim() ||
+        ['aprendiz', 'aprendiz sena', 'practicante', 'agente', 'analista'].includes(cargoNorm) ||
+        cargoActual.includes('[Área de') ||
+        cargoActual === 'Aprendiz Etapa Lectiva' ||
+        cargoActual === 'Aprendiz Etapa Productiva'
+
+      if (etapa === 'lectiva') {
+        next.salario = String(APOYO_LECTIVA_75)
+        next.auxilio_transporte = '0'
+        if (esGenerico) {
+          next.cargo = 'Aprendiz Etapa Lectiva - [Área de estudio]'
+        } else if (/aprendiz etapa productiva/i.test(cargoActual)) {
+          next.cargo = cargoActual.replace(/aprendiz etapa productiva/i, 'Aprendiz Etapa Lectiva')
+        } else if (/etapa productiva/i.test(cargoActual)) {
+          next.cargo = cargoActual.replace(/etapa productiva/i, 'Etapa Lectiva')
+        }
+      } else {
+        // productiva
+        next.salario = String(SMMLV_VIGENTE)
+        next.auxilio_transporte = String(AUXILIO_TRANSPORTE_VIGENTE)
+        if (esGenerico) {
+          next.cargo = 'Aprendiz Etapa Productiva - [Área de práctica]'
+        } else if (/aprendiz etapa lectiva/i.test(cargoActual)) {
+          next.cargo = cargoActual.replace(/aprendiz etapa lectiva/i, 'Aprendiz Etapa Productiva')
+        } else if (/etapa lectiva/i.test(cargoActual)) {
+          next.cargo = cargoActual.replace(/etapa lectiva/i, 'Etapa Productiva')
+        }
+      }
+      return next
+    })
+  }
+
+  const handleSelectDependencia = (d) => {
+    const prevDep = form.dependencia
+    setForm(prev => {
+      const next = { ...prev, dependencia: d }
+      if ((d === 'APRENDIZ' || normalizarTexto(d).includes('aprendiz')) && prevDep !== d) {
+        const cargoActual = prev.cargo || ''
+        const cargoNorm = normalizarTexto(cargoActual)
+        const esGenerico = !cargoActual.trim() || cargoNorm === 'agente' || cargoNorm === 'analista'
+        if (esGenerico) {
+          next.cargo = etapaAprendizaje === 'productiva'
+            ? 'Aprendiz Etapa Productiva - [Área de práctica]'
+            : 'Aprendiz Etapa Lectiva - [Área de estudio]'
+        }
+        if (!prev.salario || Number(prev.salario) === 0) {
+          next.salario = etapaAprendizaje === 'productiva'
+            ? String(SMMLV_VIGENTE)
+            : String(APOYO_LECTIVA_75)
+        }
+        if (prev.auxilio_transporte === '' || prev.auxilio_transporte === undefined) {
+          next.auxilio_transporte = etapaAprendizaje === 'productiva'
+            ? String(AUXILIO_TRANSPORTE_VIGENTE)
+            : '0'
+        }
+      }
+      return next
+    })
+  }
   const nombreEmpresaActiva = currentCompany === 'global_link' ? 'Global Link' : 'AmeriGlobal'
 
   const dep = form.dependencia || ''
@@ -479,8 +562,20 @@ export default function EmpleadoFormModal({
                       className="emp-form-input"
                       style={{ paddingLeft: 36 }}
                       value={form.cargo || ''}
-                      onChange={f('cargo')}
-                      placeholder="Ej: Agente / Analista de cartera"
+                      onChange={(e) => {
+                        const val = e.target.value
+                        f('cargo')(e)
+                        const valNorm = normalizarTexto(val)
+                        if (valNorm.includes('productiv')) {
+                          setEtapaAprendizaje('productiva')
+                        } else if (valNorm.includes('lectiv')) {
+                          setEtapaAprendizaje('lectiva')
+                        }
+                      }}
+                      placeholder={esModoAprendiz
+                        ? (etapaAprendizaje === 'productiva' ? 'Aprendiz Etapa Productiva - [Área de práctica]' : 'Aprendiz Etapa Lectiva - [Área de estudio]')
+                        : 'Ej: Agente / Analista de cartera'
+                      }
                     />
                   </div>
                 </div>
@@ -494,7 +589,7 @@ export default function EmpleadoFormModal({
                         <button
                           key={d} type="button"
                           className={`emp-dep-btn ${sel ? 'active' : ''}`}
-                          onClick={() => { setForm(p => ({ ...p, dependencia: d })) }}
+                          onClick={() => handleSelectDependencia(d)}
                         >
                           <span style={{ fontSize: 15 }}>{DEP_ICONS[d] || '🏢'}</span>
                           <span style={{ fontSize: 11, fontWeight: sel ? 800 : 600 }}>{d}</span>
@@ -503,6 +598,106 @@ export default function EmpleadoFormModal({
                       )
                     })}
                   </div>
+
+                  {/* Selector contextual de Fase de Aprendizaje cuando es Aprendiz */}
+                  {esModoAprendiz && (
+                    <div style={{
+                      marginTop: 10,
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      background: 'rgba(59, 130, 246, 0.06)',
+                      border: '1.5px solid rgba(59, 130, 246, 0.28)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                      animation: 'empFadeInUp .2s ease forwards',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                        <label style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '.06em',
+                          color: 'var(--text)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          margin: 0,
+                        }}>
+                          <span>🎓</span>
+                          <span>Fase de Aprendizaje (Normativa SENA)</span>
+                        </label>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {etapaAprendizaje === 'lectiva'
+                            ? 'Apoyo 75% SMMLV · Sin auxilio transporte'
+                            : 'Apoyo 100% SMMLV · Auxilio obligatorio'
+                          }
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleSeleccionarEtapa('lectiva')}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            padding: '9px 12px',
+                            borderRadius: 8,
+                            border: `2px solid ${etapaAprendizaje === 'lectiva' ? '#3B82F6' : 'var(--border)'}`,
+                            background: etapaAprendizaje === 'lectiva' ? 'rgba(59, 130, 246, 0.16)' : 'var(--surface)',
+                            color: etapaAprendizaje === 'lectiva' ? '#2563EB' : 'var(--text-muted)',
+                            fontWeight: etapaAprendizaje === 'lectiva' ? 800 : 600,
+                            fontSize: 12.5,
+                            cursor: 'pointer',
+                            transition: 'all .15s ease',
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>📘</span>
+                          <span>Etapa Lectiva</span>
+                          {etapaAprendizaje === 'lectiva' && <CheckCircle2 size={14} style={{ marginLeft: 4 }} />}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSeleccionarEtapa('productiva')}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            padding: '9px 12px',
+                            borderRadius: 8,
+                            border: `2px solid ${etapaAprendizaje === 'productiva' ? '#10B981' : 'var(--border)'}`,
+                            background: etapaAprendizaje === 'productiva' ? 'rgba(16, 185, 129, 0.16)' : 'var(--surface)',
+                            color: etapaAprendizaje === 'productiva' ? '#059669' : 'var(--text-muted)',
+                            fontWeight: etapaAprendizaje === 'productiva' ? 800 : 600,
+                            fontSize: 12.5,
+                            cursor: 'pointer',
+                            transition: 'all .15s ease',
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>🛠️</span>
+                          <span>Etapa Productiva</span>
+                          {etapaAprendizaje === 'productiva' && <CheckCircle2 size={14} style={{ marginLeft: 4 }} />}
+                        </button>
+                      </div>
+
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                        {etapaAprendizaje === 'lectiva' ? (
+                          <span>
+                            📘 <strong>Etapa Lectiva seleccionada:</strong> Sugerido 75% del SMMLV (<strong>{formatCOP(APOYO_LECTIVA_75)}</strong>) y Auxilio de transporte <strong>$0</strong> (no obligatorio en lectiva).
+                          </span>
+                        ) : (
+                          <span>
+                            🛠️ <strong>Etapa Productiva seleccionada:</strong> Sugerido 100% del SMMLV (<strong>{formatCOP(SMMLV_VIGENTE)}</strong>) y Auxilio de transporte legal (<strong>{formatCOP(AUXILIO_TRANSPORTE_VIGENTE)}</strong>, obligatorio en productiva).
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Fecha principal de ingreso y opción condicional de vínculo previo */}
@@ -589,10 +784,17 @@ export default function EmpleadoFormModal({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label className="emp-form-label">Salario mensual</label>
+                      <label className="emp-form-label">
+                        {esModoAprendiz ? 'Apoyo de sostenimiento' : 'Salario mensual'}
+                      </label>
                       {Number(form.salario) > 0 && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981', marginBottom: 4 }}>
                           {formatCOP(form.salario)}
+                          {esModoAprendiz && (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, marginLeft: 4 }}>
+                              ({etapaAprendizaje === 'lectiva' ? '75% SMMLV' : '100% SMMLV'})
+                            </span>
+                          )}
                         </span>
                       )}
                     </div>
@@ -606,14 +808,27 @@ export default function EmpleadoFormModal({
                         step="1"
                         value={form.salario ?? ''}
                         onChange={f('salario')}
-                        placeholder="Ej: 1950905"
+                        placeholder={esModoAprendiz
+                          ? (etapaAprendizaje === 'lectiva' ? String(APOYO_LECTIVA_75) : String(SMMLV_VIGENTE))
+                          : 'Ej: 1950905'
+                        }
                       />
                     </div>
                   </div>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <label className="emp-form-label">Auxilio de transporte</label>
-                      {Number(form.auxilio_transporte) > 0 && (
+                      {esModoAprendiz && etapaAprendizaje === 'lectiva' && (
+                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 4 }}>
+                          No obligatorio en lectiva
+                        </span>
+                      )}
+                      {esModoAprendiz && etapaAprendizaje === 'productiva' && (
+                        <span style={{ fontSize: 10.5, color: '#059669', fontWeight: 700, marginBottom: 4 }}>
+                          Obligatorio en productiva
+                        </span>
+                      )}
+                      {!esModoAprendiz && Number(form.auxilio_transporte) > 0 && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981', marginBottom: 4 }}>
                           {formatCOP(form.auxilio_transporte)}
                         </span>
@@ -629,7 +844,10 @@ export default function EmpleadoFormModal({
                         step="1"
                         value={form.auxilio_transporte ?? ''}
                         onChange={f('auxilio_transporte')}
-                        placeholder="Ej: 249095"
+                        placeholder={esModoAprendiz
+                          ? (etapaAprendizaje === 'lectiva' ? '0' : String(AUXILIO_TRANSPORTE_VIGENTE))
+                          : 'Ej: 249095'
+                        }
                       />
                     </div>
                   </div>

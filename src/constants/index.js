@@ -41,7 +41,7 @@ export const DEPENDENCIAS = [
 ]
 
 // Dependencias incluyendo áreas con pocos colaboradores (Empleados y Novedades).
-export const DEPENDENCIAS_EXTENDIDAS = [...DEPENDENCIAS, 'SERVICIOS GENERALES']
+export const DEPENDENCIAS_EXTENDIDAS = [...DEPENDENCIAS, 'SERVICIOS GENERALES', 'APRENDIZ']
 
 // Empresas disponibles en el sistema multi-empresa.
 export const EMPRESAS_DISPONIBLES = [

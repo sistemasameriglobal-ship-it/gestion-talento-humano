@@ -5,7 +5,7 @@
 // =============================================================
 import { Edit2, Trash2, RotateCcw, Archive, CheckCircle2, Scale, Building2 } from 'lucide-react'
 import PersonCell from '../ui/PersonCell'
-import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
+import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual, formatoDias } from '../../utils/vacacionesHelpers'
 
 export default function EmpleadoTable({
   paged,
@@ -189,12 +189,12 @@ export default function EmpleadoTable({
                           🌴 {vacacionActiva.estaDeVacaciones ? vacacionActiva.badgeTexto : `Programadas (${vacacionActiva.countdownTexto})`}
                         </span>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                          Saldo: {saldoVac.saldoPendiente}d
+                          Saldo: {formatoDias(saldoVac.saldoPendiente)}
                         </span>
                       </div>
                     ) : (
                       <span
-                        title={`Saldo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d${saldoVac.diasManuales ? `, Tomados histórico: ${saldoVac.diasManuales}d` : ''}, Disfrutados: ${saldoVac.diasDisfrutados}d, Dinero: ${saldoVac.diasEnDinero}d)`}
+                        title={`Saldo vigente: ${saldoVac.saldoPendiente} días (Causados: ${formatoDias(saldoVac.diasCausados)}${saldoVac.diasManuales ? `, Tomados histórico: ${formatoDias(saldoVac.diasManuales)}` : ''}, Disfrutados: ${formatoDias(saldoVac.diasDisfrutados)}, Dinero: ${formatoDias(saldoVac.diasEnDinero)})`}
                         style={{
                           fontSize: 11,
                           fontWeight: 600,
@@ -206,7 +206,7 @@ export default function EmpleadoTable({
                           display: 'inline-block'
                         }}
                       >
-                        {saldoVac.saldoPendiente > 0 ? `🌴 ${saldoVac.saldoPendiente}d disp.` : '—'}
+                        {saldoVac.saldoPendiente > 0 ? `🌴 ${formatoDias(saldoVac.saldoPendiente)} disp.` : '—'}
                       </span>
                     )}
                   </td>

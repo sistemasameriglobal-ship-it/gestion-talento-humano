@@ -12,6 +12,7 @@ export { DEPENDENCIAS_EXTENDIDAS as DEPENDENCIAS } from '../../constants'
 export const DEP_ICONS = {
   'COBRANZA': '💳', 'CIERRE': '🔒', 'VENTAS': '📈', 'UNDERWRITING': '📝',
   'CONTABILIDAD': '🧾', 'RRHH': '👥', 'GERENCIA': '🏢', 'SOPORTE TI': '💻',
+  'APRENDIZ': '🎓', 'SERVICIOS GENERALES': '🧹',
 }
 
 export const DEP_COLORS = {
@@ -23,6 +24,8 @@ export const DEP_COLORS = {
   'RRHH': ['#FCE7F3', '#9D174D', '#F9A8D4'],
   'GERENCIA': ['var(--success-bg)', 'var(--success-text)', 'color-mix(in srgb, var(--success) 35%, transparent)'],
   'SOPORTE TI': ['var(--info-bg)', 'var(--info-text)', 'color-mix(in srgb, var(--info) 30%, transparent)'],
+  'APRENDIZ': ['#EFF6FF', '#1D4ED8', '#93C5FD'],
+  'SERVICIOS GENERALES': ['#F3F4F6', '#374151', '#D1D5DB'],
 }
 
 export const CONCEPTOS_CON_FECHA = [
@@ -119,6 +122,38 @@ export function formatCOP(val) {
 // Parámetros legales vigentes Colombia para contrato de aprendizaje (Etapa Lectiva 75% → Etapa Productiva 100% SMMLV + Auxilio de Transporte)
 export const SMMLV_VIGENTE = 1750905
 export const AUXILIO_TRANSPORTE_VIGENTE = 249095
+export const APOYO_LECTIVA_75 = Math.round(SMMLV_VIGENTE * 0.75) // $1.313.179
+
+/**
+ * Normaliza cadenas removiendo acentos/diacríticos y pasando a minúsculas
+ */
+export function normalizarTexto(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+/**
+ * Identifica si un colaborador o datos de formulario corresponden a un Aprendiz / SENA / Practicante.
+ * Reconoce la palabra 'aprendiz' y variantes sin distinguir mayúsculas, minúsculas ni acentos.
+ */
+export function esAprendiz(emp) {
+  if (!emp) return false
+  const cargo = normalizarTexto(emp.cargo)
+  const dep = normalizarTexto(emp.dependencia)
+  const tipoDoc = String(emp.tipo_documento || '').toUpperCase().trim()
+
+  return (
+    cargo.includes('aprendiz') ||
+    cargo.includes('sena') ||
+    cargo.includes('practicante') ||
+    dep.includes('aprendiz') ||
+    dep.includes('sena') ||
+    tipoDoc === 'TI'
+  )
+}
 
 /**
  * Sugiere el 100% del SMMLV para la Etapa Productiva:

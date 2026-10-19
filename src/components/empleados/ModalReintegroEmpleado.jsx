@@ -4,6 +4,7 @@ import { hoyISO } from '../../utils/fecha'
 import {
   DEPENDENCIAS, formatCOP,
   SMMLV_VIGENTE, AUXILIO_TRANSPORTE_VIGENTE, calcularApoyoProductivoSugerido,
+  esAprendiz, normalizarTexto,
 } from './empleadosConstants'
 
 const OBS_ETAPA_PRODUCTIVA_DEFAULT =
@@ -14,13 +15,33 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
 
   // Si el colaborador está activo, se asume por defecto Ascenso / Continuidad
   const esActivo = emp?.activo !== false
-  const [tipoMovimiento, setTipoMovimiento] = useState(esActivo ? 'ascenso' : 'reintegro')
+  const esColaboradorAprendiz = esAprendiz(emp)
+  const yaEstaEnProductiva = normalizarTexto(emp?.cargo).includes('productiv')
+  const sugerirEtapaProductiva = esActivo && esColaboradorAprendiz && !yaEstaEnProductiva
+
+  const [tipoMovimiento, setTipoMovimiento] = useState(
+    !esActivo ? 'reintegro' : (sugerirEtapaProductiva ? 'etapa_productiva' : 'ascenso')
+  )
   const [fechaIngreso, setFechaIngreso] = useState(hoyISO())
-  const [cargo, setCargo] = useState(emp?.cargo || '')
+  const [cargo, setCargo] = useState(() => {
+    if (sugerirEtapaProductiva) return 'Aprendiz Etapa Productiva'
+    return emp?.cargo || ''
+  })
   const [dependencia, setDependencia] = useState(emp?.dependencia || '')
-  const [nuevoSalario, setNuevoSalario] = useState('')
-  const [nuevoAuxilio, setNuevoAuxilio] = useState('')
-  const [observaciones, setObservaciones] = useState('')
+  const [nuevoSalario, setNuevoSalario] = useState(() => {
+    if (sugerirEtapaProductiva) return String(calcularApoyoProductivoSugerido(emp?.salario))
+    return ''
+  })
+  const [nuevoAuxilio, setNuevoAuxilio] = useState(() => {
+    if (sugerirEtapaProductiva) {
+      return String(Number(emp?.auxilio_transporte) > 0 ? emp.auxilio_transporte : AUXILIO_TRANSPORTE_VIGENTE)
+    }
+    return ''
+  })
+  const [observaciones, setObservaciones] = useState(() => {
+    if (sugerirEtapaProductiva) return OBS_ETAPA_PRODUCTIVA_DEFAULT
+    return ''
+  })
   const [error, setError] = useState(null)
 
   const esContinuidad = tipoMovimiento !== 'reintegro'
@@ -76,6 +97,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
       titulo: '🎓 Transición a Etapa Productiva (Aprendiz)',
       desc: 'Paso de Etapa Lectiva (75%) a Productiva (100% SMMLV + Auxilio + ARL). Mantiene Período #1 Vigente.',
       continuidad: true,
+      destacado: esColaboradorAprendiz,
     },
     {
       id: 'reintegro',
@@ -244,10 +266,25 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
                         gap: 4,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: seleccionado ? (m.continuidad ? 'var(--primary)' : 'var(--success-text)') : 'var(--text)' }}>
-                          {m.titulo}
-                        </span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: seleccionado ? (m.continuidad ? 'var(--primary)' : 'var(--success-text)') : 'var(--text)' }}>
+                            {m.titulo}
+                          </span>
+                          {m.destacado && (
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              background: '#DBEAFE',
+                              color: '#1E40AF',
+                              padding: '1px 7px',
+                              borderRadius: 99,
+                              border: '1px solid #BFDBFE',
+                            }}>
+                              🎓 Sugerido
+                            </span>
+                          )}
+                        </div>
                         <input
                           type="radio"
                           name="tipoMovimiento"
