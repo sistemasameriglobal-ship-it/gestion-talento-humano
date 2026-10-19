@@ -6,6 +6,7 @@ import * as novedadesApi from '../api/novedades'
 import * as vacacionesApi from '../api/vacaciones'
 import * as procesosApi from '../api/procesosDisciplinarios'
 import { hoyISO } from '../utils/fecha'
+import { estaActivaHoy } from '../utils/diasHabiles'
 import { normalizarConcepto, mapearFilaEmpleadoExcel } from '../utils/parseExcel'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo } from '../utils/vacacionesHelpers'
 import { exportarExcel } from '../utils/exportarExcel'
@@ -162,15 +163,18 @@ export default function Empleados() {
 
   const vacacionesPorEmpleado = useMemo(() => {
     const acc = {}
-    ;(vacaciones || []).forEach(v => {
-      if (v.empleado_id) {
-        if (!acc[v.empleado_id]) acc[v.empleado_id] = []
-        acc[v.empleado_id].push(v)
+    const addUnique = (key, v) => {
+      if (!key) return
+      if (!acc[key]) acc[key] = []
+      if (!acc[key].some(item => item.id === v.id)) {
+        acc[key].push(v)
       }
+    }
+    ;(vacaciones || []).forEach(v => {
+      if (v.empleado_id) addUnique(v.empleado_id, v)
       if (v.nombre_empleado) {
-        const norm = normalizarNombre(v.nombre_empleado)
-        if (!acc[norm]) acc[norm] = []
-        acc[norm].push(v)
+        addUnique(v.nombre_empleado.trim().toLowerCase(), v)
+        addUnique(normalizarNombre(v.nombre_empleado), v)
       }
     })
     return acc
@@ -201,14 +205,30 @@ export default function Empleados() {
 
   const novedadesPorEmpleado = useMemo(() => {
     const acc = {}
+    const hoy = hoyISO()
     novedades.forEach(r => {
       const k = r.nombre_empleado
-      if (!acc[k]) acc[k] = { novedades: [], diasInc: 0, episodiosInc: 0, porConcepto: {} }
+      if (!acc[k]) {
+        acc[k] = {
+          novedades: [],
+          diasInc: 0,
+          episodiosInc: 0,
+          incsActivas: [],
+          diasIncHistorico: 0,
+          episodiosIncHistorico: 0,
+          porConcepto: {},
+        }
+      }
       acc[k].novedades.push(r)
       const tipo = normalizarConcepto(r.concepto)
       if (tipo === 'Incapacidad') {
-        acc[k].episodiosInc++
-        acc[k].diasInc += parseFloat(r.total_dias) || 0
+        acc[k].episodiosIncHistorico++
+        acc[k].diasIncHistorico += parseFloat(r.total_dias) || 0
+        if (estaActivaHoy(r, hoy)) {
+          acc[k].incsActivas.push(r)
+          acc[k].episodiosInc++
+          acc[k].diasInc += parseFloat(r.total_dias) || 0
+        }
       }
       if (!acc[k].porConcepto[tipo]) acc[k].porConcepto[tipo] = { episodios: 0, dias: 0 }
       acc[k].porConcepto[tipo].episodios++
@@ -813,7 +833,7 @@ export default function Empleados() {
     { val: 'activos', label: `Activos (${rows.filter(r => r.activo !== false).length})` },
     { val: 'inactivos', label: `Inactivos (${rows.filter(r => r.activo === false).length})` },
     ...(pendLiquidar > 0 ? [{ val: 'pend_liquidar', label: `⚠️ Pendientes por liquidar (${pendLiquidar})` }] : []),
-    ...(conInc > 0 ? [{ val: 'con_inc', label: `Con incapacidades (${conInc})` }] : []),
+    ...(conInc > 0 ? [{ val: 'con_inc', label: `Incapacidad activa (${conInc})` }] : []),
     ...(sinCorreo > 0 ? [{ val: 'sin_correo', label: `Sin correo (${sinCorreo})` }] : []),
   ]
 

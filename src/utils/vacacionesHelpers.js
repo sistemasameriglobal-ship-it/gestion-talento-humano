@@ -1,4 +1,4 @@
-import { diasHabilesEntre } from './diasHabiles'
+import { diasHabilesEntre, obtenerFechaRegresoLaboral } from './diasHabiles'
 import { hoyISO } from './fecha'
 
 export function aFechaInputDate(val) {
@@ -549,19 +549,55 @@ export function diasAcumuladosAnio(rows, nombreEmpleado, anio, excludeId = null)
     }, 0)
 }
 
+const DIAS_SEMANA_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+/**
+ * Calcula la fecha real de reincorporación laboral tras finalizar un periodo de vacaciones:
+ * el primer día hábil siguiente a `fechaFin` (lunes a viernes, excluyendo festivos en Colombia).
+ * Si `fechaFin` es viernes o sábado, el regreso a laborar es el lunes siguiente (o martes si es festivo).
+ */
+export function obtenerFechaRegresoVacaciones(fechaFin) {
+  if (!fechaFin) return ''
+  return obtenerFechaRegresoLaboral(fechaFin)
+}
+
+/**
+ * Formatea una fecha ISO 'YYYY-MM-DD' en formato corto con día de la semana, ej: "Lun 26/10"
+ */
+export function formatearFechaCortaRegreso(fechaISO) {
+  if (!fechaISO) return '—'
+  const clean = String(fechaISO).trim().slice(0, 10)
+  const parts = clean.split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return clean
+  const dt = new Date(parts[0], parts[1] - 1, parts[2])
+  const diaSemana = DIAS_SEMANA_CORTO[dt.getDay()] || ''
+  const dd = String(parts[2]).padStart(2, '0')
+  const mm = String(parts[1]).padStart(2, '0')
+  return `${diaSemana} ${dd}/${mm}`
+}
+
+function normalizarNombreComparacion(s) {
+  return (s || '')
+    .toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+}
+
 /**
  * Determina si un empleado se encuentra actualmente de vacaciones (hoy) o tiene vacaciones programadas a futuro.
  * Criterios:
- *  - Activa: fecha actual (hoy) entre fecha_inicio y fecha_fin (hoy >= fIni && hoy <= fFin).
+ *  - Activa: fecha actual (hoy) entre fecha_inicio y fecha_fin (hoy >= fIni && hoy <= fFin)
+ *            o en puente previo a su fecha real de reincorporación laboral (hoy >= fIni && hoy < fechaRegreso).
  *  - Programada: fecha_inicio futura (hoy < fIni).
- *  - Concluida: fecha_fin en el pasado (hoy > fFin) -> retorna null (vacación finalizada).
+ *  - Concluida: hoy >= fechaRegreso -> retorna null (vacación finalizada, ya regresó a laborar).
  */
 export function getEstadoVacacionActual(empleado, listaVacaciones = [], listaNovedades = []) {
   if (!empleado) return null
   const hoy = hoyISO()
-  const empNombre = typeof empleado === 'string'
-    ? empleado.trim().toLowerCase()
-    : (empleado.nombre_completo || empleado.nombre_empleado || '').trim().toLowerCase()
+  const empNombreRaw = typeof empleado === 'string'
+    ? empleado.trim()
+    : (empleado.nombre_completo || empleado.nombre_empleado || '').trim()
+  const empNombreNorm = normalizarNombreComparacion(empNombreRaw)
   const empId = typeof empleado === 'object' ? empleado.id : null
 
   // 1. Filtrar solicitudes de vacaciones del empleado
@@ -570,16 +606,17 @@ export function getEstadoVacacionActual(empleado, listaVacaciones = [], listaNov
     if (!v || v.estado === 'Rechazada') return false
     if (v.tipo_vacacion === 'Vacaciones en dinero') return false
     const matchId = empId && v.empleado_id && v.empleado_id === empId
-    const matchNombre = (v.nombre_empleado || '').trim().toLowerCase() === empNombre
+    const matchNombre = empNombreNorm && normalizarNombreComparacion(v.nombre_empleado) === empNombreNorm
     return matchId || matchNombre
   })
 
   // 2. Filtrar novedades del empleado con concepto Vacaciones
   const novs = (listaNovedades || []).filter(n => {
     if (!n || !n.fecha_inicio) return false
-    const matchNombre = (n.nombre_empleado || '').trim().toLowerCase() === empNombre
+    const matchId = empId && n.empleado_id && n.empleado_id === empId
+    const matchNombre = empNombreNorm && normalizarNombreComparacion(n.nombre_empleado) === empNombreNorm
     const esVac = (n.concepto || '').toLowerCase().includes('vacacion')
-    return matchNombre && esVac
+    return (matchId || matchNombre) && esVac
   })
 
   // Agrupar registros con rangos válidos
@@ -588,67 +625,76 @@ export function getEstadoVacacionActual(empleado, listaVacaciones = [], listaNov
       tipo: 'vacacion',
       id: v.id,
       estado: v.estado,
-      fecha_inicio: v.fecha_inicio,
-      fecha_fin: v.fecha_fin || v.fecha_inicio,
+      fecha_inicio: String(v.fecha_inicio || '').trim().slice(0, 10),
+      fecha_fin: String(v.fecha_fin || v.fecha_inicio || '').trim().slice(0, 10),
       raw: v,
     })),
     ...novs.map(n => ({
       tipo: 'novedad',
       id: n.id,
       estado: 'Aprobada',
-      fecha_inicio: n.fecha_inicio,
-      fecha_fin: n.fecha_fin || n.fecha_inicio,
+      fecha_inicio: String(n.fecha_inicio || '').trim().slice(0, 10),
+      fecha_fin: String(n.fecha_fin || n.fecha_inicio || '').trim().slice(0, 10),
       raw: n,
     })),
   ].filter(r => r.fecha_inicio)
 
   // -------------------------------------------------------------
-  // CASO 1: ACTIVAMENTE DE VACACIONES HOY (fIni <= hoy && hoy <= fFin)
-  // Estados válidos: 'En curso', 'Aprobada', o novedad
+  // CASO 1: ACTIVAMENTE DE VACACIONES HOY (fIni <= hoy && (hoy <= fFin || hoy < fechaRegreso))
+  // Estados válidos: 'En curso', 'Aprobada', 'Disfrutadas', 'Finalizada', o novedad
   // -------------------------------------------------------------
   const activa = registros.find(r => {
-    if (r.estado && !['En curso', 'Aprobada'].includes(r.estado)) return false
+    if (r.estado && !['En curso', 'Aprobada', 'Disfrutadas', 'Finalizada'].includes(r.estado)) return false
     const fIni = r.fecha_inicio
     const fFin = r.fecha_fin || fIni
-    return fIni <= hoy && hoy <= fFin
+    const fReg = obtenerFechaRegresoVacaciones(fFin)
+    return fIni <= hoy && (hoy <= fFin || (fReg && hoy < fReg))
   })
 
   if (activa) {
     const fechaInicio = activa.fecha_inicio
     const fechaFin = activa.fecha_fin || fechaInicio
-    const hoyD = new Date(hoy + 'T00:00:00')
-    const finD = new Date(fechaFin + 'T00:00:00')
-    const diffTime = finD.getTime() - hoyD.getTime()
-    const diffDays = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)))
+    const fechaRegreso = obtenerFechaRegresoVacaciones(fechaFin) || fechaFin
+    const fechaRegresoCorta = formatearFechaCortaRegreso(fechaRegreso)
+    const fechaRegresoFormateada = formatFecha(fechaRegreso)
 
-    const esUltimoDia = (hoy === fechaFin) || (diffDays === 0)
+    const hoyD = new Date(hoy + 'T00:00:00')
+    const regD = new Date(fechaRegreso + 'T00:00:00')
+    const diffTime = regD.getTime() - hoyD.getTime()
+    // Días restantes reales hasta la fecha efectiva de regreso laboral
+    const diffDays = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)))
+
+    const esUltimoDia = diffDays === 1
     let countdownTexto
     let badgeTexto
     let textoLargo
 
     if (esUltimoDia) {
-      countdownTexto = 'Regresa mañana'
-      badgeTexto = 'Último día de vacaciones'
-      textoLargo = '🌴 Actualmente en Vacaciones • Regresa mañana'
-    } else if (diffDays === 1) {
-      countdownTexto = 'Regresa en 1 día'
-      badgeTexto = 'Regresa en: 1 día'
-      textoLargo = '🌴 Actualmente en Vacaciones • Regresa en: 1 día'
+      countdownTexto = `Regresa mañana (${fechaRegresoCorta})`
+      badgeTexto = `De vacaciones • Regresa mañana (${fechaRegresoCorta})`
+      textoLargo = `De vacaciones • Regresa mañana (${fechaRegresoCorta})`
     } else {
-      countdownTexto = `Regresa en ${diffDays} días`
-      badgeTexto = `Regresa en: ${diffDays} días`
-      textoLargo = `🌴 Actualmente en Vacaciones • Regresa en: ${diffDays} días`
+      countdownTexto = `Regresa en ${diffDays} días (${fechaRegresoCorta})`
+      badgeTexto = `De vacaciones • Regresa en ${diffDays} días (${fechaRegresoCorta})`
+      textoLargo = `De vacaciones • Regresa en ${diffDays} días (${fechaRegresoCorta})`
     }
+
+    const badgeModal = textoLargo
 
     return {
       estaDeVacaciones: true,
       esProgramada: false,
       fechaInicio,
       fechaFin,
+      fechaRegreso,
+      fechaRegresoCorta,
+      fechaRegresoFormateada,
       diffDays,
+      diasParaRegreso: diffDays,
       esUltimoDia,
       countdownTexto,
       badgeTexto,
+      badgeModal,
       textoLargo,
       record: activa.raw,
     }
@@ -669,32 +715,41 @@ export function getEstadoVacacionActual(empleado, listaVacaciones = [], listaNov
     const proxima = futuras[0]
     const fechaInicio = proxima.fecha_inicio
     const fechaFin = proxima.fecha_fin || fechaInicio
+    const fechaRegreso = obtenerFechaRegresoVacaciones(fechaFin) || fechaFin
+    const fechaRegresoCorta = formatearFechaCortaRegreso(fechaRegreso)
+    const fechaRegresoFormateada = formatFecha(fechaRegreso)
+
     const hoyD = new Date(hoy + 'T00:00:00')
     const iniD = new Date(fechaInicio + 'T00:00:00')
     const diffTime = iniD.getTime() - hoyD.getTime()
     const diasParaInicio = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)))
 
     const countdownTexto = diasParaInicio === 1 ? 'Inician mañana' : `Inician en ${diasParaInicio} días`
-    const badgeTexto = diasParaInicio === 1 ? 'Inician mañana' : `Inician en: ${diasParaInicio} días`
-    const textoLargo = diasParaInicio === 1 ? '🌴 Vacaciones programadas • Inician mañana' : `🌴 Vacaciones programadas • Inician en: ${diasParaInicio} días`
+    const badgeTexto = `Programadas • ${countdownTexto} (Regresa: ${fechaRegresoCorta})`
+    const badgeModal = `Vacaciones programadas • ${countdownTexto} (${formatFecha(fechaInicio)})`
+    const textoLargo = `Vacaciones programadas • ${countdownTexto} (Regresa: ${fechaRegresoCorta})`
 
     return {
       estaDeVacaciones: false,
       esProgramada: true,
       fechaInicio,
       fechaFin,
+      fechaRegreso,
+      fechaRegresoCorta,
+      fechaRegresoFormateada,
       diasParaInicio,
       diffDays: diasParaInicio,
       esUltimoDia: false,
       countdownTexto,
       badgeTexto,
+      badgeModal,
       textoLargo,
       record: proxima.raw,
     }
   }
 
   // -------------------------------------------------------------
-  // CASO 3: YA CONCLUYERON (hoy > fecha_fin) O NO TIENE VACACIONES
+  // CASO 3: YA CONCLUYERON (hoy >= fechaRegreso) O NO TIENE VACACIONES
   // -------------------------------------------------------------
   return null
 }

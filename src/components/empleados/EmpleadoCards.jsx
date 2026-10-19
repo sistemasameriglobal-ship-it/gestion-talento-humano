@@ -5,6 +5,8 @@
 // =============================================================
 import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale, AlertTriangle, CheckCircle2, ArrowRight, FileText, Building2 } from 'lucide-react'
 import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
+import { normalizarConcepto } from '../../utils/parseExcel'
+import { estaActivaHoy } from '../../utils/diasHabiles'
 import './empleados.css'
 
 function iniciales(nombre) {
@@ -54,6 +56,12 @@ export default function EmpleadoCards({
           const vacacionActiva = getEstadoVacacionActual(emp, vacsEmp, nov?.novedades)
           const periodoActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || (emp.fecha_ingreso ? { fecha_ingreso: emp.fecha_ingreso, es_periodo_actual: true } : null)
           const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp, emp)
+
+          // Incapacidades activas hoy (solo hoy >= fecha_inicio && hoy < fechaRegresoLaboral)
+          const incsActivas = (nov?.novedades || []).filter(
+            n => normalizarConcepto(n.concepto) === 'Incapacidad' && estaActivaHoy(n)
+          )
+          const diasIncActivas = incsActivas.reduce((sum, n) => sum + (parseFloat(n.total_dias) || 0), 0)
 
           // Estado de liquidación para empleados inactivos
           const ultimoPeriodoCerrado = [...periodosEmp].reverse().find(p => !p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1]
@@ -116,28 +124,6 @@ export default function EmpleadoCards({
                         </span>
                       )
                     )}
-                    {vacacionActiva && (
-                      <span
-                        title={vacacionActiva.estaDeVacaciones ? `De vacaciones: ${vacacionActiva.badgeTexto}` : `Vacaciones programadas: ${vacacionActiva.badgeTexto}`}
-                        style={{
-                          fontSize: 10, borderRadius: 4, padding: '1px 6px', fontWeight: 700,
-                          background: vacacionActiva.estaDeVacaciones
-                            ? (vacacionActiva.esUltimoDia ? '#FEF3C7' : '#DBEAFE')
-                            : '#EEF2FF',
-                          color: vacacionActiva.estaDeVacaciones
-                            ? (vacacionActiva.esUltimoDia ? '#92400E' : '#1D4ED8')
-                            : '#4338CA',
-                          border: `1px solid ${
-                            vacacionActiva.estaDeVacaciones
-                              ? (vacacionActiva.esUltimoDia ? '#F59E0B' : '#93C5FD')
-                              : '#C7D2FE'
-                          }`,
-                          display: 'inline-flex', alignItems: 'center', gap: 3,
-                        }}
-                      >
-                        🌴 {vacacionActiva.estaDeVacaciones ? vacacionActiva.badgeTexto : `Programadas (${vacacionActiva.countdownTexto})`}
-                      </span>
-                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
@@ -168,22 +154,16 @@ export default function EmpleadoCards({
                 </div>
               </div>
               {vacacionActiva && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 8px',
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  background: vacacionActiva.esUltimoDia ? '#FFFBEB' : '#EFF6FF',
-                  color: vacacionActiva.esUltimoDia ? '#92400E' : '#1D4ED8',
-                  border: `1px solid ${vacacionActiva.esUltimoDia ? '#F59E0B' : '#BFDBFE'}`,
-                }}>
-                  <span>🌴</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {vacacionActiva.textoLargo}
-                  </span>
+                <div
+                  className={`emp-vac-banner ${vacacionActiva.esUltimoDia ? 'emp-vac-banner--ultimo' : !vacacionActiva.estaDeVacaciones ? 'emp-vac-banner--prog' : ''}`}
+                  title={
+                    vacacionActiva.estaDeVacaciones
+                      ? `Periodo de descanso: ${vacacionActiva.fechaInicio} al ${vacacionActiva.fechaFin} • Primer día hábil de retorno: ${vacacionActiva.fechaRegresoCorta} (${vacacionActiva.fechaRegresoFormateada})`
+                      : `Vacaciones programadas: ${vacacionActiva.fechaInicio} al ${vacacionActiva.fechaFin}`
+                  }
+                >
+                  <span style={{ flexShrink: 0 }}>🌴</span>
+                  <span>{vacacionActiva.textoLargo}</span>
                 </div>
               )}
               {(emp.cargo || emp.dependencia) && (
@@ -386,9 +366,12 @@ export default function EmpleadoCards({
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600, background: '#E6F1FB', color: '#0C447C', border: '0.5px solid #B5D4F4' }}>
                       <Calendar size={10} /> {nov.novedades.length} novedad{nov.novedades.length !== 1 ? 'es' : ''}
                     </span>
-                    {nov.episodiosInc > 0 && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600, background: 'var(--danger-bg)', color: 'var(--danger-text)', border: '0.5px solid color-mix(in srgb, var(--danger) 35%, transparent)' }}>
-                        {nov.episodiosInc} inc. · {nov.diasInc.toFixed(0)}d
+                    {incsActivas.length > 0 && (
+                      <span
+                        title={`Incapacidad activa hoy (${incsActivas.map(i => `${i.fecha_inicio} al ${i.fecha_fin || i.fecha_inicio}`).join(', ')})`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: 'var(--danger-bg)', color: 'var(--danger-text)', border: '0.5px solid color-mix(in srgb, var(--danger) 35%, transparent)' }}
+                      >
+                        {incsActivas.length} inc. activa{incsActivas.length !== 1 ? 's' : ''}{diasIncActivas > 0 ? ` · ${diasIncActivas.toFixed(0)}d` : ''}
                       </span>
                     )}
                   </>

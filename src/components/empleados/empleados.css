@@ -758,6 +758,89 @@
   color: #FFFFFF;
 }
 
+.emp-badge--vacaciones {
+  background: #E0F2FE;
+  border: 1px solid #7DD3FC;
+  color: #0369A1;
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] .emp-badge--vacaciones {
+  background: rgba(2, 132, 199, 0.22);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #7DD3FC;
+}
+
+.emp-badge--vacaciones-ultimo {
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  color: #92400E;
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] .emp-badge--vacaciones-ultimo {
+  background: rgba(180, 83, 9, 0.28);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #FDE68A;
+}
+
+.emp-badge--vacaciones-prog {
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  color: #4338CA;
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] .emp-badge--vacaciones-prog {
+  background: rgba(67, 56, 202, 0.22);
+  border-color: rgba(129, 140, 248, 0.45);
+  color: #A5B4FC;
+}
+
+.emp-vac-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+:root[data-theme="dark"] .emp-vac-banner {
+  background: rgba(30, 58, 138, 0.32);
+  color: #93C5FD;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.emp-vac-banner--ultimo {
+  background: #FFFBEB;
+  color: #92400E;
+  border-color: #F59E0B;
+}
+
+:root[data-theme="dark"] .emp-vac-banner--ultimo {
+  background: rgba(120, 53, 15, 0.35);
+  color: #FDE68A;
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
+.emp-vac-banner--prog {
+  background: #EEF2FF;
+  color: #4338CA;
+  border-color: #C7D2FE;
+}
+
+:root[data-theme="dark"] .emp-vac-banner--prog {
+  background: rgba(67, 56, 202, 0.22);
+  color: #A5B4FC;
+  border-color: rgba(129, 140, 248, 0.45);
+}
+
 /* ── Bloque Call-To-Action de Liquidación en Tarjetas (EmpleadoCards) ── */
 @keyframes empPulseSubtle {
   0%, 100% { opacity: 1; transform: scale(1); }

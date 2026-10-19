@@ -177,30 +177,14 @@ export default function EmpleadoTable({
                       <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                         <span
                           title={vacacionActiva.estaDeVacaciones
-                            ? `De vacaciones: ${vacacionActiva.fechaInicio} al ${vacacionActiva.fechaFin}. ${vacacionActiva.countdownTexto}`
-                            : `Vacaciones programadas: ${vacacionActiva.fechaInicio} al ${vacacionActiva.fechaFin}. ${vacacionActiva.countdownTexto}`
+                            ? `De vacaciones: ${vacacionActiva.fechaInicio} al ${vacacionActiva.fechaFin} • Reincorporación laboral: ${vacacionActiva.fechaRegresoCorta} (${vacacionActiva.fechaRegresoFormateada})`
+                            : `Vacaciones programadas: ${vacacionActiva.fechaInicio} al ${vacacionActiva.fechaFin} • ${vacacionActiva.countdownTexto}`
                           }
-                          style={{
-                            background: vacacionActiva.estaDeVacaciones
-                              ? (vacacionActiva.esUltimoDia ? '#FEF3C7' : '#DBEAFE')
-                              : '#EEF2FF',
-                            color: vacacionActiva.estaDeVacaciones
-                              ? (vacacionActiva.esUltimoDia ? '#92400E' : '#1D4ED8')
-                              : '#4338CA',
-                            border: `1px solid ${
-                              vacacionActiva.estaDeVacaciones
-                                ? (vacacionActiva.esUltimoDia ? '#F59E0B' : '#93C5FD')
-                                : '#C7D2FE'
-                            }`,
-                            borderRadius: 20,
-                            padding: '2px 8px',
-                            fontSize: 10.5,
-                            fontWeight: 700,
-                            whiteSpace: 'nowrap',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3
-                          }}
+                          className={`emp-badge emp-badge--sm ${
+                            vacacionActiva.estaDeVacaciones
+                              ? (vacacionActiva.esUltimoDia ? 'emp-badge--vacaciones-ultimo' : 'emp-badge--vacaciones')
+                              : 'emp-badge--vacaciones-prog'
+                          }`}
                         >
                           🌴 {vacacionActiva.estaDeVacaciones ? vacacionActiva.badgeTexto : `Programadas (${vacacionActiva.countdownTexto})`}
                         </span>

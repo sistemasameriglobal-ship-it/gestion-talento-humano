@@ -33,7 +33,12 @@ export function getFestivosCol(year) {
     return r
   }
 
-  const toISO = d => d.toISOString().split('T')[0]
+  const toISO = d => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
 
   const emilianiDates = emiliani.map(([m, d]) => {
     const fecha = new Date(year, m - 1, d)
@@ -84,7 +89,7 @@ export function diasHabilesEntre(inicio, fin) {
     const y = cur.getFullYear()
     if (!yearsSeen.has(y)) { festivosCache[y] = getFestivosCol(y); yearsSeen.add(y) }
     const dow = cur.getDay()
-    const iso = cur.toISOString().split('T')[0]
+    const iso = `${y}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
     // Lunes(1) a Sábado(6), sin festivos
     if (dow !== 0 && !festivosCache[y].has(iso)) count++
     cur.setDate(cur.getDate() + 1)
@@ -292,4 +297,14 @@ export function evaluarEstadoTemporalAusencia(novedad, hoyStr) {
     diasRestantes: null,
   }
 }
+
+/**
+ * Determina si una novedad (ej. Incapacidad) se encuentra activa en la fecha actual (`hoy`):
+ * hoy >= fecha_inicio && hoy < fechaRegresoLaboral.
+ */
+export function estaActivaHoy(novedad, hoyStr) {
+  if (!novedad || !novedad.fecha_inicio) return false
+  return evaluarEstadoTemporalAusencia(novedad, hoyStr)?.esActivaHoy === true
+}
+
 

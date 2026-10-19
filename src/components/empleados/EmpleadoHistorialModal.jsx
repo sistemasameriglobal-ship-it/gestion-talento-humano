@@ -181,6 +181,24 @@ export default function EmpleadoHistorialModal({
                   {selectedEmp.activo === false ? 'Inactivo' : 'Activo'}
                 </span>
 
+                {vacacionActiva && (
+                  vacacionActiva.estaDeVacaciones ? (
+                    <span
+                      className={`emp-badge ${vacacionActiva.esUltimoDia ? 'emp-badge--vacaciones-ultimo' : 'emp-badge--vacaciones'}`}
+                      title={`Vacaciones del ${formatFecha(vacacionActiva.fechaInicio)} al ${formatFecha(vacacionActiva.fechaFin)} • Reincorporación laboral: ${vacacionActiva.fechaRegresoCorta} (${vacacionActiva.fechaRegresoFormateada})`}
+                    >
+                      🌴 {vacacionActiva.textoLargo}
+                    </span>
+                  ) : vacacionActiva.esProgramada ? (
+                    <span
+                      className="emp-badge emp-badge--vacaciones-prog"
+                      title={`Vacaciones programadas del ${formatFecha(vacacionActiva.fechaInicio)} al ${formatFecha(vacacionActiva.fechaFin)} • Regresa: ${vacacionActiva.fechaRegresoCorta} (${vacacionActiva.fechaRegresoFormateada})`}
+                    >
+                      🌴 {vacacionActiva.textoLargo}
+                    </span>
+                  ) : null
+                )}
+
                 {selectedEmp.activo === false && (
                   estaLiquidado ? (
                     <span
@@ -402,11 +420,14 @@ export default function EmpleadoHistorialModal({
                   Vacaciones y Saldo Disponible ({periodosVacaciones.saldoTotal}d disponibles)
                 </span>
                 {vacacionActiva && (
-                  <span style={{
-                    fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-                    background: 'rgba(56, 189, 248, 0.2)', color: '#7DD3FC',
-                  }}>
-                    {vacacionActiva.countdownTexto}
+                  <span
+                    className={`emp-badge emp-badge--sm ${
+                      vacacionActiva.estaDeVacaciones
+                        ? (vacacionActiva.esUltimoDia ? 'emp-badge--vacaciones-ultimo' : 'emp-badge--vacaciones')
+                        : 'emp-badge--vacaciones-prog'
+                    }`}
+                  >
+                    {vacacionActiva.estaDeVacaciones ? vacacionActiva.textoLargo : vacacionActiva.countdownTexto}
                   </span>
                 )}
               </div>
