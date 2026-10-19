@@ -8,9 +8,9 @@ export default function ModalForm({
   onClose,
 }) {
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}
+    <div className="modal-backdrop" tabIndex={-1}
       style={{ animation: 'fadeIn .2s ease' }}>
-      <div className="modal" style={{ maxWidth: 580, padding: 0, overflow: 'hidden', animation: 'fadeInUp .25s ease', borderRadius: 16 }}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 580, padding: 0, overflow: 'hidden', animation: 'fadeInUp .25s ease', borderRadius: 16 }}>
 
         {/* ── Cabecera con preview vivo ── */}
         <div style={{

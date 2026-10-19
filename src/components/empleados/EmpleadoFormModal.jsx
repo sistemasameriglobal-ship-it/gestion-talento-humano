@@ -223,9 +223,10 @@ export default function EmpleadoFormModal({
   const showSection = (sec) => activeTab === 'todos' || activeTab === sec
 
   return (
-    <div className="modal-backdrop emp-modal-wrap" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop emp-modal-wrap" tabIndex={-1}>
       <div
         className="modal emp-modal-box"
+        onClick={e => e.stopPropagation()}
         style={{
           maxWidth: 780,
           width: '96vw',

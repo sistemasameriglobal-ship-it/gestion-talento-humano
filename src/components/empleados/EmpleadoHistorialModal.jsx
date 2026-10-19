@@ -150,9 +150,10 @@ export default function EmpleadoHistorialModal({
   }[selectedEmp.tipo_documento] || (selectedEmp.tipo_documento || 'Documento')
 
   return (
-    <div className="modal-backdrop emp-modal-wrap" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop emp-modal-wrap" tabIndex={-1}>
       <div
         className="modal emp-modal-box"
+        onClick={e => e.stopPropagation()}
         style={{
           maxWidth: 840,
           width: '96vw',

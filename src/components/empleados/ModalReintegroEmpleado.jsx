@@ -212,8 +212,8 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
   }
 
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 640 }}>
+    <div className="modal-backdrop" tabIndex={-1}>
+      <div className="modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
         {/* ── Modal Header ── */}
         <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -255,9 +255,9 @@ export default function ModalForm({
   }
 
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}
+    <div className="modal-backdrop" tabIndex={-1}
       style={{ animation: 'fadeIn .2s ease' }}>
-      <div className="modal" style={{ maxWidth: 600, padding: 0, overflow: 'hidden', borderRadius: 16, animation: 'fadeInUp .25s ease' }}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600, padding: 0, overflow: 'hidden', borderRadius: 16, animation: 'fadeInUp .25s ease' }}>
 
         {/* ── Cabecera dinámica por tipo ── */}
         <div style={{ background: GRAD[tipo] || GRAD['Vacaciones'], padding: '22px 24px 16px', transition: 'background .4s ease' }}>
