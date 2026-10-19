@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { X, Calendar, UserCheck, Briefcase, Building2, Info, Award, DollarSign } from 'lucide-react'
 import { hoyISO } from '../../utils/fecha'
-import { DEPENDENCIAS, formatCOP } from './empleadosConstants'
+import {
+  DEPENDENCIAS, formatCOP,
+  SMMLV_VIGENTE, AUXILIO_TRANSPORTE_VIGENTE, calcularApoyoProductivoSugerido,
+} from './empleadosConstants'
+
+const OBS_ETAPA_PRODUCTIVA_DEFAULT =
+  'Inicio de Etapa Productiva. Incremento de apoyo al 100% SMMLV y asignación de auxilio de transporte según normativa legal'
 
 export default function ModalReintegroEmpleado({ emp, departamentos, onClose, onConfirm, saving }) {
   const listaDepartamentos = departamentos && departamentos.length > 0 ? departamentos : DEPENDENCIAS
@@ -13,28 +19,62 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
   const [cargo, setCargo] = useState(emp?.cargo || '')
   const [dependencia, setDependencia] = useState(emp?.dependencia || '')
   const [nuevoSalario, setNuevoSalario] = useState('')
+  const [nuevoAuxilio, setNuevoAuxilio] = useState('')
   const [observaciones, setObservaciones] = useState('')
   const [error, setError] = useState(null)
 
   const esContinuidad = tipoMovimiento !== 'reintegro'
+  // El ajuste salarial y la transición a etapa productiva son novedades puras: NO crean ni cierran períodos laborales
+  const esAjusteSalarial = tipoMovimiento === 'ajuste_salarial'
+  const esEtapaProductiva = tipoMovimiento === 'etapa_productiva'
+
+  const handleSeleccionarMovimiento = (id) => {
+    setError(null)
+    if (id === 'etapa_productiva') {
+      const apoyoSugerido = calcularApoyoProductivoSugerido(emp?.salario)
+      const auxSugerido = Number(emp?.auxilio_transporte) > 0
+        ? Number(emp.auxilio_transporte)
+        : AUXILIO_TRANSPORTE_VIGENTE
+      setTipoMovimiento(id)
+      setNuevoSalario(String(apoyoSugerido))
+      setNuevoAuxilio(String(auxSugerido))
+      setCargo('Aprendiz Etapa Productiva')
+      setFechaIngreso(prev => prev || hoyISO())
+      setObservaciones(OBS_ETAPA_PRODUCTIVA_DEFAULT)
+    } else {
+      if (tipoMovimiento === 'etapa_productiva') {
+        if (observaciones === OBS_ETAPA_PRODUCTIVA_DEFAULT) setObservaciones('')
+        if (cargo === 'Aprendiz Etapa Productiva' && emp?.cargo !== 'Aprendiz Etapa Productiva') {
+          setCargo(emp?.cargo || '')
+        }
+      }
+      setTipoMovimiento(id)
+    }
+  }
 
   const MOVIMIENTOS = [
     {
       id: 'ascenso',
-      titulo: '🌟 Ascenso / Promoción',
-      desc: 'Cambio a un cargo superior, con o sin ajuste de sueldo.',
+      titulo: '🌟 Ascenso / Cambio de Cargo',
+      desc: 'Cambio formal de cargo superior (genera nuevo período auditable).',
       continuidad: true,
     },
     {
       id: 'cambio_area',
       titulo: '🔄 Ajuste de Rango / Área',
-      desc: 'Movimiento lateral o ajuste de funciones sin cerrar contrato.',
+      desc: 'Movimiento lateral formal de cargo o área (genera nuevo período).',
       continuidad: true,
     },
     {
       id: 'ajuste_salarial',
       titulo: '💰 Ajuste Salarial',
-      desc: 'Aumento o modificación salarial mediante Otrossí.',
+      desc: 'Incremento de sueldo. Se registra como novedad, sin tocar el período laboral.',
+      continuidad: true,
+    },
+    {
+      id: 'etapa_productiva',
+      titulo: '🎓 Transición a Etapa Productiva (Aprendiz)',
+      desc: 'Paso de Etapa Lectiva (75%) a Productiva (100% SMMLV + Auxilio + ARL). Mantiene Período #1 Vigente.',
       continuidad: true,
     },
     {
@@ -51,8 +91,12 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
       setError('La fecha de efectividad / ingreso es obligatoria.')
       return
     }
-    if (tipoMovimiento === 'ajuste_salarial' && (!nuevoSalario || Number(nuevoSalario) <= 0)) {
+    if (esAjusteSalarial && (!nuevoSalario || Number(nuevoSalario) <= 0)) {
       setError('Debes ingresar el nuevo salario para registrar un Ajuste Salarial.')
+      return
+    }
+    if (esEtapaProductiva && (!nuevoSalario || Number(nuevoSalario) <= 0)) {
+      setError('Debes ingresar el monto del Apoyo Productivo (100% SMMLV).')
       return
     }
     if (tipoMovimiento === 'ascenso' && !cargo.trim()) {
@@ -69,12 +113,55 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
     }
     setError(null)
 
+    const salarioActualNum = Number(emp?.salario) || 0
+    const salarioFinalNum = nuevoSalario && Number(nuevoSalario) > 0 ? Number(nuevoSalario) : (salarioActualNum > 0 ? salarioActualNum : null)
+
+    // ── Transición a Etapa Productiva (Aprendiz): actualiza salario, auxilio y cargo sin crear nuevo período ──
+    if (esEtapaProductiva) {
+      const auxilioNum = nuevoAuxilio !== '' && Number(nuevoAuxilio) >= 0
+        ? Number(nuevoAuxilio)
+        : AUXILIO_TRANSPORTE_VIGENTE
+      const notasAdicionales = observaciones.trim() || OBS_ETAPA_PRODUCTIVA_DEFAULT
+      const obsNovedad = `Transición a Etapa Productiva. Apoyo: ${formatCOP(nuevoSalario)} + Aux. Transporte: ${formatCOP(auxilioNum)}. ${notasAdicionales}`
+
+      onConfirm({
+        tipo_movimiento: 'etapa_productiva',
+        motivo_transicion: 'etapa_productiva',
+        continuidad_laboral: true,
+        es_novedad_pura: true,
+        nueva_fecha_ingreso: fechaIngreso,
+        cargo: cargo.trim() || 'Aprendiz Etapa Productiva',
+        dependencia: dependencia || emp?.dependencia || null,
+        salario: Number(nuevoSalario),
+        salario_anterior: salarioActualNum,
+        auxilio_transporte: auxilioNum,
+        observaciones: obsNovedad,
+      })
+      return
+    }
+
+    // ── Ajuste salarial: novedad pura sin períodos ──
+    if (esAjusteSalarial) {
+      const motivo = observaciones.trim() || 'Sin justificación registrada'
+      const auxilioNum = nuevoAuxilio !== '' && Number(nuevoAuxilio) >= 0 ? Number(nuevoAuxilio) : null
+      onConfirm({
+        tipo_movimiento: 'ajuste_salarial',
+        motivo_transicion: 'ajuste_salarial',
+        continuidad_laboral: true,
+        es_novedad_pura: true,
+        nueva_fecha_ingreso: fechaIngreso,
+        salario: Number(nuevoSalario),
+        salario_anterior: salarioActualNum,
+        auxilio_transporte: auxilioNum,
+        observaciones: `Ajuste de sueldo de ${formatCOP(salarioActualNum)} a ${formatCOP(nuevoSalario)}. Justificación: ${motivo}`,
+      })
+      return
+    }
+
     let obsGenerada = observaciones.trim()
     if (!obsGenerada) {
       if (tipoMovimiento === 'ascenso') {
         obsGenerada = `Ascenso a cargo "${cargo.trim()}" con continuidad laboral`
-      } else if (tipoMovimiento === 'ajuste_salarial') {
-        obsGenerada = `Ajuste salarial a ${formatCOP(nuevoSalario)} (Otrossí)`
       } else if (tipoMovimiento === 'cambio_area') {
         obsGenerada = `Cambio de área / cargo a "${cargo.trim() || emp?.cargo}" (${dependencia || emp?.dependencia}) con continuidad laboral`
       } else {
@@ -83,8 +170,6 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
     }
 
     // Trazabilidad del salario en observaciones
-    const salarioActualNum = Number(emp?.salario) || 0
-    const salarioFinalNum = nuevoSalario && Number(nuevoSalario) > 0 ? Number(nuevoSalario) : (salarioActualNum > 0 ? salarioActualNum : null)
     let textoSalarioAudit = ''
     if (salarioActualNum > 0) {
       textoSalarioAudit = ` [Salario anterior: ${formatCOP(salarioActualNum)}${salarioFinalNum && salarioFinalNum !== salarioActualNum ? ` | Nuevo salario: ${formatCOP(salarioFinalNum)}` : ''}]`
@@ -106,7 +191,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
 
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 620 }}>
+      <div className="modal" style={{ maxWidth: 640 }}>
         {/* ── Modal Header ── */}
         <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -133,7 +218,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
         <form onSubmit={handleSubmit}>
           <div className="modal-body" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {/* ── 1. Selector de Tipo de Movimiento (4 opciones claras) ── */}
+            {/* ── 1. Selector de Tipo de Movimiento ── */}
             <div>
               <label style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text)', marginBottom: 8, display: 'block' }}>
                 Tipo de Movimiento Contractual
@@ -144,7 +229,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
                   return (
                     <div
                       key={m.id}
-                      onClick={() => setTipoMovimiento(m.id)}
+                      onClick={() => handleSeleccionarMovimiento(m.id)}
                       style={{
                         border: `2px solid ${seleccionado ? (m.continuidad ? 'var(--primary)' : 'var(--success)') : 'var(--border)'}`,
                         borderRadius: 10,
@@ -168,7 +253,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
                           name="tipoMovimiento"
                           value={m.id}
                           checked={seleccionado}
-                          onChange={() => setTipoMovimiento(m.id)}
+                          onChange={() => handleSeleccionarMovimiento(m.id)}
                           style={{ cursor: 'pointer' }}
                         />
                       </div>
@@ -182,7 +267,35 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
             </div>
 
             {/* Aviso Informativo Claro */}
-            {esContinuidad ? (
+            {esEtapaProductiva ? (
+              <div style={{
+                background: '#EFF6FF', border: '1px solid #BFDBFE',
+                borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#1E3A8A',
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+              }}>
+                <Info size={16} style={{ flexShrink: 0, marginTop: 2, color: '#2563EB' }} />
+                <div style={{ lineHeight: 1.45 }}>
+                  <strong>🎓 Normativa Contrato de Aprendizaje (Paso a Etapa Productiva):</strong>
+                  <div style={{ marginTop: 4 }}>
+                    • <strong>Apoyo de sostenimiento:</strong> se actualiza del 75% al <strong>100% del SMMLV</strong>.<br />
+                    • <strong>Auxilio de transporte:</strong> <strong>OBLIGATORIO / ACTIVO</strong> en etapa productiva presencial.<br />
+                    • <strong>Seguridad Social:</strong> se activa cobertura de <strong>ARL</strong> además de EPS.<br />
+                    • <strong>Continuidad:</strong> <strong>NO</strong> se cierra el contrato ni se crea un nuevo período; el Período #1 continúa <strong>Vigente</strong>.
+                  </div>
+                </div>
+              </div>
+            ) : esAjusteSalarial ? (
+              <div style={{
+                background: '#FEF9C3', border: '1px solid #FDE68A',
+                borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#78350F',
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+              }}>
+                <Info size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>
+                  💰 <strong>Novedad salarial:</strong> se actualizará el salario del colaborador y se registrará en el <strong>Historial de Novedades</strong>. <strong>No</strong> se crea un nuevo período ni se cierra el período laboral vigente (antigüedad y vacaciones intactas).
+                </span>
+              </div>
+            ) : esContinuidad ? (
               <div style={{
                 background: '#f0fdf4', border: '1px solid #bbf7d0',
                 borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#166534',
@@ -215,7 +328,12 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
             {/* ── 2. Fechas ── */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
-                {esContinuidad ? 'Fecha de efectividad del movimiento (Fecha del Otrossí)' : 'Nueva fecha de ingreso'} <span style={{ color: '#EF4444' }}>*</span>
+                {esEtapaProductiva
+                  ? 'Fecha de inicio etapa productiva'
+                  : esContinuidad
+                  ? 'Fecha de efectividad del movimiento (Fecha del Otrossí)'
+                  : 'Nueva fecha de ingreso'}{' '}
+                <span style={{ color: '#EF4444' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <Calendar size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
@@ -236,11 +354,11 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
               )}
             </div>
 
-            {/* ── 3. Salarios (Anterior de solo lectura y Nuevo Salario) ── */}
+            {/* ── 3. Salarios (Anterior de solo lectura y Nuevo Salario / Apoyo Productivo) ── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>
-                  Salario anterior (Actual)
+                  {esEtapaProductiva ? 'Apoyo anterior (Etapa Lectiva 75%)' : 'Salario anterior (Actual)'}
                 </label>
                 <div style={{ position: 'relative' }}>
                   <DollarSign size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
@@ -257,7 +375,10 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
-                  Nuevo Salario {tipoMovimiento === 'ajuste_salarial' ? <span style={{ color: '#EF4444' }}>*</span> : <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>(Opcional)</span>}
+                  {esEtapaProductiva ? 'Nuevo Salario / Apoyo Productivo' : 'Nuevo Salario'}{' '}
+                  {(esAjusteSalarial || esEtapaProductiva)
+                    ? <span style={{ color: '#EF4444' }}>*</span>
+                    : <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>(Opcional)</span>}
                 </label>
                 <div style={{ position: 'relative' }}>
                   <DollarSign size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
@@ -267,70 +388,160 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
                     style={{ paddingLeft: 34, width: '100%' }}
                     value={nuevoSalario}
                     onChange={e => setNuevoSalario(e.target.value)}
-                    placeholder={tipoMovimiento === 'ajuste_salarial' ? 'Ej. 3500000' : 'Dejar vacío si mantiene actual'}
+                    placeholder={esEtapaProductiva ? `100% SMMLV (${SMMLV_VIGENTE})` : esAjusteSalarial ? 'Ej. 3500000' : 'Dejar vacío si mantiene actual'}
                     min="0"
-                    step="1000"
-                    required={tipoMovimiento === 'ajuste_salarial'}
+                    step="1"
+                    required={esAjusteSalarial || esEtapaProductiva}
                   />
                 </div>
-                {Number(nuevoSalario) > 0 && (
-                  <div style={{ fontSize: 11, color: '#10B981', fontWeight: 600, marginTop: 3 }}>
-                    {formatCOP(nuevoSalario)}
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {Number(nuevoSalario) > 0 && (
+                    <span style={{ fontSize: 11, color: '#10B981', fontWeight: 700 }}>
+                      {formatCOP(nuevoSalario)} {esEtapaProductiva ? '(100% Apoyo Productivo)' : ''}
+                    </span>
+                  )}
+                  {esEtapaProductiva && Number(nuevoSalario) !== SMMLV_VIGENTE && (
+                    <button
+                      type="button"
+                      onClick={() => setNuevoSalario(String(SMMLV_VIGENTE))}
+                      style={{
+                        fontSize: 10.5, fontWeight: 700, color: '#2563EB', background: '#EFF6FF',
+                        border: '1px solid #BFDBFE', borderRadius: 999, padding: '1px 8px', cursor: 'pointer',
+                      }}
+                    >
+                      Usar 100% SMMLV ({formatCOP(SMMLV_VIGENTE)})
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* ── 4. Cargo y Dependencia / Área ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
-                  {esContinuidad ? 'Nuevo Cargo / Posición' : 'Cargo'}
-                  {tipoMovimiento === 'ascenso' && <span style={{ color: '#EF4444' }}> *</span>}
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <Briefcase size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            {/* ── 3b. Auxilio de transporte (Ajuste Salarial y Transición a Etapa Productiva) ── */}
+            {(esAjusteSalarial || esEtapaProductiva) && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>
+                    Auxilio de transporte actual
+                  </label>
                   <input
                     type="text"
                     className="emp-form-input"
-                    style={{ paddingLeft: 34, width: '100%' }}
-                    value={cargo}
-                    onChange={e => setCargo(e.target.value)}
-                    placeholder={esContinuidad ? 'Ej. Coordinador Senior' : 'Cargo actual'}
+                    style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'not-allowed' }}
+                    value={Number(emp?.auxilio_transporte) > 0 ? formatCOP(emp.auxilio_transporte) : 'Sin auxilio ($0)'}
+                    readOnly
+                    disabled
                   />
                 </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
-                  {esContinuidad ? 'Nueva Dependencia / Área' : 'Dependencia / Área'}
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <Building2 size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                  <select
-                    className="emp-form-input"
-                    style={{ paddingLeft: 34, width: '100%' }}
-                    value={dependencia}
-                    onChange={e => setDependencia(e.target.value)}
-                  >
-                    <option value="">— Seleccionar —</option>
-                    {listaDepartamentos.map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', display: 'block' }}>
+                      Auxilio de Transporte{' '}
+                      {esEtapaProductiva
+                        ? <span style={{ color: '#EF4444' }}>*</span>
+                        : <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>(Opcional)</span>}
+                    </label>
+                    {esEtapaProductiva && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#166534',
+                        border: '1px solid #86EFAC', borderRadius: 999, padding: '1px 7px',
+                      }}>
+                        ✓ Activo
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <DollarSign size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                    <input
+                      type="number"
+                      className="emp-form-input"
+                      style={{ paddingLeft: 34, width: '100%' }}
+                      value={nuevoAuxilio}
+                      onChange={e => setNuevoAuxilio(e.target.value)}
+                      placeholder={esEtapaProductiva ? `Auxilio legal (${AUXILIO_TRANSPORTE_VIGENTE})` : 'Dejar vacío si no cambia'}
+                      min="0"
+                      step="1"
+                      required={esEtapaProductiva}
+                    />
+                  </div>
+                  {esEtapaProductiva ? (
+                    <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, marginTop: 4 }}>
+                      {Number(nuevoAuxilio) > 0 ? `${formatCOP(nuevoAuxilio)} — ` : ''}Obligatorio por ley en etapa productiva presencial
+                    </div>
+                  ) : (
+                    Number(nuevoAuxilio) > 0 && (
+                      <div style={{ fontSize: 11, color: '#10B981', fontWeight: 600, marginTop: 3 }}>
+                        {formatCOP(nuevoAuxilio)}
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* ── 4. Cargo y Dependencia / Área (no aplica a Ajuste Salarial) ── */}
+            {!esAjusteSalarial && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
+                    {esEtapaProductiva ? 'Etapa / Cargo en Etapa Productiva' : esContinuidad ? 'Nuevo Cargo / Posición' : 'Cargo'}
+                    {tipoMovimiento === 'ascenso' && <span style={{ color: '#EF4444' }}> *</span>}
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Briefcase size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                    <input
+                      type="text"
+                      className="emp-form-input"
+                      style={{ paddingLeft: 34, width: '100%' }}
+                      value={cargo}
+                      onChange={e => setCargo(e.target.value)}
+                      placeholder={esEtapaProductiva ? 'Aprendiz Etapa Productiva' : esContinuidad ? 'Ej. Coordinador Senior' : 'Cargo actual'}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
+                    {esContinuidad ? 'Dependencia / Área' : 'Dependencia / Área'}
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Building2 size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                    <select
+                      className="emp-form-input"
+                      style={{ paddingLeft: 34, width: '100%' }}
+                      value={dependencia}
+                      onChange={e => setDependencia(e.target.value)}
+                    >
+                      <option value="">— Seleccionar —</option>
+                      {listaDepartamentos.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── 5. Observaciones / Justificación ── */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
-                Observaciones / Justificación del Otrossí
+                {esEtapaProductiva
+                  ? 'Observaciones de la transición a Etapa Productiva'
+                  : esAjusteSalarial
+                  ? 'Justificación del ajuste salarial'
+                  : 'Observaciones / Justificación del Otrossí'}
               </label>
               <textarea
                 className="emp-form-input"
                 style={{ width: '100%', minHeight: 70, resize: 'vertical', padding: '10px 12px' }}
-                placeholder={esContinuidad ? 'Detalles del ascenso, aumento salarial o cambio contractual con continuidad...' : 'Notas sobre el nuevo contrato o acuerdo de reingreso...'}
+                placeholder={
+                  esEtapaProductiva
+                    ? OBS_ETAPA_PRODUCTIVA_DEFAULT
+                    : esAjusteSalarial
+                    ? 'Ej. Incremento anual, evaluación de desempeño...'
+                    : esContinuidad
+                    ? 'Detalles del ascenso o cambio contractual con continuidad...'
+                    : 'Notas sobre el nuevo contrato o acuerdo de reingreso...'
+                }
                 value={observaciones}
                 onChange={e => setObservaciones(e.target.value)}
               />
@@ -352,7 +563,15 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
               disabled={saving}
             >
               {esContinuidad ? <Award size={15} /> : <UserCheck size={14} />}
-              {saving ? 'Guardando movimiento...' : (esContinuidad ? 'Confirmar Movimiento / Otrossí' : 'Confirmar Reintegro')}
+              {saving
+                ? 'Guardando movimiento...'
+                : esEtapaProductiva
+                ? 'Confirmar Paso a Etapa Productiva'
+                : esAjusteSalarial
+                ? 'Registrar Ajuste Salarial'
+                : esContinuidad
+                ? 'Confirmar Movimiento / Otrossí'
+                : 'Confirmar Reintegro'}
             </button>
           </div>
         </form>

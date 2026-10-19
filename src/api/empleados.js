@@ -310,6 +310,24 @@ export async function cerrarPeriodo(periodoId, { fecha_retiro, observaciones }) 
   }
 }
 
+/**
+ * Actualiza datos del periodo vigente (ej. cargo en transición a Etapa Productiva)
+ * SIN cerrarlo ni registrar fecha de retiro.
+ */
+export async function actualizarPeriodoActivo(empleadoId, campos) {
+  try {
+    const { data, error } = await supabase
+      .from(TABLA_PERIODOS)
+      .update(campos)
+      .eq('empleado_id', empleadoId)
+      .eq('es_periodo_actual', true)
+      .select()
+    return { data, error }
+  } catch (err) {
+    return { data: null, error: err }
+  }
+}
+
 /** Crea un nuevo periodo laboral para un empleado (reintegro o alta). */
 export async function crearPeriodo(payload) {
   try {
@@ -384,23 +402,27 @@ export async function revertirUltimoPeriodo({
 
     if (errDel) throw errDel
 
-    // 2. Restaurar el periodo anterior como vigente
-    let obsRestaurada = periodoAnterior.observaciones || ''
-    obsRestaurada = obsRestaurada
-      .replace(/Cierre por (Ascenso|Cambio de cargo|Ajuste salarial|Transición)[^.]*\.?/gi, '')
-      .replace(/Promovido a[^.]*\.?/gi, '')
-      .replace(/Ajuste contractual[^.]*\.?/gi, '')
-      .replace(/Traslado a[^.]*\.?/gi, '')
-      .trim() || null
+    // 2. Restaurar el periodo anterior como vigente y COMPLETAMENTE limpio:
+    //    sin fecha de retiro, sin motivo de retiro y sin notas residuales de transición
+    //    (ej. "Ajuste salarial contractual (Otrossí)") en la columna Detalles.
+    const limpiezaBase = {
+      es_periodo_actual: true,
+      fecha_retiro: null,
+      observaciones: null,
+    }
 
-    const { error: errUpdatePrev } = await supabase
+    let { error: errUpdatePrev } = await supabase
       .from(TABLA_PERIODOS)
-      .update({
-        es_periodo_actual: true,
-        fecha_retiro: null,
-        observaciones: obsRestaurada,
-      })
+      .update({ ...limpiezaBase, motivo_retiro: null })
       .eq('id', periodoAnterior.id)
+
+    // Compatibilidad: si la columna motivo_retiro no existe en empleado_periodos, reintentar sin ella
+    if (errUpdatePrev && /motivo_retiro/i.test(errUpdatePrev.message || '')) {
+      ({ error: errUpdatePrev } = await supabase
+        .from(TABLA_PERIODOS)
+        .update(limpiezaBase)
+        .eq('id', periodoAnterior.id))
+    }
 
     if (errUpdatePrev) throw errUpdatePrev
 

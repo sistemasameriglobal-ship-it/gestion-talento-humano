@@ -513,9 +513,126 @@ export default function Empleados() {
     observaciones,
     continuidad_laboral = false,
     motivo_transicion = 'reintegro',
+    auxilio_transporte = null,
   }) => {
     if (!reintegroEmp) return
     setActionSaving(true)
+
+    // ── AJUSTE SALARIAL: novedad pura. NO crea ni cierra períodos laborales ──
+    if (motivo_transicion === 'ajuste_salarial') {
+      try {
+        const fEfectiva = nueva_fecha_ingreso || hoyISO()
+        const updateSalario = { salario: Number(salario) }
+        if (auxilio_transporte != null && !isNaN(Number(auxilio_transporte))) {
+          updateSalario.auxilio_transporte = Number(auxilio_transporte)
+        }
+        const { error: errSal } = await empleadosApi.actualizarEmpleado(reintegroEmp.id, updateSalario)
+        if (errSal) throw errSal
+
+        const { error: errNov } = await novedadesApi.crearNovedad({
+          concepto: 'Ajuste Salarial',
+          fecha_inicio: fEfectiva,
+          fecha_fin: fEfectiva,
+          total_dias: 0,
+          periodo: fEfectiva.slice(0, 7),
+          observacion: observaciones,
+          empleado_id: reintegroEmp.id,
+          nombre_empleado: reintegroEmp.nombre_completo,
+          dependencia: reintegroEmp.dependencia || null,
+          empresa: currentCompany,
+          empresa_id: reintegroEmp.empresa_id || null,
+          departamento_id: reintegroEmp.departamento_id || null,
+        }, currentCompany)
+        if (errNov) console.warn('Error al registrar novedad de ajuste salarial:', errNov)
+
+        logAccion('AJUSTE_SALARIAL', 'empleados', reintegroEmp.id, currentCompany, {
+          fecha_efectiva: fEfectiva, salario_anterior, salario, auxilio_transporte,
+        })
+
+        setMsg({ type: 'success', text: `Ajuste salarial de ${reintegroEmp.nombre_completo} registrado: ${formatCOP(salario_anterior)} → ${formatCOP(salario)}. Período laboral sin cambios.` })
+        const empId = reintegroEmp.id
+        setReintegroEmp(null)
+        await load()
+        if (selectedEmp && selectedEmp.id === empId) {
+          setSelectedEmp(prev => ({ ...prev, ...updateSalario }))
+        }
+        setTimeout(() => setMsg(null), 4000)
+      } catch (e) {
+        setMsg({ type: 'error', text: 'Error al registrar ajuste salarial: ' + e.message })
+      } finally {
+        setActionSaving(false)
+      }
+      return
+    }
+
+    // ── TRANSICIÓN A ETAPA PRODUCTIVA (APRENDIZ): NO cierra ni crea nuevo período laboral ──
+    if (motivo_transicion === 'etapa_productiva') {
+      try {
+        const fEfectiva = nueva_fecha_ingreso || hoyISO()
+        const nuevoCargoProductiva = cargo || 'Aprendiz Etapa Productiva'
+        const auxTransporteNum = auxilio_transporte != null && !isNaN(Number(auxilio_transporte))
+          ? Number(auxilio_transporte)
+          : 0
+
+        const updateEmpPayload = {
+          salario: Number(salario),
+          auxilio_transporte: auxTransporteNum,
+          cargo: nuevoCargoProductiva,
+          dependencia: dependencia || reintegroEmp.dependencia || null,
+        }
+
+        const { error: errEmp } = await empleadosApi.actualizarEmpleado(reintegroEmp.id, updateEmpPayload)
+        if (errEmp) throw errEmp
+
+        // Sincronizar cargo en el período activo (#1) SIN cerrarlo ni alterar fechas
+        await empleadosApi.actualizarPeriodoActivo(reintegroEmp.id, {
+          cargo: nuevoCargoProductiva,
+          dependencia: dependencia || reintegroEmp.dependencia || null,
+        })
+
+        const { error: errNov } = await novedadesApi.crearNovedad({
+          concepto: 'Paso a Etapa Productiva',
+          fecha_inicio: fEfectiva,
+          fecha_fin: fEfectiva,
+          total_dias: 0,
+          periodo: fEfectiva.slice(0, 7),
+          observacion: observaciones,
+          empleado_id: reintegroEmp.id,
+          nombre_empleado: reintegroEmp.nombre_completo,
+          dependencia: dependencia || reintegroEmp.dependencia || null,
+          empresa: currentCompany,
+          empresa_id: reintegroEmp.empresa_id || null,
+          departamento_id: reintegroEmp.departamento_id || null,
+        }, currentCompany)
+        if (errNov) console.warn('Error al registrar novedad de etapa productiva:', errNov)
+
+        logAccion('PASO_ETAPA_PRODUCTIVA', 'empleados', reintegroEmp.id, currentCompany, {
+          fecha_efectiva: fEfectiva,
+          salario_anterior,
+          salario,
+          auxilio_transporte: auxTransporteNum,
+          cargo: nuevoCargoProductiva,
+        })
+
+        setMsg({
+          type: 'success',
+          text: `Transición a Etapa Productiva de ${reintegroEmp.nombre_completo} registrada: Apoyo ${formatCOP(salario)} + Aux. Transporte ${formatCOP(auxTransporteNum)}. Período #1 se mantiene Vigente.`,
+        })
+        const empId = reintegroEmp.id
+        setReintegroEmp(null)
+        await load()
+        if (selectedEmp && selectedEmp.id === empId) {
+          setSelectedEmp(prev => ({ ...prev, ...updateEmpPayload }))
+        }
+        setTimeout(() => setMsg(null), 4000)
+      } catch (e) {
+        setMsg({ type: 'error', text: 'Error al registrar transición a etapa productiva: ' + e.message })
+      } finally {
+        setActionSaving(false)
+      }
+      return
+    }
+
     try {
       const periodosEmp = periodosPorEmpleado[reintegroEmp.id] || []
       const siguienteNumero = periodosEmp.length > 0
@@ -527,8 +644,6 @@ export default function Empleados() {
       if (continuidad_laboral) {
         if (motivo_transicion === 'ascenso') {
           observacionesAnterior = `Promovido a ${cargo || 'cargo superior'} (Otrossí)`
-        } else if (motivo_transicion === 'ajuste_salarial') {
-          observacionesAnterior = `Ajuste salarial contractual (Otrossí)`
         } else if (motivo_transicion === 'cambio_area') {
           observacionesAnterior = `Traslado a ${dependencia || 'área'} / ${cargo || 'rol'} (Otrossí)`
         } else {

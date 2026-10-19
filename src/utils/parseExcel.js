@@ -2,6 +2,7 @@
 export const CONCEPTOS_CANONICOS = [
   'Incapacidad','Vacaciones','LNR','LR','1/2 LR y 1/2 LNR','Maternidad','Paternidad',
   'Calamidad/Luto','Renuncia/Retiro','Ingreso','Terminación',
+  'Ascenso','Cambio de Cargo','Cambio de Área','Ajuste Salarial','Paso a Etapa Productiva',
   'Día Familia','Hospitalización','Embargo','Suspensión','Ausente','Sustitución Patronal','Otro'
 ]
 
@@ -292,6 +293,11 @@ export const CONCEPTO_COLORS = {
   'Embargo':              '#854D0E',
   'Suspensión':           '#B45309',
   'Ausente':              '#EA580C',
+  'Ascenso':              '#7C3AED',
+  'Cambio de Cargo':      '#2563EB',
+  'Cambio de Área':       '#0891B2',
+  'Ajuste Salarial':      '#059669',
+  'Paso a Etapa Productiva': '#0284C7',
   'Sustitución Patronal': '#4338CA',
   'Otro':                 '#6366F1',
 }

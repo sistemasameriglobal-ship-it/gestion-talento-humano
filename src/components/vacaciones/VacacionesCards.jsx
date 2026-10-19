@@ -1,7 +1,7 @@
 import { Edit2, Trash2, Eye, Calendar } from 'lucide-react'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
 import { PAGE_SIZE, ESTADO_STYLES } from '../../utils/vacacionesConstants'
-import { formatFecha } from '../../utils/vacacionesHelpers'
+import { formatFecha, formatoDias, formatoDiasTexto } from '../../utils/vacacionesHelpers'
 import { EditableEstadoBadge, TipoBadge } from './Badges'
 import Paginacion from '../ui/Paginacion'
 
@@ -14,7 +14,7 @@ export default function VacacionesCards({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 12, paddingTop: 4 }}>
         {paged.map((row, idx) => {
           const estadoStyle = ESTADO_STYLES[row.estado] || ESTADO_STYLES['Pendiente']
-          const habiles = row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin) : (row.total_dias || null)
+          const habiles = row.total_dias != null && row.total_dias !== '' ? row.total_dias : (row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin) : null)
           return (
             <div key={row.id} className="vac-card" style={{
               animationDelay: `${Math.min(idx, 8) * 0.04}s`,
@@ -54,9 +54,9 @@ export default function VacacionesCards({
                       {formatFecha(row.fecha_inicio)}{row.fecha_fin ? ` → ${formatFecha(row.fecha_fin)}` : ''}
                     </span>
                   )}
-                  {habiles && (
+                  {habiles != null && (
                     <span style={{ background: '#F5F3FF', color: '#7C3AED', borderRadius: 999, padding: '1px 8px', fontWeight: 700, fontSize: 11, marginLeft: 'auto' }}>
-                      {habiles} {habiles === 1 ? 'día hábil' : 'días hábiles'}
+                      {formatoDias(habiles)}
                     </span>
                   )}
                 </div>
@@ -75,7 +75,7 @@ export default function VacacionesCards({
                     background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid color-mix(in srgb, var(--warning) 40%, transparent)',
                     borderRadius: 8, padding: '4px 10px', fontSize: 12, fontWeight: 700, marginBottom: 8,
                   }}>
-                    💰 {row.dias_en_dinero} días en dinero
+                    💰 {formatoDiasTexto(row.dias_en_dinero)} en dinero
                   </div>
                 )}
 

@@ -4,7 +4,10 @@
 // Vista de tarjetas de empleados con acciones rápidas.
 // =============================================================
 import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale, AlertTriangle, CheckCircle2, ArrowRight, FileText, Building2 } from 'lucide-react'
-import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual } from '../../utils/vacacionesHelpers'
+import {
+  calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo,
+  getEstadoVacacionActual, formatoDias, formatoDiasTexto
+} from '../../utils/vacacionesHelpers'
 import { normalizarConcepto } from '../../utils/parseExcel'
 import { estaActivaHoy } from '../../utils/diasHabiles'
 import './empleados.css'
@@ -318,7 +321,7 @@ export default function EmpleadoCards({
               <div style={{ display: 'flex', gap: 6, marginTop: 2, paddingTop: 8, borderTop: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
                 {emp.activo !== false && (
                   <span
-                    title={`Saldo de vacaciones del periodo vigente: ${saldoVac.saldoPendiente} días (Causados: ${saldoVac.diasCausados}d${saldoVac.diasManuales ? `, Tomados histórico: ${saldoVac.diasManuales}d` : ''}, Disfrutados: ${saldoVac.diasDisfrutados}d, En dinero: ${saldoVac.diasEnDinero}d)`}
+                    title={`Saldo de vacaciones del periodo vigente: ${formatoDiasTexto(saldoVac.saldoPendiente)} (Causados: ${formatoDias(saldoVac.diasCausados)}${saldoVac.diasManuales ? `, Tomados histórico: ${formatoDias(saldoVac.diasManuales)}` : ''}, Disfrutados: ${formatoDias(saldoVac.diasDisfrutados)}, En dinero: ${formatoDias(saldoVac.diasEnDinero)})`}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -332,7 +335,7 @@ export default function EmpleadoCards({
                       border: `0.5px solid ${saldoVac.saldoPendiente > 0 ? '#A7F3D0' : 'var(--border)'}`,
                     }}
                   >
-                    🌴 Saldo vac.: {saldoVac.saldoPendiente}d
+                    🌴 Saldo vac.: {formatoDias(saldoVac.saldoPendiente)}
                   </span>
                 )}
 

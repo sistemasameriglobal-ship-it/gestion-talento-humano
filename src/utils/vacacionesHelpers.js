@@ -32,6 +32,43 @@ export function formatFecha(iso) {
   return `${d}/${m}/${y}`
 }
 
+/**
+ * Formatea cantidades de días de vacaciones de manera limpia:
+ * Si es entero: "15d", "9d", "0d"
+ * Si es decimal: "7.5d", "1.3d", etc.
+ */
+export function formatoDias(dias) {
+  const n = Number(dias)
+  if (!Number.isFinite(n) || n === 0) return '0d'
+  if (Number.isInteger(n)) return `${n}d`
+  return `${Number(n.toFixed(1))}d`
+}
+
+export function formatoDiasTexto(dias) {
+  const n = Number(dias)
+  if (!Number.isFinite(n) || n === 0) return '0 días'
+  if (Number.isInteger(n)) return `${n} día${n !== 1 ? 's' : ''}`
+  return `${Number(n.toFixed(1))} día${n !== 1 ? 's' : ''}`
+}
+
+/**
+ * Identifica si un colaborador es aprendiz / practicante / SENA
+ */
+export function esAprendizEmpleado(emp) {
+  if (!emp) return false
+  const cargo = String(emp.cargo || '').toLowerCase()
+  const dep = String(emp.dependencia || '').toLowerCase()
+  const tipoDoc = String(emp.tipo_documento || '').toUpperCase()
+  return (
+    cargo.includes('aprendiz') ||
+    cargo.includes('sena') ||
+    cargo.includes('practicante') ||
+    dep.includes('aprendiz') ||
+    dep.includes('sena') ||
+    tipoDoc === 'TI'
+  )
+}
+
 // ── Gestión de Continuidad Laboral (Ascensos y Cambios de Cargo) ─────────────
 /**
  * Obtiene la lista de periodos continuos que preceden y enlazan al periodo de referencia.
@@ -240,6 +277,7 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
 
   const periodosEmp = (listaPeriodos || []).filter(p => (empId && p.empleado_id === empId))
   const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || null
+  const esAprendiz = esAprendizEmpleado(empObj || pActivo)
 
   const fIngRaw = pActivo
     ? (obtenerFechaIngresoContinua(pActivo, periodosEmp) || pActivo.fecha_ingreso)
@@ -311,14 +349,18 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
     let diasCausados
     let diasProporcionales
 
+    const diffMs = Math.max(0, dCorte.getTime() - dIniCiclo.getTime())
+    const diasTrabajados = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1
+    // Fórmula continua estándar: (dias_laborados * 15) / 360 = 1.25 días por cada 30 días
+    const calculoProporcional = Math.min(15, Math.round(((diasTrabajados * 15) / 360) * 10) / 10)
+
     if (esCumplido) {
       diasCausados = 15
       diasProporcionales = 15
     } else {
-      const diffMs = Math.max(0, dCorte.getTime() - dIniCiclo.getTime())
-      const diasTrabajados = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1
-      diasProporcionales = Math.min(15, Math.round(((diasTrabajados * 15) / 360) * 10) / 10)
-      diasCausados = 0
+      diasProporcionales = calculoProporcional
+      // Para aprendices (y colaboradores en liquidación/inactivos), los días causados se acumulan de forma continua
+      diasCausados = (esAprendiz || empObj?.activo === false) ? calculoProporcional : 0
     }
 
     ciclos.push({
@@ -377,9 +419,9 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
     }
 
     if (cicloAsignado) {
-      const dinero = Number(v.dias_en_dinero) || (v.tipo_vacacion === 'Vacaciones en dinero' ? (Number(v.total_dias) || 15) : 0)
+      const dinero = parseFloat(v.dias_en_dinero || v.dias_dinero) || (v.tipo_vacacion === 'Vacaciones en dinero' ? (parseFloat(v.total_dias || v.dias_solicitados) || 15) : 0)
       const tiempo = v.tipo_vacacion === 'Vacaciones en dinero' ? 0 : (
-        Number(v.dias_disfrutados) || Number(v.total_dias) || (
+        parseFloat(v.dias_disfrutados || v.dias_tiempo) || parseFloat(v.total_dias || v.dias_solicitados) || (
           (v.fecha_inicio && v.fecha_fin) ? (diasHabilesEntre(v.fecha_inicio, v.fecha_fin) || 0) : 0
         )
       )
@@ -402,14 +444,14 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
   )
 
   solicitudesNoAsignadas.forEach(v => {
-    const dinero = Number(v.dias_en_dinero) || (v.tipo_vacacion === 'Vacaciones en dinero' ? (Number(v.total_dias) || 15) : 0)
+    const dinero = parseFloat(v.dias_en_dinero || v.dias_dinero) || (v.tipo_vacacion === 'Vacaciones en dinero' ? (parseFloat(v.total_dias || v.dias_solicitados) || 15) : 0)
     const tiempo = v.tipo_vacacion === 'Vacaciones en dinero' ? 0 : (
-      Number(v.dias_disfrutados) || Number(v.total_dias) || (
+      parseFloat(v.dias_disfrutados || v.dias_tiempo) || parseFloat(v.total_dias || v.dias_solicitados) || (
         (v.fecha_inicio && v.fecha_fin) ? (diasHabilesEntre(v.fecha_inicio, v.fecha_fin) || 0) : 0
       )
     )
 
-    const cicloConSaldo = ciclos.find(c => c.es_cumplido && (c.dias_causados - c.dias_disfrutados - c.dias_en_dinero) > 0)
+    const cicloConSaldo = ciclos.find(c => (c.es_cumplido || esAprendiz) && (c.dias_causados - c.dias_disfrutados - c.dias_en_dinero) > 0)
     const cicloDestino = cicloConSaldo || ciclos.find(c => c.es_cumplido) || ciclos[0]
 
     if (cicloDestino) {
@@ -443,7 +485,7 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
   if (remanenteManual > 0) {
     for (const c of ciclos) {
       if (remanenteManual <= 0) break
-      if (!c.es_cumplido) continue
+      if (!c.es_cumplido && !esAprendiz) continue
       const saldoPreAjuste = Math.max(0, c.dias_causados - c.dias_disfrutados - c.dias_en_dinero - c.dias_ajuste_manual)
       const aDescontar = Math.min(remanenteManual, saldoPreAjuste)
       c.dias_ajuste_manual += aDescontar
@@ -470,9 +512,9 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
   })
 
   // 7. Calcular totales globales
-  const ciclosCumplidos = ciclos.filter(c => c.es_cumplido)
-  const saldoTotal = ciclosCumplidos.reduce((acc, c) => acc + c.saldo_restante, 0)
-  const totalCausados = ciclosCumplidos.reduce((acc, c) => acc + c.dias_causados, 0)
+  const ciclosCumplidos = ciclos.filter(c => c.es_cumplido || (esAprendiz && c.dias_causados > 0))
+  const saldoTotal = ciclos.reduce((acc, c) => acc + (c.es_cumplido || esAprendiz ? c.saldo_restante : 0), 0)
+  const totalCausados = ciclos.reduce((acc, c) => acc + (c.es_cumplido || esAprendiz ? c.dias_causados : 0), 0)
   const totalDisfrutados = ciclos.reduce((acc, c) => acc + c.dias_disfrutados, 0)
   const totalEnDinero = ciclos.reduce((acc, c) => acc + c.dias_en_dinero, 0)
   const totalAjusteManual = ciclos.reduce((acc, c) => acc + c.dias_ajuste_manual, 0)
@@ -482,12 +524,13 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
   resultado.ciclos = ciclos
   resultado.periodosCumplidos = ciclosCumplidos
   resultado.periodoEnCurso = ciclos.find(c => !c.es_cumplido) || null
+  resultado.esAprendiz = esAprendiz
   resultado.saldoTotal = saldoTotal % 1 === 0 ? Math.round(saldoTotal) : Math.round(saldoTotal * 10) / 10
   resultado.saldoTotalDisponible = resultado.saldoTotal
-  resultado.totalCausados = totalCausados
-  resultado.totalDisfrutados = totalDisfrutados
-  resultado.totalEnDinero = totalEnDinero
-  resultado.totalAjusteManual = totalAjusteManual
+  resultado.totalCausados = totalCausados % 1 === 0 ? Math.round(totalCausados) : Math.round(totalCausados * 10) / 10
+  resultado.totalDisfrutados = Math.round(totalDisfrutados * 10) / 10
+  resultado.totalEnDinero = Math.round(totalEnDinero * 10) / 10
+  resultado.totalAjusteManual = Math.round(totalAjusteManual * 10) / 10
 
   return resultado
 }

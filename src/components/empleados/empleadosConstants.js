@@ -116,6 +116,27 @@ export function formatCOP(val) {
   return '$' + Math.round(num).toLocaleString('es-CO')
 }
 
+// Parámetros legales vigentes Colombia para contrato de aprendizaje (Etapa Lectiva 75% → Etapa Productiva 100% SMMLV + Auxilio de Transporte)
+export const SMMLV_VIGENTE = 1750905
+export const AUXILIO_TRANSPORTE_VIGENTE = 249095
+
+/**
+ * Sugiere el 100% del SMMLV para la Etapa Productiva:
+ * Si el aprendiz viene con el 75% del SMMLV en Etapa Lectiva, calcula el 100% exacto (salario / 0.75)
+ * cuando equivale a un SMMLV estándar; de lo contrario retorna SMMLV_VIGENTE.
+ */
+export function calcularApoyoProductivoSugerido(salarioActual) {
+  const actual = Number(salarioActual) || 0
+  if (actual > 700000 && actual < SMMLV_VIGENTE) {
+    const estimado100 = Math.round(actual / 0.75)
+    // Si el cálculo desde el 75% coincide con SMMLV vigente o anterior (con margen de redondeo de $10)
+    if (Math.abs(estimado100 - SMMLV_VIGENTE) <= 10) return SMMLV_VIGENTE
+    if (Math.abs(estimado100 - 1423500) <= 10) return 1423500
+    if (Math.abs(estimado100 - 1300000) <= 10) return 1300000
+  }
+  return SMMLV_VIGENTE
+}
+
 export const EMPTY = {
   nombre_completo: '',
   tipo_documento: 'CC',

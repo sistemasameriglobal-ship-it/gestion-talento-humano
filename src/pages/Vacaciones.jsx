@@ -12,7 +12,11 @@ import { Sun, Plus, X, Download, AlertCircle } from 'lucide-react'
 import {
   PAGE_SIZE, MESES, ANIOS, EMPTY,
 } from '../utils/vacacionesConstants'
-import { diasAcumuladosAnio, calcularSaldoVacacionesPeriodo, obtenerFechaIngresoContinua, aFechaInputDate } from '../utils/vacacionesHelpers'
+import {
+  diasAcumuladosAnio, calcularSaldoVacacionesPeriodo,
+  obtenerFechaIngresoContinua, aFechaInputDate,
+  formatoDiasTexto
+} from '../utils/vacacionesHelpers'
 import ModalDetalle from '../components/vacaciones/ModalDetalle'
 import ModalForm from '../components/vacaciones/ModalForm'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
@@ -218,12 +222,14 @@ export default function Vacaciones() {
 
     // Validar límite estricto de días disponibles según el saldo del periodo
     if (saldoVacacionesForm != null) {
-      const diasDisfrute = (form.fecha_inicio && form.fecha_fin)
-        ? (diasHabilesEntre(form.fecha_inicio, form.fecha_fin) || 0)
-        : (Number(form.dias_disfrutados) || Number(form.total_dias) || 0)
+      const diasDisfrute = form.total_dias !== '' && form.total_dias != null
+        ? (parseFloat(form.total_dias) || 0)
+        : ((form.fecha_inicio && form.fecha_fin)
+            ? (diasHabilesEntre(form.fecha_inicio, form.fecha_fin) || 0)
+            : (parseFloat(form.dias_disfrutados) || 0))
       const diasDinero = (form.tipo_vacacion === 'Vacaciones en dinero')
-        ? (Number(form.dias_en_dinero) || 15)
-        : (Number(form.dias_en_dinero) || 0)
+        ? (parseFloat(form.dias_en_dinero) || 15)
+        : (parseFloat(form.dias_en_dinero) || 0)
       const diasSolicitados = (form.tipo_vacacion === 'Vacaciones en dinero')
         ? diasDinero
         : (diasDisfrute + diasDinero)
@@ -233,7 +239,7 @@ export default function Vacaciones() {
         : saldoVacacionesForm.saldoPendiente
 
       if (diasSolicitados > topeMax) {
-        return flash('error', `No puedes solicitar ${diasSolicitados} días. El colaborador solo tiene ${topeMax} días disponibles.`)
+        return flash('error', `No puedes solicitar ${formatoDiasTexto(diasSolicitados)}. El colaborador solo tiene ${formatoDiasTexto(topeMax)} disponibles.`)
       }
     }
 
@@ -255,9 +261,9 @@ export default function Vacaciones() {
       periodo_vacaciones:  form.periodo_vacaciones || null,
       fecha_inicio:        form.fecha_inicio || null,
       fecha_fin:           form.fecha_fin || null,
-      total_dias:          form.total_dias === '' ? null : form.total_dias,
-      dias_disfrutados:    form.dias_disfrutados === '' ? null : form.dias_disfrutados,
-      dias_en_dinero:      form.dias_en_dinero === '' ? null : form.dias_en_dinero,
+      total_dias:          form.total_dias === '' || form.total_dias == null ? null : parseFloat(form.total_dias),
+      dias_disfrutados:    form.dias_disfrutados === '' || form.dias_disfrutados == null ? null : parseFloat(form.dias_disfrutados),
+      dias_en_dinero:      form.dias_en_dinero === '' || form.dias_en_dinero == null ? null : parseFloat(form.dias_en_dinero),
       tipo_vacacion:       form.tipo_vacacion || 'Vacaciones',
       estado:              form.estado || 'Pendiente',
       observacion:         form.observacion || null,
@@ -274,19 +280,19 @@ export default function Vacaciones() {
 
       // Al crear o actualizar una vacación, sincronizar hacia Novedades:
       // Conserva desglose de disfrute físico y compensación en dinero en observación y soporte contable.
-      const diasDinero = payload.dias_en_dinero != null && payload.dias_en_dinero !== '' ? Number(payload.dias_en_dinero) : 0
-      const diasFisicos = payload.fecha_inicio && payload.fecha_fin ? diasHabilesEntre(payload.fecha_inicio, payload.fecha_fin) : (payload.dias_disfrutados != null && payload.dias_disfrutados !== '' ? Number(payload.dias_disfrutados) : null)
-      let totalDiasNovedad = payload.total_dias != null && payload.total_dias !== '' ? Number(payload.total_dias) : null
+      const diasDinero = payload.dias_en_dinero != null && payload.dias_en_dinero !== '' ? parseFloat(payload.dias_en_dinero) : 0
+      const diasFisicos = payload.total_dias != null && payload.total_dias !== '' ? parseFloat(payload.total_dias) : (payload.fecha_inicio && payload.fecha_fin ? (diasHabilesEntre(payload.fecha_inicio, payload.fecha_fin) || 0) : (payload.dias_disfrutados != null && payload.dias_disfrutados !== '' ? parseFloat(payload.dias_disfrutados) : null))
+      let totalDiasNovedad = payload.total_dias != null && payload.total_dias !== '' ? parseFloat(payload.total_dias) : null
       if (payload.tipo_vacacion === 'Vacaciones en dinero') {
         totalDiasNovedad = diasDinero || totalDiasNovedad
       } else if (diasDinero > 0 && diasFisicos != null) {
-        totalDiasNovedad = diasFisicos + diasDinero
+        totalDiasNovedad = Math.round((diasFisicos + diasDinero) * 10) / 10
       } else if (diasFisicos != null) {
         totalDiasNovedad = diasFisicos
       }
 
-      const detalleDinero = diasDinero > 0 ? `Compensación: ${diasDinero} días en dinero` : ''
-      const desgloseDias = diasDinero > 0 && diasFisicos != null ? `${diasFisicos} días disfrute + ${diasDinero} en dinero` : ''
+      const detalleDinero = diasDinero > 0 ? `Compensación: ${formatoDiasTexto(diasDinero)} en dinero` : ''
+      const desgloseDias = diasDinero > 0 && diasFisicos != null ? `${formatoDiasTexto(diasFisicos)} disfrute + ${formatoDiasTexto(diasDinero)} en dinero` : ''
       const obsPartes = [
         desgloseDias ? `[${desgloseDias}]` : detalleDinero ? `[${detalleDinero}]` : null,
         payload.observacion_contable,
@@ -329,19 +335,19 @@ export default function Vacaciones() {
       // Sincronizar actualización hacia Novedades
       if (!error && (payload.fecha_inicio || form.fecha_inicio)) {
         const fInicioBusqueda = form.fecha_inicio || payload.fecha_inicio
-        const diasDinero = payload.dias_en_dinero != null && payload.dias_en_dinero !== '' ? Number(payload.dias_en_dinero) : 0
-        const diasFisicos = payload.fecha_inicio && payload.fecha_fin ? diasHabilesEntre(payload.fecha_inicio, payload.fecha_fin) : (payload.dias_disfrutados != null && payload.dias_disfrutados !== '' ? Number(payload.dias_disfrutados) : null)
-        let totalDiasNovedad = payload.total_dias != null && payload.total_dias !== '' ? Number(payload.total_dias) : null
+        const diasDinero = payload.dias_en_dinero != null && payload.dias_en_dinero !== '' ? parseFloat(payload.dias_en_dinero) : 0
+        const diasFisicos = payload.total_dias != null && payload.total_dias !== '' ? parseFloat(payload.total_dias) : (payload.fecha_inicio && payload.fecha_fin ? (diasHabilesEntre(payload.fecha_inicio, payload.fecha_fin) || 0) : (payload.dias_disfrutados != null && payload.dias_disfrutados !== '' ? parseFloat(payload.dias_disfrutados) : null))
+        let totalDiasNovedad = payload.total_dias != null && payload.total_dias !== '' ? parseFloat(payload.total_dias) : null
         if (payload.tipo_vacacion === 'Vacaciones en dinero') {
           totalDiasNovedad = diasDinero || totalDiasNovedad
         } else if (diasDinero > 0 && diasFisicos != null) {
-          totalDiasNovedad = diasFisicos + diasDinero
+          totalDiasNovedad = Math.round((diasFisicos + diasDinero) * 10) / 10
         } else if (diasFisicos != null) {
           totalDiasNovedad = diasFisicos
         }
 
-        const detalleDinero = diasDinero > 0 ? `Compensación: ${diasDinero} días en dinero` : ''
-        const desgloseDias = diasDinero > 0 && diasFisicos != null ? `${diasFisicos} días disfrute + ${diasDinero} en dinero` : ''
+        const detalleDinero = diasDinero > 0 ? `Compensación: ${formatoDiasTexto(diasDinero)} en dinero` : ''
+        const desgloseDias = diasDinero > 0 && diasFisicos != null ? `${formatoDiasTexto(diasFisicos)} disfrute + ${formatoDiasTexto(diasDinero)} en dinero` : ''
         const obsPartes = [
           desgloseDias ? `[${desgloseDias}]` : detalleDinero ? `[${detalleDinero}]` : null,
           payload.observacion_contable,

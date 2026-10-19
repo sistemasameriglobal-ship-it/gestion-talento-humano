@@ -15,7 +15,8 @@ import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { CONCEPTOS_CON_FECHA, calcularEdad, formatCOP } from './empleadosConstants'
 import {
   formatFecha, calcAntiguedadEmpleado,
-  getEstadoVacacionActual, obtenerPeriodosVacacionesEmpleado
+  getEstadoVacacionActual, obtenerPeriodosVacacionesEmpleado,
+  formatoDias, formatoDiasTexto
 } from '../../utils/vacacionesHelpers'
 import { hoyISO } from '../../utils/fecha'
 import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
@@ -424,7 +425,7 @@ export default function EmpleadoHistorialModal({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span>🌴</span>
                 <span style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em' }}>
-                  Vacaciones y Saldo Disponible ({periodosVacaciones.saldoTotal}d disponibles)
+                  Vacaciones y Saldo Disponible ({formatoDias(periodosVacaciones.saldoTotal)} disponibles)
                 </span>
                 {vacacionActiva && (
                   <span
@@ -455,26 +456,26 @@ export default function EmpleadoHistorialModal({
                       Saldo Total Acumulado
                     </div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: periodosVacaciones.saldoTotal > 0 ? '#10B981' : 'var(--text)' }}>
-                      {periodosVacaciones.saldoTotal} {periodosVacaciones.saldoTotal === 1 ? 'día disponible' : 'días disponibles'}
+                      {formatoDiasTexto(periodosVacaciones.saldoTotal)} disponible{periodosVacaciones.saldoTotal !== 1 ? 's' : ''}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Total Causados</div>
-                      <div style={{ fontWeight: 700, color: 'var(--text)' }}>{periodosVacaciones.totalCausados}d</div>
+                      <div style={{ fontWeight: 700, color: 'var(--text)' }}>{formatoDias(periodosVacaciones.totalCausados)}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Total Disfrutados</div>
-                      <div style={{ fontWeight: 700, color: '#10B981' }}>{periodosVacaciones.totalDisfrutados}d</div>
+                      <div style={{ fontWeight: 700, color: '#10B981' }}>{formatoDias(periodosVacaciones.totalDisfrutados)}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Total En Dinero</div>
-                      <div style={{ fontWeight: 700, color: '#EAB308' }}>{periodosVacaciones.totalEnDinero}d</div>
+                      <div style={{ fontWeight: 700, color: '#EAB308' }}>{formatoDias(periodosVacaciones.totalEnDinero)}</div>
                     </div>
                     {periodosVacaciones.totalAjusteManual > 0 && (
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Ajuste Histórico</div>
-                        <div style={{ fontWeight: 700, color: '#F97316' }}>{periodosVacaciones.totalAjusteManual}d</div>
+                        <div style={{ fontWeight: 700, color: '#F97316' }}>{formatoDias(periodosVacaciones.totalAjusteManual)}</div>
                       </div>
                     )}
                   </div>
@@ -525,32 +526,32 @@ export default function EmpleadoHistorialModal({
                             color: c.saldo_restante > 0 ? '#10B981' : 'var(--text-muted)',
                             border: `1px solid ${c.saldo_restante > 0 ? 'rgba(16, 185, 129, 0.35)' : 'var(--border)'}`,
                           }}>
-                            Saldo: {c.saldo_restante} {c.saldo_restante === 1 ? 'día' : 'días'}
+                            Saldo: {formatoDiasTexto(c.saldo_restante)}
                           </span>
                         </div>
 
                         {/* Mini KPIs del período */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 6, marginBottom: 10 }}>
                           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{c.dias_causados}d</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{formatoDias(c.dias_causados)}</div>
                             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Causados</div>
                           </div>
                           <div style={{ background: 'var(--surface)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: '#10B981' }}>{c.dias_disfrutados}d</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#10B981' }}>{formatoDias(c.dias_disfrutados)}</div>
                             <div style={{ fontSize: 10, color: '#059669' }}>Disfrutados</div>
                           </div>
                           <div style={{ background: 'var(--surface)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: '#EAB308' }}>{c.dias_en_dinero}d</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#EAB308' }}>{formatoDias(c.dias_en_dinero)}</div>
                             <div style={{ fontSize: 10, color: '#CA8A04' }}>En dinero</div>
                           </div>
                           {c.dias_ajuste_manual > 0 && (
                             <div style={{ background: 'var(--surface)', border: '1px solid rgba(249, 115, 22, 0.35)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: '#FB923C' }}>{c.dias_ajuste_manual}d</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: '#FB923C' }}>{formatoDias(c.dias_ajuste_manual)}</div>
                               <div style={{ fontSize: 10, color: '#F97316' }}>Ajuste manual</div>
                             </div>
                           )}
                           <div style={{ background: 'var(--surface)', border: `1px solid ${c.saldo_restante > 0 ? 'rgba(16, 185, 129, 0.45)' : 'var(--border)'}`, borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: c.saldo_restante > 0 ? '#10B981' : 'var(--text-muted)' }}>{c.saldo_restante}d</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: c.saldo_restante > 0 ? '#10B981' : 'var(--text-muted)' }}>{formatoDias(c.saldo_restante)}</div>
                             <div style={{ fontSize: 10, color: c.saldo_restante > 0 ? '#059669' : 'var(--text-muted)' }}>Restantes</div>
                           </div>
                         </div>
@@ -586,7 +587,7 @@ export default function EmpleadoHistorialModal({
                                         {v.fecha_inicio ? `📅 ${formatFecha(v.fecha_inicio)} → ${v.fecha_fin ? formatFecha(v.fecha_fin) : '—'}` : '💰 Sin fecha (compensación)'}
                                       </span>
                                       <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                                        ({v.dias_tiempo_calc || 0}d tiempo{v.dias_dinero_calc ? ` + ${v.dias_dinero_calc}d dinero` : ''})
+                                        ({formatoDias(v.dias_tiempo_calc || 0)} tiempo{v.dias_dinero_calc ? ` + ${formatoDias(v.dias_dinero_calc)} dinero` : ''})
                                       </span>
                                       {(v.observacion_contable || v.observacion) && (
                                         <span style={{ color: 'var(--text-muted)', fontSize: 11, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -767,6 +768,13 @@ export default function EmpleadoHistorialModal({
                               detalleTexto = 'Ajuste contractual (Otrossí)'
                             }
                           }
+                        }
+
+                        // Un período vigente (sin período siguiente) nunca debe mostrar notas
+                        // residuales de cierre/transición (ej. "Ajuste salarial contractual (Otrossí)")
+                        const REGEX_NOTA_TRANSICION = /Ajuste salarial|Ajuste contractual|Promovido a|Traslado a|Cierre por|Otross[ií]/i
+                        if (p.es_periodo_actual && !siguientePeriodo && p.observaciones && REGEX_NOTA_TRANSICION.test(p.observaciones) && !p.continuidad_laboral) {
+                          detalleTexto = '—'
                         }
 
                         return (

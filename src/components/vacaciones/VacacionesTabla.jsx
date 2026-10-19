@@ -1,7 +1,7 @@
 import { Edit2, Trash2, Eye, Calendar } from 'lucide-react'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
 import { PAGE_SIZE } from '../../utils/vacacionesConstants'
-import { formatFecha } from '../../utils/vacacionesHelpers'
+import { formatFecha, formatoDias, formatoDiasTexto } from '../../utils/vacacionesHelpers'
 import { EditableEstadoBadge, TipoBadge } from './Badges'
 import Paginacion from '../ui/Paginacion'
 import PersonCell from '../ui/PersonCell'
@@ -54,12 +54,12 @@ export default function VacacionesTabla({
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Calendar size={12} style={{ flexShrink: 0 }} /> {formatFecha(row.fecha_fin)}</span>
                 </td>
                 <td style={{ textAlign: 'center', fontWeight: 700, color: '#7C3AED' }}>
-                  {row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin) : (row.total_dias || '—')}
+                  {row.total_dias != null && row.total_dias !== '' ? formatoDias(row.total_dias) : (row.fecha_inicio && row.fecha_fin ? formatoDias(diasHabilesEntre(row.fecha_inicio, row.fecha_fin)) : '—')}
                 </td>
                 <td style={{ textAlign: 'center' }}>
                   {row.dias_en_dinero != null && row.dias_en_dinero !== '' ? (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid color-mix(in srgb, var(--warning) 40%, transparent)' }}>
-                      💰 {row.dias_en_dinero} días
+                      💰 {formatoDiasTexto(row.dias_en_dinero)}
                     </span>
                   ) : '—'}
                 </td>
