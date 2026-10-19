@@ -30,7 +30,15 @@ export const CONCEPTOS_CON_FECHA = [
   'Calamidad/Luto', 'Hospitalización', 'Embargo', 'Otro',
 ]
 
-export const TIPOS_DOCUMENTO = ['CC', 'PEP', 'PPT', 'CE', 'Pasaporte']
+export const TIPOS_DOCUMENTO = [
+  { value: 'CC', label: 'Cédula de Ciudadanía (CC)' },
+  { value: 'TI', label: 'Tarjeta de Identidad (TI)' },
+  { value: 'Contraseña', label: 'Contraseña / En trámite' },
+  { value: 'CE', label: 'Cédula de Extranjería (CE)' },
+  { value: 'PEP', label: 'Permiso Especial de Permanencia (PEP)' },
+  { value: 'PPT', label: 'Permiso por Protección Temporal (PPT)' },
+  { value: 'Pasaporte', label: 'Pasaporte' },
+]
 
 export const TIPOS_SANGRE = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 

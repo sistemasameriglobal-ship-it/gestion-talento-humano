@@ -12,7 +12,7 @@ import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo } from '../utils
 import { exportarExcel } from '../utils/exportarExcel'
 import { logAccion } from '../utils/auditLogger'
 import { Contact, Plus, Search, X, Download, Upload, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
-import { PAGE_SIZE, EMPTY } from '../components/empleados/empleadosConstants'
+import { PAGE_SIZE, EMPTY, formatCOP } from '../components/empleados/empleadosConstants'
 import EmpleadoKpis from '../components/empleados/EmpleadoKpis'
 import AreaDistribution from '../components/empleados/AreaDistribution'
 import EmpleadoCards from '../components/empleados/EmpleadoCards'
@@ -504,9 +504,12 @@ export default function Empleados() {
   }
 
   const handleConfirmReintegro = async ({
+    tipo_movimiento,
     nueva_fecha_ingreso,
     cargo,
     dependencia,
+    salario,
+    salario_anterior,
     observaciones,
     continuidad_laboral = false,
     motivo_transicion = 'reintegro',
@@ -519,14 +522,48 @@ export default function Empleados() {
         ? Math.max(...periodosEmp.map(p => p.numero_periodo || 1)) + 1
         : 2
 
-      // 1. Si el colaborador tenía un periodo activo previo (caso de ascenso mientras sigue activo),
-      // cerramos formalmente ese periodo en la fecha de efectividad del nuevo cargo.
-      const periodoActivoPrevio = periodosEmp.find(p => p.es_periodo_actual)
-      if (periodoActivoPrevio) {
-        await empleadosApi.cerrarPeriodo(periodoActivoPrevio.id, {
+      // Determinar la observación descriptiva del rol anterior (Otrossí / Transición, NO retiro)
+      let observacionesAnterior = ''
+      if (continuidad_laboral) {
+        if (motivo_transicion === 'ascenso') {
+          observacionesAnterior = `Promovido a ${cargo || 'cargo superior'} (Otrossí)`
+        } else if (motivo_transicion === 'ajuste_salarial') {
+          observacionesAnterior = `Ajuste salarial contractual (Otrossí)`
+        } else if (motivo_transicion === 'cambio_area') {
+          observacionesAnterior = `Traslado a ${dependencia || 'área'} / ${cargo || 'rol'} (Otrossí)`
+        } else {
+          observacionesAnterior = `Ajuste contractual (Otrossí)`
+        }
+      } else {
+        observacionesAnterior = 'Finalización de contrato anterior'
+      }
+
+      // Si el colaborador no tenía periodos en la tabla empleado_periodos (empleados creados antes de la tabla),
+      // creamos su Periodo #1 formal con sus datos previos para conservar trazabilidad completa.
+      if (periodosEmp.length === 0) {
+        const fechaIngresoBase = reintegroEmp.fecha_ingreso || nueva_fecha_ingreso
+        await empleadosApi.crearPeriodo({
+          empleado_id: reintegroEmp.id,
+          empresa: currentCompany,
+          numero_periodo: 1,
+          fecha_ingreso: fechaIngresoBase,
           fecha_retiro: nueva_fecha_ingreso,
-          observaciones: observaciones || `Cierre por ${continuidad_laboral ? (motivo_transicion === 'ascenso' ? 'Ascenso de cargo' : 'Cambio de cargo') : 'Finalización de contrato anterior'}`,
+          cargo: reintegroEmp.cargo || null,
+          dependencia: reintegroEmp.dependencia || null,
+          es_periodo_actual: false,
+          continuidad_laboral: true,
+          motivo_transicion: 'inicio_contrato',
+          observaciones: observacionesAnterior,
         })
+      } else {
+        // 1. Si tenía un periodo activo previo, cerramos formalmente ese periodo en la fecha del otrossí
+        const periodoActivoPrevio = periodosEmp.find(p => p.es_periodo_actual)
+        if (periodoActivoPrevio) {
+          await empleadosApi.cerrarPeriodo(periodoActivoPrevio.id, {
+            fecha_retiro: nueva_fecha_ingreso,
+            observaciones: observacionesAnterior,
+          })
+        }
       }
 
       // 2. Crear nuevo periodo laboral en empleado_periodos
@@ -541,35 +578,42 @@ export default function Empleados() {
         es_periodo_actual: true,
         continuidad_laboral: Boolean(continuidad_laboral),
         motivo_transicion: motivo_transicion || (continuidad_laboral ? 'ascenso' : 'reintegro'),
-        observaciones: observaciones || (continuidad_laboral ? 'Ascenso con continuidad laboral' : 'Reintegro bajo nuevo contrato laboral'),
+        observaciones: observaciones || (continuidad_laboral ? 'Movimiento contractual con continuidad laboral' : 'Reintegro bajo nuevo contrato laboral'),
       })
       if (errorPeriodo) throw errorPeriodo
 
       // 3. Actualizar tabla empleados:
-      // Si hay continuidad laboral, se conserva la fecha de ingreso histórica de la empresa.
-      // Si es un reintegro tras retiro externo sin continuidad, inicia nuevo ciclo con la nueva fecha de ingreso.
       const fechaIngresoEmpFinal = continuidad_laboral
         ? (reintegroEmp.fecha_ingreso || nueva_fecha_ingreso)
         : nueva_fecha_ingreso
 
-      const { error } = await empleadosApi.actualizarEmpleado(reintegroEmp.id, {
+      const updatePayload = {
         activo: true,
         fecha_ingreso: fechaIngresoEmpFinal,
         fecha_retiro: null,
         cargo: cargo || reintegroEmp.cargo || null,
         dependencia: dependencia || reintegroEmp.dependencia || null,
-      })
+      }
+      if (salario != null && Number(salario) > 0) {
+        updatePayload.salario = Number(salario)
+      }
+
+      const { error } = await empleadosApi.actualizarEmpleado(reintegroEmp.id, updatePayload)
       if (error) throw error
 
       // 4. Sincronización automática de evento contractual en public.novedades
       const fEfectivaFinal = nueva_fecha_ingreso || new Date().toISOString().split('T')[0]
       const conceptoNovedad = continuidad_laboral
-        ? (motivo_transicion === 'ascenso' ? 'Ascenso' : 'Cambio de Cargo')
+        ? (motivo_transicion === 'ascenso' ? 'Ascenso' : motivo_transicion === 'ajuste_salarial' ? 'Ajuste Salarial' : 'Cambio de Cargo')
         : 'Ingreso'
 
       const obsNovedad = observaciones || (
         continuidad_laboral
-          ? (motivo_transicion === 'ascenso' ? `Ascenso a cargo "${cargo || 'Nuevo Rol'}" con continuidad laboral` : `Cambio de cargo a "${cargo || 'Nuevo Rol'}" con continuidad laboral`)
+          ? (motivo_transicion === 'ascenso'
+              ? `Ascenso a cargo "${cargo || 'Nuevo Rol'}" con continuidad laboral`
+              : motivo_transicion === 'ajuste_salarial'
+              ? `Ajuste salarial a ${formatCOP(salario)} (Otrossí)`
+              : `Cambio de cargo a "${cargo || 'Nuevo Rol'}" en "${dependencia}" con continuidad laboral`)
           : 'Reintegro bajo nuevo contrato laboral tras retiro externo'
       )
 
@@ -597,23 +641,89 @@ export default function Empleados() {
         }
       }
 
-      logAccion(continuidad_laboral ? 'ASCENSO' : 'REINTEGRAR', 'empleados', reintegroEmp.id, currentCompany, {
+      logAccion(continuidad_laboral ? 'MOVIMIENTO_CONTRACTUAL' : 'REINTEGRAR', 'empleados', reintegroEmp.id, currentCompany, {
+        tipo_movimiento,
         nueva_fecha_ingreso,
         numero_periodo: siguienteNumero,
         continuidad_laboral,
         motivo_transicion,
+        cargo,
+        dependencia,
+        salario,
+        salario_anterior,
       })
 
       const msgExito = continuidad_laboral
-        ? `Colaborador ${reintegroEmp.nombre_completo} actualizado con continuidad laboral (${motivo_transicion === 'ascenso' ? 'Ascenso' : 'Cambio de cargo'}). Antigüedad y vacaciones acumuladas conservadas.`
+        ? `Colaborador ${reintegroEmp.nombre_completo}: Movimiento contractual registrado con éxito (${motivo_transicion === 'ascenso' ? 'Ascenso' : motivo_transicion === 'ajuste_salarial' ? 'Ajuste Salarial' : 'Cambio de Cargo/Área'}). Antigüedad y vacaciones acumuladas conservadas.`
         : `Colaborador ${reintegroEmp.nombre_completo} reintegrado exitosamente en nuevo ciclo contractual.`
 
       setMsg({ type: 'success', text: msgExito })
       setReintegroEmp(null)
       await load()
+
+      // Si el modal de historial sigue abierto para este empleado, refrescar con datos nuevos
+      if (selectedEmp && selectedEmp.id === reintegroEmp.id) {
+        setSelectedEmp(prev => ({
+          ...prev,
+          cargo: cargo || prev.cargo,
+          dependencia: dependencia || prev.dependencia,
+          salario: (salario != null && Number(salario) > 0) ? Number(salario) : prev.salario,
+        }))
+      }
       setTimeout(() => setMsg(null), 4000)
     } catch (e) {
       setMsg({ type: 'error', text: 'Error al registrar movimiento del colaborador: ' + e.message })
+    } finally {
+      setActionSaving(false)
+    }
+  }
+
+  const handleRevertirPeriodo = async ({ periodoAEliminar, periodoAnterior }) => {
+    if (!selectedEmp) return
+    setActionSaving(true)
+    try {
+      const { error } = await empleadosApi.revertirUltimoPeriodo({
+        empleado: selectedEmp,
+        periodoAEliminar,
+        periodoAnterior,
+      })
+      if (error) throw error
+
+      logAccion('REVERTIR_MOVIMIENTO', 'empleados', selectedEmp.id, currentCompany, {
+        periodo_eliminado: periodoAEliminar.numero_periodo,
+        periodo_restaurado: periodoAnterior.numero_periodo,
+      })
+
+      setMsg({
+        type: 'success',
+        text: `Movimiento #${periodoAEliminar.numero_periodo} revertido exitosamente. Se restauró el Periodo #${periodoAnterior.numero_periodo} como vigente.`,
+      })
+
+      await load()
+
+      // Actualizar el empleado en memoria con los datos restaurados
+      setSelectedEmp(prev => {
+        if (!prev) return null
+        let salRestaurado = prev.salario
+        if (periodoAEliminar.observaciones) {
+          const matchSal = periodoAEliminar.observaciones.match(/Salario anterior:\s*\$?([\d.,]+)/i)
+          if (matchSal && matchSal[1]) {
+            const num = Number(matchSal[1].replace(/[.,]/g, ''))
+            if (!isNaN(num) && num >= 0) salRestaurado = num
+          }
+        }
+        return {
+          ...prev,
+          cargo: periodoAnterior.cargo || prev.cargo,
+          dependencia: periodoAnterior.dependencia || prev.dependencia,
+          salario: salRestaurado,
+        }
+      })
+
+      setTimeout(() => setMsg(null), 4000)
+    } catch (e) {
+      console.error('Error al revertir periodo laboral:', e)
+      setMsg({ type: 'error', text: 'Error al revertir el movimiento contractual: ' + e.message })
     } finally {
       setActionSaving(false)
     }
@@ -1071,6 +1181,7 @@ export default function Empleados() {
           onReintegrar={setReintegroEmp}
           onLiquidar={setLiquidarEmp}
           onSustitucion={puedeEditar ? setSustitucionEmp : null}
+          onRevertirPeriodo={handleRevertirPeriodo}
         />
       )}
     </div>

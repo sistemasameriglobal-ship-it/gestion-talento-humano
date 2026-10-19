@@ -9,7 +9,7 @@ export { MESES }
 
 export const CONCEPTOS_LIST = [
   'Incapacidad', 'Vacaciones', 'LNR', 'LR', '1/2 LR y 1/2 LNR', 'Maternidad', 'Paternidad',
-  'Calamidad/Luto', 'Renuncia', 'Ingreso', 'Terminación de Contrato', 'Ascenso', 'Cambio de Cargo', 'Cambio de Área', 'Sustitución Patronal', 'Suspensión', 'Recargo Dominical o Festivos', 'Ausente', 'Otros'
+  'Calamidad/Luto', 'Renuncia', 'Ingreso', 'Terminación de Contrato', 'Ascenso', 'Cambio de Cargo', 'Cambio de Área', 'Ajuste Salarial', 'Sustitución Patronal', 'Suspensión', 'Recargo Dominical o Festivos', 'Ausente', 'Otros'
 ]
 export const CONCEPTOS_SIN_FECHAS = []
 export const PAGE_SIZE = 15
@@ -20,7 +20,7 @@ export const ICONOS = {
   'Incapacidad': '🏥', 'Vacaciones': '🌴', 'LNR': '📋', 'LR': '📁', '1/2 LR y 1/2 LNR': '🕐',
   'Maternidad': '👶', 'Paternidad': '👨‍👦', 'Calamidad/Luto': '🖤',
   'Renuncia/Retiro': '🚪', 'Ingreso': '🎉', 'Terminación de Contrato': '📤',
-  'Ascenso': '⭐', 'Cambio de Cargo': '🔄', 'Cambio de Área': '🔄', 'Sustitución Patronal': '🏛️',
+  'Ascenso': '⭐', 'Cambio de Cargo': '🔄', 'Cambio de Área': '🔄', 'Ajuste Salarial': '💰', 'Sustitución Patronal': '🏛️',
   'Suspensión': '⏸', 'Día Familia': '👨‍👩‍👧', 'Hospitalización': '🏨',
   'Embargo': '⚖️', 'Recargo Dominical o Festivos': '💰', 'Ausente': '🚫'
 }

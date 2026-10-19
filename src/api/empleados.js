@@ -360,6 +360,107 @@ export async function listarTodosLosPeriodos(empresa) {
 }
 
 /**
+ * Revierte el último periodo laboral creado (ej. un ascenso, ajuste salarial o movimiento registrado por error):
+ * 1. Elimina el registro del periodo en empleado_periodos
+ * 2. En el periodo anterior: actualiza fecha_retiro = null, restaura observaciones y lo marca como vigente (es_periodo_actual = true)
+ * 3. En el empleado principal: restaura cargo, dependencia y salario previo
+ * 4. Elimina la novedad generada en public.novedades asociada a ese movimiento
+ */
+export async function revertirUltimoPeriodo({
+  empleado,
+  periodoAEliminar,
+  periodoAnterior,
+}) {
+  try {
+    if (!periodoAEliminar?.id || !periodoAnterior?.id || !empleado?.id) {
+      throw new Error('Parámetros insuficientes para revertir el periodo.')
+    }
+
+    // 1. Eliminar el periodo vigente de empleado_periodos
+    const { error: errDel } = await supabase
+      .from(TABLA_PERIODOS)
+      .delete()
+      .eq('id', periodoAEliminar.id)
+
+    if (errDel) throw errDel
+
+    // 2. Restaurar el periodo anterior como vigente
+    let obsRestaurada = periodoAnterior.observaciones || ''
+    obsRestaurada = obsRestaurada
+      .replace(/Cierre por (Ascenso|Cambio de cargo|Ajuste salarial|Transición)[^.]*\.?/gi, '')
+      .replace(/Promovido a[^.]*\.?/gi, '')
+      .replace(/Ajuste contractual[^.]*\.?/gi, '')
+      .replace(/Traslado a[^.]*\.?/gi, '')
+      .trim() || null
+
+    const { error: errUpdatePrev } = await supabase
+      .from(TABLA_PERIODOS)
+      .update({
+        es_periodo_actual: true,
+        fecha_retiro: null,
+        observaciones: obsRestaurada,
+      })
+      .eq('id', periodoAnterior.id)
+
+    if (errUpdatePrev) throw errUpdatePrev
+
+    // 3. Restaurar cargo, dependencia y salario del empleado principal
+    const updateEmpPayload = {
+      cargo: periodoAnterior.cargo || null,
+      dependencia: periodoAnterior.dependencia || null,
+      fecha_retiro: null,
+      activo: true,
+    }
+
+    // Si en observaciones del periodo eliminado se guardó el salario anterior:
+    // Formato: "[Salario anterior: $2.500.000]" o "Salario anterior: 2500000"
+    if (periodoAEliminar.observaciones) {
+      const matchSal = periodoAEliminar.observaciones.match(/Salario anterior:\s*\$?([\d.,]+)/i)
+      if (matchSal && matchSal[1]) {
+        const salNum = Number(matchSal[1].replace(/[.,]/g, ''))
+        if (!isNaN(salNum) && salNum >= 0) {
+          updateEmpPayload.salario = salNum
+        }
+      }
+    }
+
+    const { error: errEmp } = await supabase
+      .from('empleados')
+      .update(updateEmpPayload)
+      .eq('id', empleado.id)
+
+    if (errEmp) console.warn('Advertencia al restaurar cargo/salario del empleado:', errEmp)
+
+    // 4. Eliminar la novedad generada en public.novedades (asociada a ese ascenso/aumento/movimiento)
+    if (periodoAEliminar.fecha_ingreso) {
+      const conceptosMovimiento = ['Ascenso', 'Cambio de Cargo', 'Cambio de Área', 'Ajuste Salarial', 'Ingreso', 'Otros', 'Otro']
+      
+      let query = supabase
+        .from('novedades')
+        .delete()
+        .eq('fecha_inicio', periodoAEliminar.fecha_ingreso)
+        .in('concepto', conceptosMovimiento)
+
+      if (empleado.id) {
+        query = query.eq('empleado_id', empleado.id)
+      } else {
+        query = query.eq('nombre_empleado', empleado.nombre_completo)
+      }
+      
+      const { error: errNov } = await query
+      if (errNov) {
+        console.warn('Advertencia al eliminar novedad asociada al movimiento:', errNov)
+      }
+    }
+
+    return { error: null }
+  } catch (err) {
+    console.error('Error al revertir periodo laboral:', err)
+    return { error: err }
+  }
+}
+
+/**
  * Marca a un empleado inactivo (y su periodo cerrado correspondiente) como liquidado
  * o actualiza el estado de su liquidación contable.
  */

@@ -110,6 +110,22 @@ export default function EmpleadoFormModal({
     }))
   }
 
+  // Validación asistida con la edad al ingresar fecha de nacimiento
+  const handleFechaNacimientoChange = (e) => {
+    const val = e.target.value
+    const edad = calcularEdad(val)
+    setForm(prev => {
+      const next = { ...prev, fecha_nacimiento: val }
+      // Si la edad es menor de 18 años y el tipo de documento es blanco o CC por defecto, sugerir TI
+      if (edad !== null && edad < 18) {
+        if (!prev.tipo_documento || prev.tipo_documento === 'CC') {
+          next.tipo_documento = 'TI'
+        }
+      }
+      return next
+    })
+  }
+
   // Progreso basado en campos claves del expediente
   const camposClave = [
     form.nombre_completo,
@@ -277,7 +293,7 @@ export default function EmpleadoFormModal({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 240px) 1fr', gap: 10 }}>
                   <div>
                     <label className="emp-form-label">Tipo Doc.</label>
                     <select
@@ -286,7 +302,7 @@ export default function EmpleadoFormModal({
                       onChange={f('tipo_documento')}
                     >
                       {TIPOS_DOCUMENTO.map(td => (
-                        <option key={td} value={td}>{td}</option>
+                        <option key={td.value} value={td.value}>{td.label}</option>
                       ))}
                     </select>
                   </div>
@@ -319,7 +335,7 @@ export default function EmpleadoFormModal({
                       className="emp-form-input"
                       type="date"
                       value={form.fecha_nacimiento || ''}
-                      onChange={f('fecha_nacimiento')}
+                      onChange={handleFechaNacimientoChange}
                     />
                   </div>
                   <div>

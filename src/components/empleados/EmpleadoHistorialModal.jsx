@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   X, Edit2, Award, Scale, Phone, ChevronDown, ChevronUp,
-  IdCard, MapPin, ShieldCheck, HeartPulse, Landmark, FileSpreadsheet, Building2,
+  IdCard, MapPin, ShieldCheck, HeartPulse, Landmark, FileSpreadsheet, Building2, Trash2,
 } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
@@ -19,6 +19,7 @@ import {
 } from '../../utils/vacacionesHelpers'
 import { hoyISO } from '../../utils/fecha'
 import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
+import DeleteConfirmModal from '../ui/DeleteConfirmModal'
 import './empleados.css'
 
 function inicialesNombre(nombre) {
@@ -73,11 +74,15 @@ export default function EmpleadoHistorialModal({
   onReintegrar,
   onLiquidar,
   onSustitucion,
+  onRevertirPeriodo,
 }) {
   const { companyConfig } = useCompany()
   const nombreEmpresaActiva = companyConfig?.nombre || 'Empresa'
   const nov = novedadesPorEmpleado[selectedEmp.nombre_completo]
   const procesosRef = useRef(null)
+
+  const [periodoARevertir, setPeriodoARevertir] = useState(null)
+  const [revertingPeriod, setRevertingPeriod] = useState(false)
 
   const [openSections, setOpenSections] = useState({
     vacaciones: true,
@@ -135,9 +140,11 @@ export default function EmpleadoHistorialModal({
 
   const labelTipoDoc = {
     CC: 'Cédula (CC)',
-    PEP: 'PEP',
-    PPT: 'PPT',
-    CE: 'Cédula Extranjería',
+    TI: 'Tarjeta de Identidad (TI)',
+    Contraseña: 'Contraseña',
+    CE: 'Cédula Extranjería (CE)',
+    PEP: 'Permiso Especial de Permanencia (PEP)',
+    PPT: 'Permiso por Protección Temporal (PPT)',
     Pasaporte: 'Pasaporte',
   }[selectedEmp.tipo_documento] || (selectedEmp.tipo_documento || 'Documento')
 
@@ -716,7 +723,7 @@ export default function EmpleadoHistorialModal({
                   }}
                   className="emp-hist-action-btn"
                 >
-                  <Award size={13} /> Registrar Ascenso / Movimiento
+                  <Award size={13} /> Movimiento Contractual / Otrossí
                 </button>
               )}
             </div>
@@ -729,43 +736,134 @@ export default function EmpleadoHistorialModal({
                       <tr>
                         <th>Periodo</th>
                         <th>Ingreso</th>
-                        <th>Retiro</th>
+                        <th>Fin Rol / Retiro</th>
                         <th>Área / Cargo</th>
                         <th style={{ textAlign: 'center' }}>Estado</th>
                         <th>Detalles</th>
+                        {onRevertirPeriodo && <th style={{ textAlign: 'center', width: 44 }}>Acción</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {listaPeriodos.map(p => (
-                        <tr key={p.id || p.numero_periodo}>
-                          <td>
-                            <span className="emp-hist-period-badge">#{p.numero_periodo}</span>
-                          </td>
-                          <td className="emp-hist-cell-date">{p.fecha_ingreso || '—'}</td>
-                          <td className="emp-hist-cell-date" style={{ color: p.fecha_retiro ? '#EF4444' : undefined }}>
-                            {p.fecha_retiro || '—'}
-                          </td>
-                          <td style={{ color: 'var(--text)' }}>
-                            {[p.dependencia, p.cargo].filter(Boolean).join(' · ') || '—'}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              padding: '3px 9px',
-                              borderRadius: 999,
-                              background: p.es_periodo_actual ? 'rgba(16, 185, 129, 0.16)' : 'rgba(148, 163, 184, 0.14)',
-                              color: p.es_periodo_actual ? '#10B981' : 'var(--text-muted)',
-                              border: `1px solid ${p.es_periodo_actual ? 'rgba(16, 185, 129, 0.35)' : 'rgba(148, 163, 184, 0.28)'}`,
-                            }}>
-                              {p.es_periodo_actual ? 'Vigente' : 'Cerrado'}
-                            </span>
-                          </td>
-                          <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {p.observaciones || '—'}
-                          </td>
-                        </tr>
-                      ))}
+                      {listaPeriodos.map(p => {
+                        const maxNumeroPeriodo = Math.max(...listaPeriodos.map(item => item.numero_periodo || 1))
+                        const esUltimoPeriodo = p.numero_periodo === maxNumeroPeriodo && listaPeriodos.length > 1 && p.es_periodo_actual
+                        const siguientePeriodo = listaPeriodos.find(next => next.numero_periodo === p.numero_periodo + 1)
+                        const esTransicionContinuidad = Boolean(
+                          (siguientePeriodo && siguientePeriodo.continuidad_laboral) ||
+                          (p.motivo_transicion && p.motivo_transicion !== 'reintegro' && !p.es_periodo_actual) ||
+                          (p.observaciones && /Promovido|Otrossí|Ajuste|Ascenso/i.test(p.observaciones))
+                        )
+
+                        let detalleTexto = p.observaciones || '—'
+                        if (esTransicionContinuidad) {
+                          if (!p.observaciones || p.observaciones === 'Periodo inicial registrado' || p.observaciones.startsWith('Cierre por')) {
+                            if (siguientePeriodo?.motivo_transicion === 'ascenso') {
+                              detalleTexto = `Promovido a ${siguientePeriodo.cargo || 'cargo superior'}`
+                            } else if (siguientePeriodo?.motivo_transicion === 'ajuste_salarial') {
+                              detalleTexto = 'Ajuste contractual (Otrossí)'
+                            } else if (siguientePeriodo?.motivo_transicion === 'cambio_area') {
+                              detalleTexto = `Traslado a ${siguientePeriodo.dependencia || ''} ${siguientePeriodo.cargo || ''}`.trim() || 'Ajuste contractual (Otrossí)'
+                            } else {
+                              detalleTexto = 'Ajuste contractual (Otrossí)'
+                            }
+                          }
+                        }
+
+                        return (
+                          <tr key={p.id || p.numero_periodo}>
+                            <td>
+                              <span className="emp-hist-period-badge">#{p.numero_periodo}</span>
+                            </td>
+                            <td className="emp-hist-cell-date">{p.fecha_ingreso || '—'}</td>
+                            <td
+                              className="emp-hist-cell-date"
+                              style={{
+                                color: p.fecha_retiro
+                                  ? (esTransicionContinuidad ? 'var(--text)' : '#EF4444')
+                                  : undefined,
+                                fontWeight: esTransicionContinuidad ? 500 : undefined,
+                              }}
+                              title={p.fecha_retiro ? (esTransicionContinuidad ? 'Fecha de transición contractual (Otrossí)' : 'Fecha de retiro') : ''}
+                            >
+                              {p.fecha_retiro || '—'}
+                            </td>
+                            <td style={{ color: 'var(--text)' }}>
+                              {[p.dependencia, p.cargo].filter(Boolean).join(' · ') || '—'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {p.es_periodo_actual ? (
+                                <span style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  padding: '3px 9px',
+                                  borderRadius: 999,
+                                  background: 'rgba(16, 185, 129, 0.16)',
+                                  color: '#10B981',
+                                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                                }}>
+                                  Vigente
+                                </span>
+                              ) : esTransicionContinuidad ? (
+                                <span style={{
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  padding: '3px 9px',
+                                  borderRadius: 999,
+                                  background: '#FDF2F8',
+                                  color: '#BE185D',
+                                  border: '1px solid #FBCFE8',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  ⭐ Otrossí / Transición
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  padding: '3px 9px',
+                                  borderRadius: 999,
+                                  background: 'rgba(148, 163, 184, 0.14)',
+                                  color: 'var(--text-muted)',
+                                  border: '1px solid rgba(148, 163, 184, 0.28)',
+                                }}>
+                                  Cerrado
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              {detalleTexto}
+                            </td>
+                            {onRevertirPeriodo && (
+                              <td style={{ textAlign: 'center' }}>
+                                {esUltimoPeriodo ? (
+                                  <button
+                                    type="button"
+                                    title="Revertir este movimiento contractual y restaurar el período anterior"
+                                    onClick={() => setPeriodoARevertir(p)}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      color: '#EF4444',
+                                      padding: '4px 6px',
+                                      borderRadius: 6,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'background 0.15s ease',
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    disabled={revertingPeriod}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                ) : null}
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -885,6 +983,39 @@ export default function EmpleadoHistorialModal({
           </div>
         </div>
       </div>
+
+      {periodoARevertir && (
+        <DeleteConfirmModal
+          deleteId={periodoARevertir.id}
+          onClose={() => setPeriodoARevertir(null)}
+          onConfirm={async () => {
+            const periodoAnterior = listaPeriodos.find(
+              item => item.numero_periodo === periodoARevertir.numero_periodo - 1
+            ) || listaPeriodos[listaPeriodos.length - 2]
+
+            if (!periodoAnterior) {
+              alert('No se encontró el período anterior para restaurar.')
+              setPeriodoARevertir(null)
+              return
+            }
+
+            setRevertingPeriod(true)
+            try {
+              if (onRevertirPeriodo) {
+                await onRevertirPeriodo({
+                  periodoAEliminar: periodoARevertir,
+                  periodoAnterior,
+                })
+              }
+              setPeriodoARevertir(null)
+            } finally {
+              setRevertingPeriod(false)
+            }
+          }}
+          message="¿Deseas revertir este movimiento/ascenso? Se eliminará este registro y se restaurará el período anterior como vigente."
+          tip="Se eliminará la novedad generada en el historial y se restaurará el cargo, área y salario previos del colaborador."
+        />
+      )}
     </div>
   )
 }

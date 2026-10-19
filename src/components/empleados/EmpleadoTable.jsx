@@ -59,7 +59,7 @@ export default function EmpleadoTable({
                     <PersonCell
                       nombre={emp.nombre_completo}
                       sub={[
-                        emp.numero_documento ? `${emp.tipo_documento || 'CC'}: ${emp.numero_documento}` : null,
+                        (emp.numero_documento || emp.tipo_documento) ? `${emp.tipo_documento || 'CC'}: ${emp.numero_documento || '—'}` : null,
                         emp.fecha_ingreso ? `Ingreso: ${emp.fecha_ingreso}` : null,
                         antig?.texto ? `Antigüedad: ${antig.texto}` : null,
                       ].filter(Boolean).join(' • ') || null}

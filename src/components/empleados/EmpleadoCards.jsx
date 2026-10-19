@@ -92,9 +92,9 @@ export default function EmpleadoCards({
                   <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {emp.nombre_completo}
                   </div>
-                  {emp.numero_documento && (
+                  {(emp.numero_documento || emp.tipo_documento) && (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginTop: 1 }}>
-                      {emp.tipo_documento || 'CC'}: {emp.numero_documento}
+                      {emp.tipo_documento || 'CC'}: {emp.numero_documento || '—'}
                     </div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
