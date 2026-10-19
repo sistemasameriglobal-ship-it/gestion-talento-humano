@@ -20,6 +20,7 @@ import {
 } from '../../utils/vacacionesHelpers'
 import { hoyISO } from '../../utils/fecha'
 import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
+import { CONCEPTO_MAP } from '../../utils/procesosDisciplinariosConstants'
 import DeleteConfirmModal from '../ui/DeleteConfirmModal'
 import './empleados.css'
 
@@ -661,6 +662,8 @@ export default function EmpleadoHistorialModal({
                         </thead>
                         <tbody>
                           {procesos.map(p => {
+                            const meta = CONCEPTO_MAP[p.concepto] || { id: p.concepto, label: p.concepto, icon: '⚖️', color: '#DC2626' }
+                            const esLlegadaTarde = p.concepto === 'Disciplina (Llegadas tarde)'
                             const fEvento = p.fecha
                               ? String(p.fecha).slice(0, 10)
                               : p.fecha_inicio
@@ -670,8 +673,14 @@ export default function EmpleadoHistorialModal({
                                 : (p.created_at ? String(p.created_at).slice(0, 10) : '—')
                             return (
                               <tr key={p.id}>
-                                <td style={{ fontWeight: 700, color: '#F59E0B', whiteSpace: 'nowrap' }}>
-                                  {p.concepto}
+                                <td style={{ fontWeight: 700, color: meta.color || '#DC2626', whiteSpace: 'nowrap' }}>
+                                  <span style={{ marginRight: 6 }}>{meta.icon}</span>
+                                  <span>{meta.label || meta.id || p.concepto}</span>
+                                  {esLlegadaTarde && (
+                                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, opacity: 0.8, color: 'var(--text-muted)' }}>
+                                      (Llegadas tarde)
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="emp-hist-cell-date">
                                   {fEvento}{p.hora ? ` (${String(p.hora).slice(0, 5)})` : ''}

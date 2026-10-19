@@ -112,7 +112,7 @@ export default function ProcesosDisciplinarios() {
         r.nombre_empleado?.toLowerCase().includes(s) ||
         r.departamento?.toLowerCase().includes(s) ||
         r.concepto?.toLowerCase().includes(s)
-      const matchConcepto = !filterConcepto || r.concepto === filterConcepto
+      const matchConcepto = !filterConcepto || r.concepto === filterConcepto || (CONCEPTO_MAP[r.concepto]?.id === filterConcepto)
       const matchDep = !filterDepartamento || r.departamento === filterDepartamento
       const matchAlerta = !soloAlertas || (conteoPorEmpleado[normalizeNombre(r.nombre_empleado)] || 0) >= UMBRAL_ALERTA
       return matchSearch && matchConcepto && matchDep && matchAlerta
@@ -188,6 +188,7 @@ export default function ProcesosDisciplinarios() {
     const rango = CONCEPTO_MAP[data.concepto]?.rango
     return {
       ...data,
+      concepto: CONCEPTO_MAP[data.concepto]?.id || data.concepto,
       fecha: rango ? null : (data.fecha || null),
       fecha_inicio: rango ? (data.fecha_inicio || null) : null,
       fecha_fin: rango ? (data.fecha_fin || null) : null,

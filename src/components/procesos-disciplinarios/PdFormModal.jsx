@@ -130,7 +130,7 @@ export default function PdFormModal({
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
                   {CONCEPTOS.map(c => {
-                    const sel = form.concepto === c.id
+                    const sel = form.concepto === c.id || (c.id === 'Falta Reglamento Interno' && form.concepto === 'Disciplina (Llegadas tarde)')
                     return (
                       <button key={c.id} type="button"
                         onClick={() => { setFormDirty(true); setForm(p => ({ ...p, concepto: c.id })) }}
@@ -202,7 +202,11 @@ export default function PdFormModal({
                   <span style={{ fontSize: 10, color: '#6B7280' }}>— opcional</span>
                 </div>
                 <textarea className="form-control" rows={3} value={form.observacion || ''} onChange={f('observacion')}
-                  placeholder="Detalle del proceso disciplinario..."
+                  placeholder={
+                    form.concepto === 'Productividad'
+                      ? 'Detalle de métricas, bajo rendimiento o KPIs incumplidos...'
+                      : 'Ej: Llegadas tarde reiteradas, incumplimiento de lineamientos internos, etc.'
+                  }
                   style={{ resize: 'vertical', lineHeight: 1.6 }} />
               </div>
 

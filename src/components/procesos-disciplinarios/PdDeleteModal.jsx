@@ -23,7 +23,7 @@ export default function PdDeleteModal({ deleteRow, deleting, onClose, onConfirm 
           }}>
             <div style={{ fontWeight: 700 }}>{deleteRow.nombre_empleado}</div>
             <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
-              {CONCEPTO_MAP[deleteRow.concepto]?.icon} {deleteRow.concepto}
+              {CONCEPTO_MAP[deleteRow.concepto]?.icon} {CONCEPTO_MAP[deleteRow.concepto]?.label || deleteRow.concepto}
               {deleteRow.departamento ? ` · ${deleteRow.departamento}` : ''}
             </div>
           </div>

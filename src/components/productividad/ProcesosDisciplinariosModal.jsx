@@ -29,7 +29,7 @@ export default function ProcesosDisciplinariosModal({ persona, onCerrar }) {
           ) : procesos.map(p => (
             <div key={p.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                <span className="badge badge-blue">{CONCEPTO_ICONS[p.concepto] || '📄'} {p.concepto}</span>
+                <span className="badge badge-blue">{CONCEPTO_ICONS[p.concepto] || '📄'} {p.concepto === 'Disciplina (Llegadas tarde)' ? 'Falta Reglamento Interno' : p.concepto}</span>
                 <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
                   {p.fecha_inicio ? `${p.fecha_inicio} → ${p.fecha_fin || '—'}` : (p.fecha || '—')}
                 </span>

@@ -34,7 +34,7 @@ export default function PdEmpleadoDetalleModal({ empleadoDetalle, onClose, onVer
             return (
               <div key={p.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="badge badge-blue">{meta.icon} {p.concepto}</span>
+                  <span className="badge badge-blue">{meta.icon} {meta.label || p.concepto}</span>
                   {Array.isArray(p.archivos) && p.archivos.length > 0 && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }} title={`${p.archivos.length} adjunto(s)`}>
                       <Paperclip size={12} /> {p.archivos.length}

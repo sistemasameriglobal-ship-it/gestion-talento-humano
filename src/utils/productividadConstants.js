@@ -79,7 +79,7 @@ export const normalizeNombre = (s) => (s || '').trim().toLowerCase()
 // Íconos/colores por concepto de proceso disciplinario (mismos que ProcesosDisciplinarios.jsx)
 export const CONCEPTO_ICONS = {
   'Falta Reglamento Interno': '📕',
-  'Disciplina (Llegadas tarde)': '⏰',
+  'Disciplina (Llegadas tarde)': '📕',
   'Productividad': '📉',
   'Citación a Descargos': '📨',
 }

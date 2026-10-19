@@ -53,7 +53,7 @@ export default function PdGruposTable({ pagedGrupos, onSelectEmpleado }) {
                     color: enAlerta ? ALERT.text : 'var(--text-muted)',
                   }}>{count}</span>
                 </td>
-                <td><span className="badge badge-blue">{meta.icon} {ultimo.concepto}</span></td>
+                <td><span className="badge badge-blue">{meta.icon} {meta.label || ultimo.concepto}</span></td>
                 <td style={{ color: 'var(--text-muted)' }}>{ultimo.departamento || '—'}</td>
                 <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 12.5 }}>
                   {meta.rango

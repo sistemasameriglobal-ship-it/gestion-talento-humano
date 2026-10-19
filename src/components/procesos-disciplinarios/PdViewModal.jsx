@@ -29,7 +29,7 @@ export default function PdViewModal({ viewRow, conteoPorEmpleado, signedUrlLoadi
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Concepto</div>
-              <div style={{ fontSize: 14, fontWeight: 500 }}>{viewRow.concepto}</div>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{meta.label || viewRow.concepto}</div>
             </div>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Departamento</div>

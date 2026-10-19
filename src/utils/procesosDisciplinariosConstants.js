@@ -4,11 +4,14 @@ export const UMBRAL_ALERTA = 3 // 3 o más procesos → alerta
 // Conceptos disponibles, color de acento y si usan rango de fechas (inicio/fin) o una sola fecha
 export const CONCEPTOS = [
   { id: 'Falta Reglamento Interno', icon: '📕', color: '#DC2626', rango: false },
-  { id: 'Disciplina (Llegadas tarde)', icon: '⏰', color: '#F59E0B', rango: false },
   { id: 'Productividad', icon: '📉', color: '#7C3AED', rango: true },
-  { id: 'Citación a Descargos', icon: '📨', color: '#2563EB', rango: false },
 ]
-export const CONCEPTO_MAP = Object.fromEntries(CONCEPTOS.map(c => [c.id, c]))
+export const CONCEPTO_MAP = {
+  ...Object.fromEntries(CONCEPTOS.map(c => [c.id, c])),
+  // Compatibilidad con registros históricos en base de datos
+  'Disciplina (Llegadas tarde)': { id: 'Falta Reglamento Interno', label: 'Falta Reglamento Interno', icon: '📕', color: '#DC2626', rango: false, legacyId: 'Disciplina (Llegadas tarde)' },
+  'Citación a Descargos': { id: 'Citación a Descargos', label: 'Citación a Descargos', icon: '📨', color: '#2563EB', rango: false, legacyId: 'Citación a Descargos' },
+}
 
 export { DEPENDENCIAS as DEPARTAMENTOS } from '../constants'
 
