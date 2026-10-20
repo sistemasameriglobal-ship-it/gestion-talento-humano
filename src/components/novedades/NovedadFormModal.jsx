@@ -213,7 +213,7 @@ export default function NovedadFormModal({
                 )}
                 {form.nombre_empleado && (() => {
                   let historial = rows
-                    .filter(r => r.nombre_empleado === form.nombre_empleado && (r.concepto === 'Ingreso' || r.concepto === 'Terminación de Contrato') && r.fecha_inicio)
+                    .filter(r => r.nombre_empleado === form.nombre_empleado && (r.concepto === 'Ingreso' || r.concepto === 'Terminación de Contrato' || r.concepto === 'No renovación de contrato' || r.concepto === 'Renuncia' || r.concepto === 'Renuncia/Retiro') && r.fecha_inicio)
                     .sort((a, b) => a.fecha_inicio.localeCompare(b.fecha_inicio))
                   let esRespaldoFicha = false
                   const ficha = fichasEmpleados[form.nombre_empleado]

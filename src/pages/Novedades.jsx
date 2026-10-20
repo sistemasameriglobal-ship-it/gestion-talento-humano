@@ -397,7 +397,7 @@ export default function Novedades() {
   // porque esa novedad es justamente la que puede estar definiendo/ajustando
   // esa fecha límite.
   const fichaSel = fichasEmpleados[form.nombre_empleado]
-  const limitaPorConcepto = form.concepto !== 'Ingreso' && form.concepto !== 'Terminación de Contrato'
+  const limitaPorConcepto = form.concepto !== 'Ingreso' && form.concepto !== 'Terminación de Contrato' && form.concepto !== 'No renovación de contrato' && form.concepto !== 'Renuncia' && form.concepto !== 'Renuncia/Retiro'
   const minFechaForm = (limitaPorConcepto && fichaSel?.fecha_ingreso) ? fichaSel.fecha_ingreso : undefined
   const maxFechaForm = (limitaPorConcepto && fichaSel && fichaSel.activo === false && fichaSel.fecha_retiro) ? fichaSel.fecha_retiro : undefined
 

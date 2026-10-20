@@ -33,18 +33,72 @@ export async function crearProcesoDisciplinario(payload, empresa = 'ameriglobal'
   const empresaFinal = payload.empresa || empresa
   // Aquí el campo de texto se llama 'departamento' (no 'dependencia' como en
   // otras tablas), pero resuelve contra la misma tabla `departamentos`.
-  const { empleado_id, departamento_id, empresa_id } = await resolverIdsRelacionales({
+  const rel = await resolverIdsRelacionales({
     nombre_empleado: payload.nombre_empleado,
     empresa: empresaFinal,
     dependencia: payload.departamento,
   })
-  return supabase.from(TABLA).insert([{
+  const empleadoIdFinal = payload.empleado_id || rel.empleado_id
+  const departamentoIdFinal = payload.departamento_id || rel.departamento_id
+  const empresaIdFinal = payload.empresa_id || rel.empresa_id
+
+  // 1. Guardar el proceso disciplinario en su tabla principal (procesos_disciplinarios)
+  const { data: procData, error: procError } = await supabase.from(TABLA).insert([{
     ...payload,
     empresa: empresaFinal,
-    empleado_id,
-    departamento_id,
-    empresa_id,
-  }])
+    empleado_id: empleadoIdFinal,
+    departamento_id: departamentoIdFinal,
+    empresa_id: empresaIdFinal,
+  }]).select()
+
+  if (procError) {
+    return { data: null, error: procError, novedad: null, errorNovedad: null }
+  }
+
+  // 2. Inmediatamente después, insertar el registro en public.novedades
+  const fInicio = payload.fecha_inicio || payload.fecha || new Date().toISOString().split('T')[0]
+  const fFin = payload.fecha_fin || fInicio
+  const obsUser = payload.observacion ? String(payload.observacion).trim() : ''
+  const obsNovedad = obsUser
+    ? `Proceso Disciplinario: ${obsUser}`
+    : `Proceso Disciplinario: ${payload.concepto}`
+
+  let novData = null
+  let novError = null
+
+  try {
+    const { data: nData, error: nError } = await supabase.from('novedades').insert([{
+      empleado_id: empleadoIdFinal || null,
+      nombre_empleado: payload.nombre_empleado,
+      concepto: payload.concepto,
+      fecha_inicio: fInicio,
+      fecha_fin: fFin,
+      total_dias: 0,
+      periodo: fInicio.slice(0, 7),
+      dependencia: payload.departamento || null,
+      observacion: obsNovedad,
+      empresa: empresaFinal,
+      empresa_id: empresaIdFinal || null,
+      departamento_id: departamentoIdFinal || null,
+    }]).select()
+
+    if (nError) {
+      console.error('Error al sincronizar novedad de proceso disciplinario en public.novedades:', nError)
+      novError = nError
+    } else {
+      novData = nData
+    }
+  } catch (err) {
+    console.error('Excepción al insertar novedad en public.novedades:', err)
+    novError = err
+  }
+
+  return {
+    data: procData,
+    error: null,
+    novedad: novData,
+    errorNovedad: novError,
+  }
 }
 
 export async function actualizarProcesoDisciplinario(id, payload) {

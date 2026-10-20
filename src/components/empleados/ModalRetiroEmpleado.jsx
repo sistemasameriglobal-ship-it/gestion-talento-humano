@@ -4,7 +4,8 @@ import { hoyISO } from '../../utils/fecha'
 import { CONCEPTOS_LIST } from '../../utils/novedadesConstants'
 
 const CONCEPTOS_RETIRO_COMUNES = [
-  { id: 'Terminación de Contrato', label: 'Terminación de Contrato', icon: '📤', color: '#EF4444', desc: 'Finalización de contrato laboral o vencimiento' },
+  { id: 'Terminación de Contrato', label: 'Terminación de Contrato', icon: '📤', color: '#EF4444', desc: 'Finalización de contrato laboral o acuerdo' },
+  { id: 'No renovación de contrato', label: 'No renovación de contrato', icon: '📄', color: '#8B5CF6', desc: 'Vencimiento del plazo pactado sin prórroga' },
   { id: 'Renuncia', label: 'Renuncia Voluntaria', icon: '🚪', color: '#F59E0B', desc: 'Decisión voluntaria del colaborador' },
   { id: 'Suspensión', label: 'Suspensión', icon: '⏸', color: '#6366F1', desc: 'Suspensión temporal de actividades' },
   { id: '__otro__', label: 'Otro Concepto...', icon: '📋', color: '#0D9488', desc: 'Elegir otro concepto de novedades' },
@@ -119,6 +120,7 @@ export default function ModalRetiroEmpleado({ emp, onClose, onConfirm, saving })
                         borderRadius: 9,
                         padding: '10px 12px',
                         background: sel ? `color-mix(in srgb, ${item.color} 10%, var(--surface))` : 'var(--surface)',
+                        gridColumn: item.id === '__otro__' ? '1 / -1' : undefined,
                         cursor: 'pointer',
                         transition: 'all .15s ease',
                         display: 'flex',

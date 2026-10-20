@@ -68,6 +68,10 @@ export default function ProcesosDisciplinarios() {
             acc[e.nombre_completo] = e.dependencia || ''
             return acc
           }, {}),
+          mapaIds: data.reduce((acc, e) => {
+            acc[e.nombre_completo] = e.id
+            return acc
+          }, {}),
         })
       })
   }, [loadProcesos, currentCompany])
@@ -275,14 +279,20 @@ export default function ProcesosDisciplinarios() {
     try {
       if (modal === 'add') {
         const insertData = omit(['id', 'created_at', 'updated_at'], clean)
-        const { error } = await procesosApi.crearProcesoDisciplinario(insertData, currentCompany)
+        const empId = empleados?.mapaIds?.[clean.nombre_empleado] || null
+        if (empId) insertData.empleado_id = empId
+        const { error, errorNovedad } = await procesosApi.crearProcesoDisciplinario(insertData, currentCompany)
         if (error) throw error
+        if (errorNovedad) console.warn('Aviso: proceso disciplinario creado pero no se pudo sincronizar en novedades:', errorNovedad)
+
         logAccion('CREAR', 'procesos_disciplinarios', null, currentCompany, { empleado: clean.nombre_empleado, concepto: clean.concepto })
       } else {
         if (!clean.id) throw new Error('ID de registro no encontrado.')
         const rest = omit(['id', 'created_at', 'updated_at'], clean)
         const { error } = await procesosApi.actualizarProcesoDisciplinario(clean.id, rest)
         if (error) throw error
+        if (errorNovedad) console.warn('Aviso: proceso disciplinario creado pero no se pudo sincronizar en novedades:', errorNovedad)
+
         logAccion('ACTUALIZAR', 'procesos_disciplinarios', clean.id, currentCompany, { empleado: clean.nombre_empleado, concepto: clean.concepto })
       }
 

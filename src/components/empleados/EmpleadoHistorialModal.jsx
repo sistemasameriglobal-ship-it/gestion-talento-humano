@@ -936,9 +936,14 @@ export default function EmpleadoHistorialModal({
                             return (
                               <tr key={r.id}>
                                 <td>
-                                  <span className="emp-concept-tag" style={{ '--tag': color }}>
+                                  <span className="emp-concept-tag" style={{ '--tag': color }} title={r.observacion || ''}>
                                     {r.concepto}
                                   </span>
+                                  {r.observacion && (
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.observacion}>
+                                      {r.observacion}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="emp-hist-cell-date">{r.fecha_inicio || '—'}</td>
                                 <td className="emp-hist-cell-date">{r.fecha_fin || '—'}</td>

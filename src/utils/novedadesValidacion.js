@@ -57,12 +57,13 @@ export function validarContraFichaEmpleado(data, fichasEmpleados) {
 export function validarContraHistorial(data, rows) {
   // Las novedades que EN SÍ MISMAS son Ingreso/Terminación de Contrato
   // son las que definen el historial: no se validan contra él.
-  if (data.concepto === 'Ingreso' || data.concepto === 'Terminación de Contrato') return null
+  const esHitoLaboral = (c) => c === 'Ingreso' || c === 'Terminación de Contrato' || c === 'No renovación de contrato' || c === 'Renuncia' || c === 'Renuncia/Retiro'
+  if (esHitoLaboral(data.concepto)) return null
   if (!data.fecha_inicio) return null
 
   const historial = rows
     .filter(r => r.nombre_empleado === data.nombre_empleado
-      && (r.concepto === 'Ingreso' || r.concepto === 'Terminación de Contrato')
+      && (esHitoLaboral(r.concepto))
       && r.fecha_inicio
       && r.id !== data.id) // al editar, no contar el propio registro
     .sort((a, b) => a.fecha_inicio.localeCompare(b.fecha_inicio))

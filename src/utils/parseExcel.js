@@ -1,9 +1,9 @@
 // Valores canónicos que usa el select de Novedades — deben coincidir exactamente
 export const CONCEPTOS_CANONICOS = [
   'Incapacidad','Vacaciones','LNR','LR','1/2 LR y 1/2 LNR','Maternidad','Paternidad',
-  'Calamidad/Luto','Renuncia/Retiro','Ingreso','Terminación',
+  'Calamidad/Luto','Renuncia/Retiro','Ingreso','Terminación','No renovación de contrato',
   'Ascenso','Cambio de Cargo','Cambio de Área','Ajuste Salarial','Paso a Etapa Productiva',
-  'Día Familia','Hospitalización','Embargo','Suspensión','Ausente','Sustitución Patronal','Otro'
+  'Día Familia','Hospitalización','Embargo','Suspensión','Ausente','Sustitución Patronal','Falta Reglamento Interno','Productividad','Otro'
 ]
 
 export function normalizarConcepto(concepto) {
@@ -21,6 +21,7 @@ export function normalizarConcepto(concepto) {
   if (c.includes('luto') || c.includes('calamidad')) return 'Calamidad/Luto'
   if (c.includes('renuncia') || c.includes('retiro') || c === 'ret') return 'Renuncia/Retiro'
   if (c.includes('ingreso') || c === 'ing') return 'Ingreso'
+  if (c.includes('no renovacion') || c.includes('no renovación')) return 'No renovación de contrato'
   if (c.includes('terminacion') || c.includes('terminación') || c.includes('despido')) return 'Terminación'
   if (c.includes('familia')) return 'Día Familia'
   if (c.includes('hospitaliz')) return 'Hospitalización'
@@ -288,6 +289,9 @@ export const CONCEPTO_COLORS = {
   'Renuncia/Retiro':      '#9F1239',
   'Ingreso':              '#15803D',
   'Terminación':          '#92400E',
+  'No renovación de contrato': '#8B5CF6',
+  'Falta Reglamento Interno': '#DC2626',
+  'Productividad':        '#7C3AED',
   'Día Familia':          '#0E7490',
   'Hospitalización':      '#BE123C',
   'Embargo':              '#854D0E',
