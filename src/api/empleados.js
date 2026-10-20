@@ -17,14 +17,19 @@ export function listarEmpleados(empresa) {
   return query
 }
 
-/** Empleados con solo los campos usados en Novedades (más liviano). */
-export function listarEmpleadosParaNovedades(empresa) {
-  let query = supabase
-    .from(TABLA)
-    .select('id, nombre_completo, activo, fecha_ingreso, fecha_retiro, dependencia, empresa, created_at')
-    .order('nombre_completo')
-  if (empresa) query = query.eq('empresa', empresa)
-  return query
+/** Empleados con los campos usados en Novedades (incluye numero_documento). */
+export async function listarEmpleadosParaNovedades(empresa) {
+  try {
+    let query = supabase
+      .from(TABLA)
+      .select('id, nombre_completo, numero_documento, activo, fecha_ingreso, fecha_retiro, dependencia, empresa, created_at')
+      .order('nombre_completo')
+    if (empresa) query = query.eq('empresa', empresa)
+    return await query
+  } catch (err) {
+    console.warn('Error al listar empleados para novedades:', err)
+    return { data: [], error: err }
+  }
 }
 
 /** Empleados con solo los campos usados en Vacaciones. */

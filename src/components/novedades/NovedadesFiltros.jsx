@@ -1,4 +1,5 @@
 import { Search, X, Calendar } from 'lucide-react'
+import FiltroEmpleadoSelect from './FiltroEmpleadoSelect'
 
 const formatPeriodo = (p, meses) => {
   if (!p) return ''
@@ -27,6 +28,7 @@ const agruparPeriodos = (items) => {
 // periodo, etc.).
 export default function NovedadesFiltros({
   searchInput, setSearchInput,
+  empleadoFiltro, setEmpleadoFiltro, empleadosActivos = [],
   filterConcepto, setFilterConcepto,
   filterDep, setFilterDep, depsEnDatos,
   filterDiagnostico, setFilterDiagnostico,
@@ -51,6 +53,14 @@ export default function NovedadesFiltros({
         <input className="form-control search-input" style={{ paddingLeft: 32 }} placeholder="Buscar empleado, área..."
           value={searchInput} onChange={e => setSearchInput(e.target.value)} />
       </div>
+
+      {/* Selector / Filtro por empleado con buscador interno */}
+      <FiltroEmpleadoSelect
+        value={empleadoFiltro}
+        onChange={val => { setEmpleadoFiltro(val); setPage(1) }}
+        empleados={empleadosActivos}
+        placeholder="Todos los empleados"
+      />
 
       {/* Concepto */}
       <select className="form-control" style={{ flex: '1 1 140px', minWidth: 130 }} value={filterConcepto}

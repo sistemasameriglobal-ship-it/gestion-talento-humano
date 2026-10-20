@@ -62,6 +62,8 @@ export default function Novedades() {
   const [highlightId, setHighlightId] = useState(null) // fila recién creada/editada
 
   const [empleados, setEmpleados] = useState({ activos: [], inactivos: [] })
+  const [listaEmpleados, setListaEmpleados] = useState([])
+  const [empleadoFiltro, setEmpleadoFiltro] = useState('')
   const [fichasEmpleados, setFichasEmpleados] = useState({}) // nombre -> { activo, fecha_ingreso, fecha_retiro }
 
   // Índice normalizado (sin tildes/mayúsculas/espacios) de los nombres que
@@ -160,6 +162,7 @@ export default function Novedades() {
     const ps = [...new Set((data || []).map(r => r.periodo).filter(Boolean))].sort().reverse()
     setPeriodos(ps)
     if (empData && empData.length > 0) {
+      setListaEmpleados(empData)
       setEmpleados({
         activos: empData.filter(e => e.activo !== false).map(e => e.nombre_completo),
         inactivos: empData.filter(e => e.activo === false).map(e => e.nombre_completo),
@@ -181,6 +184,7 @@ export default function Novedades() {
       })
       setFichasEmpleados(fichas)
     } else {
+      setListaEmpleados([])
       setEmpleados({ activos: [], inactivos: [] })
       setFichasEmpleados({})
     }
@@ -221,10 +225,17 @@ export default function Novedades() {
     }
   }, [form.fecha_inicio, form.fecha_fin, form.concepto])
 
+  const empleadosActivos = useMemo(() => {
+    return (listaEmpleados || [])
+      .filter(e => e.activo !== false)
+      .sort((a, b) => (a.nombre_completo || '').localeCompare(b.nombre_completo || ''))
+  }, [listaEmpleados])
+
   const { aniosDisponibles, depsEnDatos, rangoMes, filtered, totalPages, paged, handleSort } =
     useNovedadesFiltros({
       rows, search, filterConcepto, filterPeriodo, filterDep, filterDiagnostico,
       filterAnio, filterMes, soloActivas,
+      empleadoFiltro, listaEmpleados,
       sortField, sortDir, setSortField, setSortDir,
       page, setPage,
     })
@@ -433,8 +444,8 @@ export default function Novedades() {
   }
 
 
-  const hasFilter = searchInput || filterConcepto || filterPeriodo || filterAnio || filterMes || filterDep || filterDiagnostico || soloActivas
-  const clearFilters = () => { setSearchInput(''); setSearch(''); setFilterConcepto(''); setFilterPeriodo(''); setFilterAnio(''); setFilterMes(''); setFilterDep(''); setFilterDiagnostico(''); setSoloActivas(false); setPage(1) }
+  const hasFilter = searchInput || filterConcepto || filterPeriodo || filterAnio || filterMes || filterDep || filterDiagnostico || soloActivas || (empleadoFiltro && empleadoFiltro !== 'Todos')
+  const clearFilters = () => { setSearchInput(''); setSearch(''); setFilterConcepto(''); setFilterPeriodo(''); setFilterAnio(''); setFilterMes(''); setFilterDep(''); setFilterDiagnostico(''); setSoloActivas(false); setEmpleadoFiltro(''); setPage(1) }
 
   const [recalculando, setRecalculando] = useState(false)
   const recalcularDiasVacaciones = async () => {
@@ -511,6 +522,8 @@ export default function Novedades() {
         {/* ── Filtros ── */}
         <NovedadesFiltros
           searchInput={searchInput} setSearchInput={setSearchInput}
+          empleadoFiltro={empleadoFiltro} setEmpleadoFiltro={setEmpleadoFiltro}
+          empleadosActivos={empleadosActivos}
           filterConcepto={filterConcepto} setFilterConcepto={setFilterConcepto}
           filterDep={filterDep} setFilterDep={setFilterDep} depsEnDatos={depsEnDatos}
           filterDiagnostico={filterDiagnostico} setFilterDiagnostico={setFilterDiagnostico}
@@ -523,21 +536,37 @@ export default function Novedades() {
           setPage={setPage}
         />
 
-        {/* Contador */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-          <span>
-            <AnimatedNumber value={filtered.length} /> registro{filtered.length !== 1 ? 's' : ''}
-            {hasFilter ? ' filtrados' : ' totales'}
+        {/* Contador de resultados */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>
+              Mostrando <strong style={{ color: 'var(--text)' }}><AnimatedNumber value={filtered.length} /></strong> {filtered.length === 1 ? 'novedad' : 'novedades'}
+              {hasFilter ? ` (filtradas de ${rows.length})` : ' en total'}
+            </span>
+            <span style={{
+              background: 'var(--primary-light, #EFF6FF)',
+              color: 'var(--primary, #2563EB)',
+              padding: '3px 10px',
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 700,
+              border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4
+            }}>
+              Total de novedades: <AnimatedNumber value={filtered.length} />
+            </span>
             {filtered.some(r => {
               if (normalizarConcepto(r.concepto) !== 'Incapacidad') return false
               const v = (r.validacion_incapacidad || '').toLowerCase().trim()
               return !(r.radicacion_incapacidad || '').trim() || !(r.nomina_electronica || '').trim() || !(r.seguridad_social || '').trim() || v === '' || v === 'validar'
             }) && (
-                <span style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--warning-text)', fontWeight: 600 }}>
-                  <AlertCircle size={12} /> hay registros incompletos
-                </span>
-              )}
-          </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--warning-text)', fontWeight: 600, fontSize: 12 }}>
+                <AlertCircle size={12} /> hay registros incompletos
+              </span>
+            )}
+          </div>
           <span style={{ fontSize: 11, opacity: 0.6 }}>
             Clic en encabezado para ordenar {puedeEditar ? '· Clic en pill para editar' : '· Solo lectura'}
           </span>

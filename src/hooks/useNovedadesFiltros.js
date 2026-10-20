@@ -13,6 +13,7 @@ export function useNovedadesFiltros({
   rows,
   search, filterConcepto, filterPeriodo, filterDep, filterDiagnostico,
   filterAnio, filterMes, soloActivas,
+  empleadoFiltro, listaEmpleados = [],
   sortField, sortDir, setSortField, setSortDir,
   page, setPage,
 }) {
@@ -58,6 +59,20 @@ export function useNovedadesFiltros({
       const hoy = hoyISO()
       const matchActiva = !soloActivas || (!!r.fecha_inicio && evaluarEstadoTemporalAusencia(r, hoy)?.esActivaHoy === true)
 
+      // Filtro por colaborador específico
+      let matchEmpleado = true
+      if (empleadoFiltro && empleadoFiltro !== 'Todos' && empleadoFiltro !== '') {
+        const empSeleccionado = (listaEmpleados || []).find(e =>
+          String(e.id) === String(empleadoFiltro) ||
+          (e.nombre_completo && e.nombre_completo.trim().toLowerCase() === String(empleadoFiltro).trim().toLowerCase())
+        )
+        const nomTarget = empSeleccionado?.nombre_completo?.trim().toLowerCase()
+        const rNombre = (r.nombre_empleado || '').trim().toLowerCase()
+
+        matchEmpleado = (r.empleado_id && String(r.empleado_id) === String(empleadoFiltro)) ||
+          (!!nomTarget && rNombre === nomTarget)
+      }
+
       let matchFecha = true
       if (rangoMes) {
         // Si hay rango de mes: solo pasan registros con fecha_inicio dentro del rango
@@ -74,7 +89,7 @@ export function useNovedadesFiltros({
         matchFecha = !!(enFecha || enPeriodo)
       }
 
-      return matchSearch && matchConcepto && matchPeriodo && matchDep && matchDiagnostico && matchFecha && matchActiva
+      return matchSearch && matchConcepto && matchPeriodo && matchDep && matchDiagnostico && matchFecha && matchActiva && matchEmpleado
     })
 
     // Ordenar
@@ -87,7 +102,7 @@ export function useNovedadesFiltros({
       return 0
     })
     return result
-  }, [rows, search, filterConcepto, filterPeriodo, filterDep, filterDiagnostico, filterAnio, filterMes, rangoMes, sortField, sortDir, soloActivas])
+  }, [rows, search, filterConcepto, filterPeriodo, filterDep, filterDiagnostico, filterAnio, filterMes, rangoMes, sortField, sortDir, soloActivas, empleadoFiltro, listaEmpleados])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
