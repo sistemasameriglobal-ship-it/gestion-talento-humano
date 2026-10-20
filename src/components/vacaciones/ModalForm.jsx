@@ -3,7 +3,7 @@ import { X, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
 import {
-  calcAntiguedad, calcDias, calcularAniosCumplidos,
+  calcAntiguedad, calcDias, calcularDiasHabiles, calcularAniosCumplidos,
   obtenerFechaIngresoContinua, aFechaInputDate,
   obtenerPeriodosVacacionesEmpleado, normalizarPeriodoVacaciones,
   formatoDias, formatoDiasTexto
@@ -48,7 +48,7 @@ export default function ModalForm({
   const diasDisfrute = form.total_dias !== '' && form.total_dias != null
     ? (parseFloat(form.total_dias) || 0)
     : ((form.fecha_inicio && form.fecha_fin)
-        ? (diasHabilesEntre(form.fecha_inicio, form.fecha_fin) || 0)
+        ? (calcularDiasHabiles(form.fecha_inicio, form.fecha_fin) || 0)
         : (parseFloat(form.dias_disfrutados) || 0))
   const diasDinero = (form.tipo_vacacion === 'Vacaciones en dinero')
     ? (parseFloat(form.dias_en_dinero) || 15)
@@ -219,10 +219,10 @@ export default function ModalForm({
   const onFechaInicioChange = (e) => {
     const fIni = e.target.value
     const fFin = form.fecha_fin
-    const dias = (fIni && fFin) ? calcDias(fIni, fFin) : form.total_dias
+    const dias = (fIni && fFin) ? calcularDiasHabiles(fIni, fFin) : form.total_dias
     let dinero = form.dias_en_dinero
     if (modal === 'add' && fIni && fFin && (form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero') {
-      const habiles = diasHabilesEntre(fIni, fFin) || 0
+      const habiles = (dias !== '' && dias != null) ? Number(dias) : (calcularDiasHabiles(fIni, fFin) || 0)
       const tope = topeDisponible != null ? topeDisponible : 15
       const disponibleParaDinero = Math.max(0, tope - habiles)
       dinero = String(Math.min(Math.max(0, 15 - habiles), disponibleParaDinero))
@@ -238,10 +238,10 @@ export default function ModalForm({
   const onFechaFinChange = (e) => {
     const fFin = e.target.value
     const fIni = form.fecha_inicio
-    const dias = (fIni && fFin) ? calcDias(fIni, fFin) : form.total_dias
+    const dias = (fIni && fFin) ? calcularDiasHabiles(fIni, fFin) : form.total_dias
     let dinero = form.dias_en_dinero
     if (modal === 'add' && fIni && fFin && (form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero') {
-      const habiles = diasHabilesEntre(fIni, fFin) || 0
+      const habiles = (dias !== '' && dias != null) ? Number(dias) : (calcularDiasHabiles(fIni, fFin) || 0)
       const tope = topeDisponible != null ? topeDisponible : 15
       const disponibleParaDinero = Math.max(0, tope - habiles)
       dinero = String(Math.min(Math.max(0, 15 - habiles), disponibleParaDinero))
