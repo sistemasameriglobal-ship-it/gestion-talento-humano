@@ -4,9 +4,46 @@ import SearchableSelect from '../ui/SearchableSelect'
 
 export default function ModalForm({
   modal, form, setForm, f, save, saving, dupWarn,
-  empleados, aniosDisponibles, mesActual, anioActual,
+  empleados, listaEmpleados = [], aniosDisponibles, mesActual, anioActual,
   onClose,
 }) {
+  const handleEmpleadoChange = (val) => {
+    if (!val) {
+      setForm(p => ({
+        ...p,
+        nombre_empleado: '',
+        empleado_id: null,
+      }))
+      return
+    }
+
+    const catalogo = (listaEmpleados && listaEmpleados.length > 0)
+      ? listaEmpleados
+      : (empleados?.lista || [])
+
+    const emp = catalogo.find(e =>
+      e.id === val ||
+      (e.nombre_completo && val && e.nombre_completo.trim().toLowerCase() === val.trim().toLowerCase())
+    )
+
+    if (emp) {
+      const doc = emp.numero_documento || emp.cedula || emp.documento || ''
+      const cel = emp.celular || emp.telefono || ''
+
+      setForm(p => ({
+        ...p,
+        nombre_empleado: emp.nombre_completo || val,
+        empleado_id: emp.id || p.empleado_id || null,
+        cedula: doc || (p.nombre_empleado ? '' : p.cedula),
+        telefono: cel || (p.nombre_empleado ? '' : p.telefono),
+      }))
+    } else {
+      setForm(p => ({
+        ...p,
+        nombre_empleado: val,
+      }))
+    }
+  }
   return (
     <div className="modal-backdrop" tabIndex={-1}
       style={{ animation: 'fadeIn .2s ease' }}>
@@ -108,7 +145,7 @@ export default function ModalForm({
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Nombre completo *</label>
                 <SearchableSelect
                   value={form.nombre_empleado}
-                  onChange={val => setForm(p => ({ ...p, nombre_empleado: val }))}
+                  onChange={handleEmpleadoChange}
                   activos={empleados.activos} inactivos={empleados.inactivos}
                   placeholder="— Seleccionar empleado —"
                 />

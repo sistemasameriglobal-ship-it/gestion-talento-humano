@@ -37,11 +37,19 @@ export function listarEmpleadosParaVacaciones(empresa) {
   return query
 }
 
-/** Empleados con solo los campos usados en Parqueadero / Procesos disciplinarios. */
-export function listarEmpleadosBasico(empresa) {
-  let query = supabase.from(TABLA).select('nombre_completo, activo, empresa, dependencia').order('nombre_completo')
-  if (empresa) query = query.eq('empresa', empresa)
-  return query
+/** Empleados con los campos usados en Parqueadero / Procesos disciplinarios. */
+export async function listarEmpleadosBasico(empresa) {
+  try {
+    let query = supabase
+      .from(TABLA)
+      .select('id, nombre_completo, activo, empresa, dependencia, numero_documento, celular')
+      .order('nombre_completo')
+    if (empresa) query = query.eq('empresa', empresa)
+    return await query
+  } catch (err) {
+    console.warn('Error al listar empleados básico:', err)
+    return { data: [], error: err }
+  }
 }
 
 /** Empleados con el campo tiene_vehiculo, usado en Colaboradores. */

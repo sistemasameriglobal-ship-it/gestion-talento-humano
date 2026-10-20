@@ -40,7 +40,8 @@ export default function Parqueadero() {
   const [deleteId, setDeleteId] = useState(null)
   const [viewRow, setViewRow]   = useState(null)
   const [historial, setHistorial] = useState(null)
-  const [empleados, setEmpleados] = useState({ activos: [], inactivos: [] })
+  const [empleados, setEmpleados] = useState({ activos: [], inactivos: [], lista: [] })
+  const [listaEmpleados, setListaEmpleados] = useState([])
   const [dupWarn, setDupWarn]     = useState(false)
   const [sendingReport, setSendingReport] = useState(false)
   const [modalCopiar, setModalCopiar]     = useState(null)
@@ -58,9 +59,12 @@ export default function Parqueadero() {
       setEmpleados({
         activos:   empData.filter(e => e.activo !== false).map(e => e.nombre_completo),
         inactivos: empData.filter(e => e.activo === false).map(e => e.nombre_completo),
+        lista:     empData,
       })
+      setListaEmpleados(empData)
     } else {
-      setEmpleados({ activos: [], inactivos: [] })
+      setEmpleados({ activos: [], inactivos: [], lista: [] })
+      setListaEmpleados([])
     }
     setLoading(false)
   }, [currentCompany])
@@ -343,7 +347,7 @@ export default function Parqueadero() {
       {modal && (
         <ModalForm
           modal={modal} form={form} setForm={setForm} f={f} save={save} saving={saving} dupWarn={dupWarn}
-          empleados={empleados} aniosDisponibles={aniosDisponibles} mesActual={mesActual} anioActual={anioActual}
+          empleados={empleados} listaEmpleados={listaEmpleados} aniosDisponibles={aniosDisponibles} mesActual={mesActual} anioActual={anioActual}
           onClose={() => setModal(null)}
         />
       )}
