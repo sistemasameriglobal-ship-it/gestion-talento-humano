@@ -52,26 +52,63 @@ export default function Vacaciones() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: vac }, { data: emp }, { data: pers }] = await Promise.all([
-      vacacionesApi.listarVacaciones(currentCompany),
-      empleadosApi.listarEmpleadosParaVacaciones(currentCompany),
-      empleadosApi.listarTodosLosPeriodos(currentCompany).catch(() => ({ data: [] })),
-    ])
+    try {
+      const [resVac, resEmp, resPers] = await Promise.allSettled([
+        Promise.resolve(vacacionesApi.listarVacaciones(currentCompany)),
+        Promise.resolve(empleadosApi.listarEmpleadosParaVacaciones(currentCompany)),
+        Promise.resolve(empleadosApi.listarTodosLosPeriodos(currentCompany)),
+      ])
 
-    const hoy = hoyISO()
-    let listaVac = vac || []
+      const vac = resVac.status === 'fulfilled' ? resVac.value?.data || [] : []
+      const emp = resEmp.status === 'fulfilled' ? resEmp.value?.data || [] : []
+      const pers = resPers.status === 'fulfilled' ? resPers.value?.data || [] : []
 
-    // Transicionar automáticamente solicitudes que ya concluyeron (hoy > fecha_fin) y siguen "En curso"
-    const concluidas = listaVac.filter(v => v.estado === 'En curso' && v.fecha_fin && v.fecha_fin < hoy)
-    if (concluidas.length > 0) {
-      Promise.all(concluidas.map(c => vacacionesApi.actualizarEstadoVacacion(c.id, 'Finalizada').catch(() => {})))
-      listaVac = listaVac.map(v => (v.estado === 'En curso' && v.fecha_fin && v.fecha_fin < hoy) ? { ...v, estado: 'Finalizada' } : v)
+      const hoy = hoyISO()
+      const cambiosPendientes = []
+
+      // Automatizar transición de estados:
+      // - Si está 'Aprobada' y hoy >= fecha_inicio y hoy <= fecha_fin: pasar a 'En curso'
+      // - Si está 'En curso' (o 'Aprobada') y hoy > fecha_fin: pasar a 'Finalizada'
+      const listaVac = vac.map(v => {
+        if (!v.fecha_inicio) return v
+        const fIni = String(v.fecha_inicio).trim().slice(0, 10)
+        const fFin = String(v.fecha_fin || v.fecha_inicio).trim().slice(0, 10)
+        let nuevoEstado = v.estado
+
+        if (v.estado === 'Aprobada' && hoy >= fIni && hoy <= fFin) {
+          nuevoEstado = 'En curso'
+        } else if ((v.estado === 'En curso' || v.estado === 'Aprobada') && hoy > fFin) {
+          nuevoEstado = 'Finalizada'
+        }
+
+        if (nuevoEstado !== v.estado) {
+          cambiosPendientes.push({ id: v.id, nuevoEstado })
+          return { ...v, estado: nuevoEstado }
+        }
+        return v
+      })
+
+      // Sincronizar en segundo plano con Supabase sin bloquear la UI
+      if (cambiosPendientes.length > 0) {
+        Promise.allSettled(
+          cambiosPendientes.map(async ({ id, nuevoEstado }) => {
+            try {
+              await vacacionesApi.actualizarEstadoVacacion(id, nuevoEstado)
+            } catch (err) {
+              console.warn('Aviso al sincronizar estado de vacación en segundo plano:', err)
+            }
+          })
+        ).catch(() => {})
+      }
+
+      setRows(listaVac)
+      setEmpleados(emp)
+      setPeriodos(pers)
+    } catch (e) {
+      console.warn('Error en la carga de vacaciones:', e)
+    } finally {
+      setLoading(false)
     }
-
-    setRows(listaVac)
-    setEmpleados(emp || [])
-    setPeriodos(pers || [])
-    setLoading(false)
   }, [currentCompany])
 
   useEffect(() => { Promise.resolve().then(() => load()) }, [load])
