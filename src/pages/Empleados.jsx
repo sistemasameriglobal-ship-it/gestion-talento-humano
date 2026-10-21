@@ -398,6 +398,14 @@ export default function Empleados() {
       // a) Sincronización automática de evento contractual: Nuevo Ingreso
       if (!error) {
         const nuevoEmp = createdData?.[0]
+        const nuevoId = nuevoEmp?.id || null
+        logAccion('CREAR', 'empleados', nuevoId, currentCompany, {
+          descripcion: `Se creó el perfil del empleado: ${payload.nombre_completo}`,
+          detalle: `Se creó el perfil del empleado: ${payload.nombre_completo}`,
+          empleado: payload.nombre_completo,
+          cargo: payload.cargo,
+          dependencia: payload.dependencia,
+        })
         const fechaIngresoFinal = payload.fecha_ingreso || nuevoEmp?.fecha_ingreso || new Date().toISOString().split('T')[0]
         const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
           payload.nombre_completo, 'Ingreso', fechaIngresoFinal, currentCompany
@@ -425,6 +433,15 @@ export default function Empleados() {
     } else {
       const { error } = await empleadosApi.actualizarEmpleado(form.id, payload)
       err = error
+      if (!error) {
+        logAccion('ACTUALIZAR', 'empleados', form.id, currentCompany, {
+          descripcion: `Se actualizó el perfil del empleado: ${payload.nombre_completo}`,
+          detalle: `Se actualizó el perfil del empleado: ${payload.nombre_completo}`,
+          empleado: payload.nombre_completo,
+          cargo: payload.cargo,
+          dependencia: payload.dependencia,
+        })
+      }
     }
     setSaving(false)
     if (err) return setMsg({ type: 'error', text: err.message })
@@ -435,9 +452,19 @@ export default function Empleados() {
   }
 
   const remove = async (id) => {
+    const emp = rows.find(r => r.id === id)
     const { error } = await empleadosApi.eliminarEmpleado(id)
-    if (!error) { setDeleteId(null); load() }
-    else setMsg({ type: 'error', text: error.message })
+    if (!error) {
+      logAccion('ELIMINAR', 'empleados', id, currentCompany, {
+        descripcion: `Se eliminó el perfil del empleado: ${emp?.nombre_completo || id}`,
+        detalle: `Se eliminó el perfil del empleado: ${emp?.nombre_completo || id}`,
+        empleado: emp?.nombre_completo || id,
+      })
+      setDeleteId(null)
+      load()
+    } else {
+      setMsg({ type: 'error', text: error.message })
+    }
   }
 
   const handleConfirmRetiro = async ({ fecha_retiro, concepto = 'Terminación de Contrato', observaciones }) => {

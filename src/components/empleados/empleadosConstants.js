@@ -75,19 +75,28 @@ export const CESANTIAS_LIST = [
 ]
 
 export const BANCOS_LIST = [
-  'Bancolombia',
-  'Davivienda',
-  'BBVA',
+  'Banco Agrario de Colombia',
+  'Banco AV Villas',
+  'Banco Caja Social',
   'Banco de Bogotá',
   'Banco de Occidente',
+  'Banco Falabella',
+  'Banco Finandina',
+  'Banco Pichincha',
   'Banco Popular',
-  'Banco Caja Social',
-  'Scotiabank Colpatria',
+  'Banco Santander',
+  'Bancolombia',
+  'BBVA Colombia',
+  'Dale!',
+  'Daviplata',
+  'Davivienda',
   'Itaú',
-  'Nequi',
-  'DaviPlata',
   'Lulo Bank',
-  'Nu Colombia',
+  'Nequi',
+  'Nu',
+  'Pibank',
+  'RappiPay',
+  'Scotiabank Colpatria',
 ]
 
 export const TIPOS_CUENTA = ['Ahorros', 'Corriente']

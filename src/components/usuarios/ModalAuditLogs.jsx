@@ -32,7 +32,8 @@ export default function ModalAuditLogs({ onClose }) {
         (log.correo_usuario || '').toLowerCase().includes(search.toLowerCase()) ||
         (log.tabla || '').toLowerCase().includes(search.toLowerCase()) ||
         (log.accion || '').toLowerCase().includes(search.toLowerCase()) ||
-        (log.registro_id || '').toLowerCase().includes(search.toLowerCase())
+        (log.registro_id || '').toLowerCase().includes(search.toLowerCase()) ||
+        (typeof log.detalles === 'object' ? JSON.stringify(log.detalles) : String(log.detalles || '')).toLowerCase().includes(search.toLowerCase())
       )
       const matchAccion = !filterAccion || log.accion === filterAccion
       return matchSearch && matchAccion
@@ -165,7 +166,9 @@ export default function ModalAuditLogs({ onClose }) {
                       </td>
                       <td style={{ padding: '10px 6px', color: 'var(--text-muted)', fontSize: 11 }}>
                         {log.registro_id ? `ID: ${log.registro_id.slice(0, 8)}... ` : ''}
-                        {log.detalles && typeof log.detalles === 'object' ? JSON.stringify(log.detalles) : ''}
+                        {log.detalles && typeof log.detalles === 'object'
+                          ? (log.detalles.descripcion || log.detalles.detalle || JSON.stringify(log.detalles))
+                          : (log.detalles || '')}
                       </td>
                     </tr>
                   )
