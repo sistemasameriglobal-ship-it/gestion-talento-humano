@@ -164,8 +164,10 @@ export function aplicarModo(modo) {
   const root = document.documentElement
   if (modo === 'oscuro') {
     root.setAttribute('data-theme', 'dark')
+    root.style.colorScheme = 'dark'
   } else {
     root.removeAttribute('data-theme')
+    root.style.colorScheme = 'light'
   }
 }
 

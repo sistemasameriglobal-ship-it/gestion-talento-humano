@@ -213,6 +213,7 @@
   font-size: 13.5px;
   background: var(--surface);
   color: var(--text);
+  caret-color: #0F172A;
   transition: border-color .15s, box-shadow .15s, background .15s;
   outline: none;
   box-sizing: border-box;
@@ -238,6 +239,7 @@
   background: #1E293B;
   border-color: #334155;
   color: #F8FAFC;
+  caret-color: #F8FAFC;
 }
 
 :root[data-theme="dark"] .emp-form-input:focus {

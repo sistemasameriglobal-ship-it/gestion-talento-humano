@@ -2,6 +2,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  color-scheme: light;
   --bg:        #F0F2F5;
   --surface:   #FFFFFF;
   --card-bg:   #FFFFFF;
@@ -48,6 +49,7 @@
    El navy del sidebar se mantiene: solo cambian fondo, superficies,
    texto y bordes de la parte "clara" de la app. */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg:        #0B1220;
   --surface:   #131B2C;
   --card-bg:   #131B2C;
@@ -73,6 +75,47 @@
 }
 
 body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; transition: background-color .2s ease, color .2s ease; }
+
+/* ===== ACCESIBILIDAD: COLOR DE CURSOR / PUNTERO DE ESCRITURA (CARET) ===== */
+input, textarea, select, [contenteditable="true"] {
+  caret-color: #0F172A; /* slate-900 / gris oscuro en modo claro */
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] [contenteditable="true"] {
+  caret-color: #F8FAFC; /* slate-100 / blanco visible en modo oscuro */
+}
+
+/* Clases de utilidad Tailwind de cursor para inputs */
+.caret-slate-900 { caret-color: #0F172A !important; }
+.dark\:caret-slate-100, :root[data-theme="dark"] .dark\:caret-slate-100 { caret-color: #F8FAFC !important; }
+.caret-blue-600 { caret-color: #2563EB !important; }
+.dark\:caret-blue-400, :root[data-theme="dark"] .dark\:caret-blue-400 { caret-color: #60A5FA !important; }
+
+/* ===== FORZAR PUNTERO OSCURO (I-BEAM) PARA TEXTOS EN MODO CLARO ===== */
+html:not([data-theme="dark"]) input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not(:disabled),
+html:not([data-theme="dark"]) textarea:not(:disabled),
+html:not([data-theme="dark"]) [contenteditable="true"],
+html:not([data-theme="dark"]) .form-control:not(select):not(:disabled),
+html:not([data-theme="dark"]) .emp-form-input:not(select):not(:disabled) {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="24" viewBox="0 0 10 24"><path fill="%230F172A" d="M1 2h8v2H6v16h3v2H1v-2h3V4H1V2z"/></svg>') 5 12, text !important;
+}
+
+/* Forzar puntero I-beam claro en modo oscuro para visibilidad garantizada */
+:root[data-theme="dark"] input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not(:disabled),
+:root[data-theme="dark"] textarea:not(:disabled),
+:root[data-theme="dark"] [contenteditable="true"],
+:root[data-theme="dark"] .form-control:not(select):not(:disabled),
+:root[data-theme="dark"] .emp-form-input:not(select):not(:disabled) {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="24" viewBox="0 0 10 24"><path fill="%23F8FAFC" d="M1 2h8v2H6v16h3v2H1v-2h3V4H1V2z"/></svg>') 5 12, text !important;
+}
+
+/* Comportamiento de lectura */
+html:not([data-theme="dark"]) p {
+  cursor: text;
+}
 
 :root[data-theme="dark"] tbody tr:hover { background: rgba(255,255,255,.035); }
 :root[data-theme="dark"] .modal-backdrop,
@@ -211,8 +254,12 @@ tbody tr:last-child { border-bottom: none; }
   width: 100%; padding: 8px 12px; border: 1px solid var(--border);
   border-radius: 10px; font-size: 13px; background: var(--bg);
   color: var(--text); outline: none; transition: all .15s; font-family: inherit;
+  caret-color: #0F172A;
 }
 .form-control:focus { border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(var(--secondary-rgb),.15); }
+:root[data-theme="dark"] .form-control {
+  caret-color: #F8FAFC;
+}
 select.form-control { cursor: pointer; }
 textarea.form-control { resize: vertical; min-height: 80px; }
 
