@@ -50,9 +50,7 @@ export default function ModalForm({
     : ((form.fecha_inicio && form.fecha_fin)
         ? (calcularDiasHabiles(form.fecha_inicio, form.fecha_fin) || 0)
         : (parseFloat(form.dias_disfrutados) || 0))
-  const diasDinero = (form.tipo_vacacion === 'Vacaciones en dinero')
-    ? (parseFloat(form.dias_en_dinero) || 15)
-    : (parseFloat(form.dias_en_dinero) || 0)
+  const diasDinero = parseFloat(form.dias_en_dinero) || 0
   const diasSolicitados = (form.tipo_vacacion === 'Vacaciones en dinero')
     ? diasDinero
     : (diasDisfrute + diasDinero)
@@ -201,15 +199,12 @@ export default function ModalForm({
 
   const onTipoChange = (tipoVal) => {
     if (tipoVal === 'Vacaciones en dinero') {
-      const tope = topeDisponible != null ? topeDisponible : 15
-      const dineroDefault = String(Math.max(0, Math.min(15, tope)))
       setForm(p => ({
         ...p,
         tipo_vacacion: tipoVal,
         fecha_inicio: '',
         fecha_fin: '',
         total_dias: '',
-        dias_en_dinero: p.dias_en_dinero || dineroDefault,
       }))
     } else {
       setForm(p => ({ ...p, tipo_vacacion: tipoVal }))
@@ -220,18 +215,10 @@ export default function ModalForm({
     const fIni = e.target.value
     const fFin = form.fecha_fin
     const dias = (fIni && fFin) ? calcularDiasHabiles(fIni, fFin) : form.total_dias
-    let dinero = form.dias_en_dinero
-    if (modal === 'add' && fIni && fFin && (form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero') {
-      const habiles = (dias !== '' && dias != null) ? Number(dias) : (calcularDiasHabiles(fIni, fFin) || 0)
-      const tope = topeDisponible != null ? topeDisponible : 15
-      const disponibleParaDinero = Math.max(0, tope - habiles)
-      dinero = String(Math.min(Math.max(0, 15 - habiles), disponibleParaDinero))
-    }
     setForm(p => ({
       ...p,
       fecha_inicio: fIni,
       total_dias: (fIni && fFin && dias !== '') ? String(dias) : p.total_dias,
-      dias_en_dinero: dinero,
     }))
   }
 
@@ -239,18 +226,10 @@ export default function ModalForm({
     const fFin = e.target.value
     const fIni = form.fecha_inicio
     const dias = (fIni && fFin) ? calcularDiasHabiles(fIni, fFin) : form.total_dias
-    let dinero = form.dias_en_dinero
-    if (modal === 'add' && fIni && fFin && (form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero') {
-      const habiles = (dias !== '' && dias != null) ? Number(dias) : (calcularDiasHabiles(fIni, fFin) || 0)
-      const tope = topeDisponible != null ? topeDisponible : 15
-      const disponibleParaDinero = Math.max(0, tope - habiles)
-      dinero = String(Math.min(Math.max(0, 15 - habiles), disponibleParaDinero))
-    }
     setForm(p => ({
       ...p,
       fecha_fin: fFin,
       total_dias: (fIni && fFin && dias !== '') ? String(dias) : p.total_dias,
-      dias_en_dinero: dinero,
     }))
   }
 
@@ -515,7 +494,7 @@ export default function ModalForm({
                 display: 'flex', alignItems: 'center', gap: 8
               }}>
                 <AlertCircle size={15} style={{ flexShrink: 0 }} />
-                <span>No requiere fechas. Días en dinero a compensar: <strong>{formatoDiasTexto(form.dias_en_dinero || 15)}</strong>.</span>
+                <span>No requiere fechas. Días en dinero a compensar: <strong>{formatoDiasTexto(parseFloat(form.dias_en_dinero) || 0)}</strong>.</span>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px', gap: 12 }}>

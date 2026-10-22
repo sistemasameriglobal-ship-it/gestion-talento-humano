@@ -266,9 +266,7 @@ export default function Vacaciones() {
         : ((form.fecha_inicio && form.fecha_fin)
             ? (calcularDiasHabiles(form.fecha_inicio, form.fecha_fin) || 0)
             : (parseFloat(form.dias_disfrutados) || 0))
-      const diasDinero = (form.tipo_vacacion === 'Vacaciones en dinero')
-        ? (parseFloat(form.dias_en_dinero) || 15)
-        : (parseFloat(form.dias_en_dinero) || 0)
+      const diasDinero = parseFloat(form.dias_en_dinero) || 0
       const diasSolicitados = (form.tipo_vacacion === 'Vacaciones en dinero')
         ? diasDinero
         : (diasDisfrute + diasDinero)
