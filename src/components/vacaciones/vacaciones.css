@@ -61,3 +61,28 @@
 :root[data-theme="dark"] .vac-chip { background: rgba(59,130,246,.16); color: #93C5FD; border-color: rgba(59,130,246,.35); }
 :root[data-theme="dark"] .vac-chip button { color: #93C5FD; }
 :root[data-theme="dark"] .vac-tab { background: var(--surface); }
+
+/* ── Enlace interactivo a expediente del empleado ── */
+.vac-emp-cell-btn {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  max-width: 100%;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.vac-emp-cell-btn:hover {
+  background: rgba(15, 23, 42, 0.05);
+}
+:root[data-theme="dark"] .vac-emp-cell-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.vac-emp-cell-btn:hover .person-name {
+  color: var(--secondary, #2563EB) !important;
+  text-decoration: underline;
+}

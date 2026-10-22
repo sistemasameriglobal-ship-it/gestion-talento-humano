@@ -1,20 +1,21 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { lazyWithReload } from '../utils/lazyWithReload'
 import { useAuth } from '../context/AuthContext'
 import { useCompany } from '../context/CompanyContext'
 import * as perfilesApi from '../api/perfiles'
 import { Menu, Eye } from 'lucide-react'
 
 // ── Carga diferida de páginas (code-splitting) ─────────────────────────────
-const Dashboard = lazy(() => import('../pages/Dashboard'))
-const Novedades = lazy(() => import('../pages/Novedades'))
-const ProcesosDisciplinarios = lazy(() => import('../pages/ProcesosDisciplinarios'))
-const Colaboradores = lazy(() => import('../pages/Colaboradores'))
-const Empleados = lazy(() => import('../pages/Empleados'))
-const Parqueadero = lazy(() => import('../pages/Parqueadero'))
-const Vacaciones = lazy(() => import('../pages/Vacaciones'))
-const Usuarios = lazy(() => import('../pages/Usuarios'))
-const Productividad = lazy(() => import('../pages/Productividad'))
-const Sistema = lazy(() => import('../pages/Sistema'))
+const Dashboard = lazyWithReload(() => import('../pages/Dashboard'))
+const Novedades = lazyWithReload(() => import('../pages/Novedades'))
+const ProcesosDisciplinarios = lazyWithReload(() => import('../pages/ProcesosDisciplinarios'))
+const Colaboradores = lazyWithReload(() => import('../pages/Colaboradores'))
+const Empleados = lazyWithReload(() => import('../pages/Empleados'))
+const Parqueadero = lazyWithReload(() => import('../pages/Parqueadero'))
+const Vacaciones = lazyWithReload(() => import('../pages/Vacaciones'))
+const Usuarios = lazyWithReload(() => import('../pages/Usuarios'))
+const Productividad = lazyWithReload(() => import('../pages/Productividad'))
+const Sistema = lazyWithReload(() => import('../pages/Sistema'))
 import { NAV_SECTIONS, ADMIN_SECTION } from './navConfig'
 import Sidebar from './Sidebar'
 import ModalCambiarPassword from './ModalCambiarPassword'

@@ -18,6 +18,7 @@ export default function VacacionesTabla({
   paged, filtered, page, totalPages, setPage,
   sortField, sortAsc, toggleSort,
   quickSaveEstado, openEdit, setViewRow, setDeleteId,
+  onSelectEmpleado,
 }) {
   return (
     <>
@@ -42,7 +43,19 @@ export default function VacacionesTabla({
           <tbody>
             {paged.map((row, idx) => (
               <tr key={row.id} className="vac-row" style={{ animationDelay: `${Math.min(idx, 8) * 0.03}s` }}>
-                <td style={{ maxWidth: 230 }}><PersonCell nombre={row.nombre_empleado} /></td>
+                <td style={{ maxWidth: 230 }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectEmpleado?.(row.empleado_id || row.nombre_empleado)
+                    }}
+                    className="vac-emp-cell-btn group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors rounded-md text-left w-full focus:outline-none"
+                    title={`Ver expediente y saldos de ${row.nombre_empleado || 'empleado'}`}
+                  >
+                    <PersonCell nombre={row.nombre_empleado} className="group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+                  </button>
+                </td>
                 <td style={{ color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{row.fecha_ingreso ? formatFecha(row.fecha_ingreso) : '—'}</td>
                 <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{row.dependencia || '—'}</td>
                 <td style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{row.periodo_vacaciones || '—'}</td>

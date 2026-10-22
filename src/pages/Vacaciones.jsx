@@ -19,6 +19,7 @@ import {
 } from '../utils/vacacionesHelpers'
 import ModalDetalle from '../components/vacaciones/ModalDetalle'
 import ModalForm from '../components/vacaciones/ModalForm'
+import EmpleadoHistorialModal from '../components/empleados/EmpleadoHistorialModal'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
 import VacacionesKPIs from '../components/vacaciones/VacacionesKPIs'
 import VacacionesFiltros from '../components/vacaciones/VacacionesFiltros'
@@ -47,6 +48,7 @@ export default function Vacaciones() {
   const [msg, setMsg]             = useState(null)
   const [deleteId, setDeleteId]   = useState(null)
   const [viewRow, setViewRow]     = useState(null)
+  const [empleadoSeleccionadoId, setEmpleadoSeleccionadoId] = useState(null)
   const [sortField, setSortField] = useState('fecha_inicio')
   const [sortAsc, setSortAsc]     = useState(false)
 
@@ -540,6 +542,14 @@ export default function Vacaciones() {
     filterAnio   && { label: filterMes ? `${filterMes} ${filterAnio}` : filterAnio, clear: () => { setFilterAnio(''); setFilterMes(''); setPage(1) } },
   ].filter(Boolean)
 
+  const empleadoSeleccionado = useMemo(() => {
+    if (!empleadoSeleccionadoId) return null
+    return empleados.find(e =>
+      e.id === empleadoSeleccionadoId ||
+      (e.nombre_completo && e.nombre_completo.trim().toLowerCase() === String(empleadoSeleccionadoId).trim().toLowerCase())
+    ) || null
+  }, [empleadoSeleccionadoId, empleados])
+
   const enrichedViewRow = useMemo(() => {
     if (!viewRow) return null
     const emp = empleados.find(e => e.nombre_completo?.trim().toLowerCase() === viewRow.nombre_empleado?.trim().toLowerCase())
@@ -622,11 +632,13 @@ export default function Vacaciones() {
             paged={paged} filtered={filtered} page={page} totalPages={totalPages} setPage={setPage}
             sortField={sortField} sortAsc={sortAsc} toggleSort={toggleSort}
             quickSaveEstado={puedeEditar ? quickSaveEstado : null} openEdit={puedeEditar ? openEdit : null} setViewRow={setViewRow} setDeleteId={puedeEditar ? setDeleteId : null}
+            onSelectEmpleado={setEmpleadoSeleccionadoId}
           />
         ) : (
           <VacacionesCards
             paged={paged} filtered={filtered} page={page} totalPages={totalPages} setPage={setPage}
             quickSaveEstado={puedeEditar ? quickSaveEstado : null} openEdit={puedeEditar ? openEdit : null} setViewRow={setViewRow} setDeleteId={puedeEditar ? setDeleteId : null}
+            onSelectEmpleado={setEmpleadoSeleccionadoId}
           />
         )}
       </div>
@@ -657,6 +669,19 @@ export default function Vacaciones() {
           onClose={() => setViewRow(null)}
           onEdit={row => { setViewRow(null); openEdit(row) }}
           allRows={rows}
+        />
+      )}
+
+      {/* ── Modal expediente del colaborador ──────────────────────────────────── */}
+      {empleadoSeleccionadoId && (
+        <EmpleadoHistorialModal
+          id={empleadoSeleccionado?.id || (typeof empleadoSeleccionadoId === 'string' && empleadoSeleccionadoId.includes('-') ? empleadoSeleccionadoId : null)}
+          selectedEmp={empleadoSeleccionado}
+          periodos={empleadoSeleccionado ? (periodos || []).filter(p => p.empleado_id === empleadoSeleccionado.id) : []}
+          vacaciones={empleadoSeleccionado ? rows.filter(r => (r.empleado_id && r.empleado_id === empleadoSeleccionado.id) || (r.nombre_empleado && r.nombre_empleado.trim().toLowerCase() === empleadoSeleccionado.nombre_completo?.trim().toLowerCase())) : []}
+          novedadesPorEmpleado={{}}
+          procesos={[]}
+          onClose={() => setEmpleadoSeleccionadoId(null)}
         />
       )}
     </div>

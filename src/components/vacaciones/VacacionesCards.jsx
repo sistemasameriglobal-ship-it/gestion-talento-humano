@@ -8,6 +8,7 @@ import Paginacion from '../ui/Paginacion'
 export default function VacacionesCards({
   paged, filtered, page, totalPages, setPage,
   quickSaveEstado, openEdit, setViewRow, setDeleteId,
+  onSelectEmpleado,
 }) {
   return (
     <>
@@ -29,7 +30,24 @@ export default function VacacionesCards({
               {/* Header */}
               <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 5 }}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectEmpleado?.(row.empleado_id || row.nombre_empleado)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        onSelectEmpleado?.(row.empleado_id || row.nombre_empleado)
+                      }
+                    }}
+                    style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 5 }}
+                    className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors text-left"
+                    title={`Ver expediente de ${row.nombre_empleado || 'empleado'}`}
+                  >
                     {row.nombre_empleado}
                   </div>
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>

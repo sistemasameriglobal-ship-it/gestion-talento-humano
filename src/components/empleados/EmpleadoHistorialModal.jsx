@@ -11,6 +11,7 @@ import {
   IdCard, MapPin, ShieldCheck, HeartPulse, Landmark, FileSpreadsheet, Building2, Trash2,
 } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
+import { supabase } from '../../supabaseClient'
 import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { CONCEPTOS_CON_FECHA, calcularEdad, formatCOP } from './empleadosConstants'
 import {
@@ -65,11 +66,12 @@ function DataRow({ label, value, badge, badgeColor }) {
 }
 
 export default function EmpleadoHistorialModal({
-  selectedEmp,
-  novedadesPorEmpleado,
-  periodos = [],
-  vacaciones = [],
-  procesos = [],
+  selectedEmp: propSelectedEmp,
+  id,
+  novedadesPorEmpleado = {},
+  periodos: propPeriodos = [],
+  vacaciones: propVacaciones = [],
+  procesos: propProcesos = [],
   initialSection = null,
   onClose,
   onEdit,
@@ -80,7 +82,53 @@ export default function EmpleadoHistorialModal({
 }) {
   const { companyConfig } = useCompany()
   const nombreEmpresaActiva = companyConfig?.nombre || 'Empresa'
-  const nov = novedadesPorEmpleado[selectedEmp.nombre_completo]
+
+  const [asyncEmp, setAsyncEmp] = useState(null)
+  const [asyncPeriodos, setAsyncPeriodos] = useState([])
+  const [asyncVacaciones, setAsyncVacaciones] = useState([])
+  const [asyncProcesos, setAsyncProcesos] = useState([])
+  const [loadingAsync, setLoadingAsync] = useState(false)
+
+  const effectiveId = id || propSelectedEmp?.id
+
+  useEffect(() => {
+    const tieneDetalleCompleto = propSelectedEmp && (propSelectedEmp.numero_documento || propSelectedEmp.celular || propSelectedEmp.salario_base)
+    if (effectiveId && !tieneDetalleCompleto && typeof effectiveId === 'string' && effectiveId.includes('-')) {
+      let cancel = false
+      setLoadingAsync(true)
+      Promise.allSettled([
+        supabase.from('empleados').select('*').eq('id', effectiveId).maybeSingle(),
+        propPeriodos?.length ? Promise.resolve({ data: propPeriodos }) : supabase.from('periodos_laborales').select('*').eq('empleado_id', effectiveId).order('numero_periodo', { ascending: true }),
+        propVacaciones?.length ? Promise.resolve({ data: propVacaciones }) : supabase.from('vacaciones').select('*').eq('empleado_id', effectiveId).order('fecha_inicio', { ascending: false }),
+        propProcesos?.length ? Promise.resolve({ data: propProcesos }) : supabase.from('procesos_disciplinarios').select('*').eq('empleado_id', effectiveId),
+      ]).then(([resEmp, resPer, resVac, resProc]) => {
+        if (cancel) return
+        if (resEmp.status === 'fulfilled' && resEmp.value?.data) {
+          setAsyncEmp(resEmp.value.data)
+        }
+        if (resPer.status === 'fulfilled' && resPer.value?.data) {
+          setAsyncPeriodos(resPer.value.data || [])
+        }
+        if (resVac.status === 'fulfilled' && resVac.value?.data) {
+          setAsyncVacaciones(resVac.value.data || [])
+        }
+        if (resProc.status === 'fulfilled' && resProc.value?.data) {
+          setAsyncProcesos(resProc.value.data || [])
+        }
+        setLoadingAsync(false)
+      }).catch(() => {
+        if (!cancel) setLoadingAsync(false)
+      })
+      return () => { cancel = true }
+    }
+  }, [effectiveId, propSelectedEmp, propPeriodos, propVacaciones, propProcesos])
+
+  const selectedEmp = asyncEmp || propSelectedEmp
+  const periodos = propPeriodos?.length ? propPeriodos : asyncPeriodos
+  const vacaciones = propVacaciones?.length ? propVacaciones : asyncVacaciones
+  const procesos = propProcesos?.length ? propProcesos : asyncProcesos
+
+  const nov = (novedadesPorEmpleado && selectedEmp?.nombre_completo) ? novedadesPorEmpleado[selectedEmp.nombre_completo] : null
   const procesosRef = useRef(null)
 
   const [periodoARevertir, setPeriodoARevertir] = useState(null)
@@ -104,6 +152,19 @@ export default function EmpleadoHistorialModal({
       return () => clearTimeout(t)
     }
   }, [initialSection])
+
+  if (!selectedEmp) {
+    if (loadingAsync || id) {
+      return (
+        <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="modal" style={{ maxWidth: 440, padding: 32, textAlign: 'center', background: 'var(--surface)' }}>
+            <p style={{ color: 'var(--text-muted)' }}>Cargando expediente del colaborador...</p>
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
 
   // Si no hay lista de periodos de la BD, armar periodo base con los datos del empleado
   const listaPeriodos = (periodos && periodos.length > 0)
@@ -1000,9 +1061,11 @@ export default function EmpleadoHistorialModal({
                 <Building2 size={14} /> Sustitución Patronal
               </button>
             )}
-            <button className="btn btn-primary" onClick={onEdit}>
-              <Edit2 size={14} /> Editar expediente
-            </button>
+            {onEdit && (
+              <button className="btn btn-primary" onClick={onEdit}>
+                <Edit2 size={14} /> Editar expediente
+              </button>
+            )}
           </div>
         </div>
       </div>
