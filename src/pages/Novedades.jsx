@@ -245,7 +245,18 @@ export default function Novedades() {
 
 
   const openAdd = () => { setForm(EMPTY); setFormDirty(false); setNuevoPeriodoMode(false); setFormError(null); setModal('add') }
-  const openEdit = (row) => { setForm({ ...row }); setFormDirty(false); setNuevoPeriodoMode(false); setFormError(null); setModal('edit') }
+  const openEdit = (row) => {
+    const ficha = fichasEmpleados?.[row.nombre_empleado] ||
+      Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === (row.nombre_empleado || '').trim().toLowerCase())
+    setForm({
+      ...row,
+      dependencia: row.dependencia || ficha?.dependencia || '',
+    })
+    setFormDirty(false)
+    setNuevoPeriodoMode(false)
+    setFormError(null)
+    setModal('edit')
+  }
 
   const closeModal = () => {
     if (formDirty && !window.confirm('Tienes cambios sin guardar. ¿Salir sin guardar?')) return
@@ -270,7 +281,13 @@ export default function Novedades() {
     }
 
     setSaving(true)
-    const cleanForm = sanitizeForm(form)
+    const fichaEmp = fichasEmpleados?.[form.nombre_empleado] ||
+      Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === (form.nombre_empleado || '').trim().toLowerCase())
+    const depFinal = form.dependencia || fichaEmp?.dependencia || ''
+    const cleanForm = sanitizeForm({
+      ...form,
+      dependencia: depFinal,
+    })
     try {
       let savedId = null
       let errorVacacion = null

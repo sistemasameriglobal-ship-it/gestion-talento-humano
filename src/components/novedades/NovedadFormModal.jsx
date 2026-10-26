@@ -38,10 +38,9 @@ export default function NovedadFormModal({
   sinFechas, minFechaForm, maxFechaForm,
   f, save, closeModal,
 }) {
-  // Auto-completar dependencia / área si se selecciona un empleado y el campo está vacío
+  // Auto-completar dependencia / área estrictamente con la que tiene el empleado en su perfil
   useEffect(() => {
     if (!modal || !form.nombre_empleado) return
-    if (form.dependencia) return
     const ficha = fichasEmpleados?.[form.nombre_empleado] ||
       Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
     const depFicha = ficha?.dependencia
@@ -49,7 +48,9 @@ export default function NovedadFormModal({
     const depFinal = depFicha || depRow || ''
     if (depFinal) {
       const depMatch = (dependencias || []).find(d => d.trim().toLowerCase() === depFinal.trim().toLowerCase()) || depFinal
-      setForm(p => ({ ...p, dependencia: depMatch }))
+      if (form.dependencia !== depMatch) {
+        setForm(p => ({ ...p, dependencia: depMatch }))
+      }
     }
   }, [modal, form.nombre_empleado, form.dependencia, fichasEmpleados, rows, dependencias, setForm])
 
@@ -192,7 +193,7 @@ export default function NovedadFormModal({
                     setForm(p => ({
                       ...p,
                       nombre_empleado: val,
-                      dependencia: depMatch || p.dependencia,
+                      dependencia: depMatch,
                     }))
                     setFormDirty(true)
                   }}
@@ -374,14 +375,31 @@ export default function NovedadFormModal({
                     )}
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Dependencia / Área</label>
-                    <select className="form-control" value={form.dependencia || ''} onChange={f('dependencia')}>
-                      <option value="">— Seleccionar área —</option>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Dependencia / Área</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--text-muted)', opacity: 0.85 }}>🔒 Asignada en perfil</span>
+                    </label>
+                    <select
+                      className="form-control bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-not-allowed opacity-75"
+                      value={form.dependencia || ''}
+                      onChange={f('dependencia')}
+                      disabled={true}
+                      title="Campo bloqueado: se asigna automáticamente según el área del perfil del empleado."
+                      style={{
+                        cursor: 'not-allowed',
+                        opacity: 0.75,
+                        backgroundColor: 'var(--bg-disabled, rgba(241, 245, 249, 0.85))',
+                      }}
+                    >
+                      <option value="">— Sin área asignada —</option>
                       {form.dependencia && !dependencias.includes(form.dependencia) && (
                         <option value={form.dependencia}>{form.dependencia}</option>
                       )}
                       {dependencias.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
+                    <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                      Área bloqueada para evitar inconsistencias con la ficha del colaborador.
+                    </span>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Diagnóstico (código)</label>
