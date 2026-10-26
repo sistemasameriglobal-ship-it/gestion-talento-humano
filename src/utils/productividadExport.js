@@ -20,12 +20,14 @@ export async function exportarProductividadClientesExcel({ cfg, anio, filas }) {
     'Fecha Ingreso': fmtFecha(v.ingreso),
     'Clientes Asignados': v.totalAsignados,
     'Clientes Resueltos': v.totalResueltos,
-    '% Resolución': `${v.pct}%`,
+    '% Resolución (Meta 40%)': `${v.pct}%`,
+    'Clientes en Frío': v.totalFrios || 0,
+    'Total Resueltos (General)': v.totalResueltosGeneral || (v.totalResueltos + (v.totalFrios || 0)),
     'Procesos Disciplinarios': v.procesos?.length || 0,
   }))
   await crearHoja(wb, `Consolidado ${anio}`, consolidado, {
     titulo: `Productividad — ${cfg.tabLabel} · Consolidado ${anio}`,
-    anchosColumnas: [10, 28, 22, 16, 18, 18, 14, 22],
+    anchosColumnas: [10, 28, 22, 16, 18, 18, 16, 18, 20, 22],
     marca: true,
   })
 
@@ -33,9 +35,11 @@ export async function exportarProductividadClientesExcel({ cfg, anio, filas }) {
   const detalle = []
   MESES_FULL.forEach((mes, i) => {
     filas.forEach(v => {
-      const asig = v.asignados[i] || 0
-      const resu = v.resueltos[i] || 0
-      if (!asig && !resu) return
+      const asig = v.asignados?.[i] || 0
+      const resu = v.resueltos?.[i] || 0
+      const fr = v.frios?.[i] || 0
+      const totalGen = resu + fr
+      if (!asig && !resu && !fr) return
       detalle.push({
         'Año': anio,
         'Mes': mes,
@@ -43,14 +47,16 @@ export async function exportarProductividadClientesExcel({ cfg, anio, filas }) {
         'Cargo': v.cargo || '—',
         'Clientes Asignados': asig,
         'Clientes Resueltos': resu,
-        '% Resolución': `${calcPct(resu, asig)}%`,
+        '% Resolución (Meta 40%)': asig > 0 ? `${calcPct(resu, asig)}%` : '—',
+        'Clientes en Frío': fr,
+        'Total Resueltos': totalGen,
       })
     })
   })
   if (detalle.length > 0) {
     await crearHoja(wb, `Detalle Mensual ${anio}`, detalle, {
       titulo: `Productividad — ${cfg.tabLabel} · Detalle mensual ${anio}`,
-      anchosColumnas: [8, 14, 28, 22, 18, 18, 14],
+      anchosColumnas: [8, 14, 28, 22, 18, 18, 16, 18, 18],
       marca: true,
     })
   }

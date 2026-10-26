@@ -11,7 +11,7 @@ const clean = v => { const t = (v || '').toString().trim(); return (!t || t.toUp
 // Hook que encapsula la importación masiva desde Excel según la plantilla oficial:
 // lectura de la hoja 'Novedades', omisión de notas/ejemplos, mapeo a campos
 // de BD y resolución relacional automática.
-export function useImportacionExcel({ empleadosIndex, load, currentCompany = 'ameriglobal' }) {
+export function useImportacionExcel({ empleadosIndex, listaEmpleados = [], load, currentCompany = 'ameriglobal' }) {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const [importPreview, setImportPreview] = useState(null)
@@ -61,6 +61,12 @@ export function useImportacionExcel({ empleadosIndex, load, currentCompany = 'am
       return { omitir: true, motivoOmision: motivo, filaOriginal: row }
     }
 
+    // Ubicar registro oficial del empleado para asignar su área y cargo reales
+    const empOficial = (listaEmpleados || []).find(e =>
+      normalizarNombre(e.nombre_completo) === nombreNormalizado ||
+      (e.nombre_completo && e.nombre_completo.trim().toLowerCase() === nombreEnBD.toLowerCase())
+    )
+
     const fecha_inicio = parseFechaImportada(row[idxInicio])
     let fecha_fin = parseFechaImportada(row[idxFin])
     const { concepto, medioDia, observacionExtra } = normalizarConceptoImportado(conceptoRaw)
@@ -79,7 +85,8 @@ export function useImportacionExcel({ empleadosIndex, load, currentCompany = 'am
       }
     }
 
-    const dependencia = (row[idxDep] || '').toString().trim().toUpperCase() || null
+    const depExcel = (row[idxDep] || '').toString().trim().toUpperCase()
+    const dependencia = empOficial?.dependencia || depExcel || null
     let observacion = (row[idxObs] || '').toString().trim()
     if (observacionExtra) observacion = observacion ? `${observacion} — ${observacionExtra}` : observacionExtra
 
@@ -87,6 +94,8 @@ export function useImportacionExcel({ empleadosIndex, load, currentCompany = 'am
 
     const payload = {
       nombre_empleado: nombreEnBD,
+      empleado_id: empOficial?.id || null,
+      cargo: empOficial?.cargo || null,
       concepto,
       fecha_inicio,
       fecha_fin: fecha_fin || null,

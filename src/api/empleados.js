@@ -22,7 +22,7 @@ export async function listarEmpleadosParaNovedades(empresa) {
   try {
     let query = supabase
       .from(TABLA)
-      .select('id, nombre_completo, numero_documento, cargo, activo, fecha_ingreso, fecha_retiro, dependencia, empresa, created_at')
+      .select('id, nombre_completo, numero_documento, cargo, activo, fecha_ingreso, fecha_inicio_empresa_actual, fecha_primer_ingreso, fecha_retiro, dependencia, empresa, created_at')
       .order('nombre_completo')
     if (empresa) query = query.eq('empresa', empresa)
     return await query
@@ -176,53 +176,24 @@ export async function crearEmpleado(payload, empresa = 'ameriglobal') {
   // y su novedad contractual de Ingreso
   if (!res.error && res.data?.[0]?.id) {
     const nuevoEmp = res.data[0]
-    const fechaIngresoFinal = nuevoEmp.fecha_ingreso || nuevoEmp.fecha_inicio_empresa_actual || new Date().toISOString().split('T')[0]
-    await crearPeriodo({
-      empleado_id: nuevoEmp.id,
-      empresa: empresaFinal,
-      empresa_id,
-      departamento_id,
-      numero_periodo: 1,
-      fecha_ingreso: fechaIngresoFinal,
-      fecha_retiro: nuevoEmp.fecha_retiro || null,
-      cargo: nuevoEmp.cargo || null,
-      dependencia: nuevoEmp.dependencia || null,
-      es_periodo_actual: nuevoEmp.activo !== false,
-      continuidad_laboral: false,
-      observaciones: 'Inicio de contrato inicial',
-    }).catch(err => {
-      console.warn('Nota: no se pudo crear periodo inicial (puede requerir migración SQL):', err)
-    })
-
-    // Sincronización automática de evento contractual: Ingreso
-    try {
-      const periodoMes = fechaIngresoFinal.slice(0, 7)
-      const { data: novExistente } = await supabase
-        .from('novedades')
-        .select('id')
-        .eq('concepto', 'Ingreso')
-        .eq('empresa', empresaFinal)
-        .or(`empleado_id.eq.${nuevoEmp.id},nombre_empleado.eq.${nuevoEmp.nombre_completo}`)
-        .limit(1)
-
-      if (!novExistente || novExistente.length === 0) {
-        await supabase.from('novedades').insert([{
-          concepto: 'Ingreso',
-          fecha_inicio: fechaIngresoFinal,
-          fecha_fin: fechaIngresoFinal,
-          total_dias: 0,
-          periodo: periodoMes,
-          observacion: 'Registro inicial de ingreso del colaborador',
-          empleado_id: nuevoEmp.id,
-          nombre_empleado: nuevoEmp.nombre_completo,
-          dependencia: nuevoEmp.dependencia || null,
-          empresa: empresaFinal,
-          empresa_id,
-          departamento_id,
-        }])
-      }
-    } catch (novErr) {
-      console.warn('Nota: no se pudo registrar novedad de ingreso inicial:', novErr)
+    const fechaIngresoFinal = cleanPayload.fecha_ingreso || cleanPayload.fecha_inicio_empresa_actual || nuevoEmp.fecha_ingreso || nuevoEmp.fecha_inicio_empresa_actual || cleanPayload.fecha_primer_ingreso || null
+    if (fechaIngresoFinal) {
+      await crearPeriodo({
+        empleado_id: nuevoEmp.id,
+        empresa: empresaFinal,
+        empresa_id,
+        departamento_id,
+        numero_periodo: 1,
+        fecha_ingreso: fechaIngresoFinal,
+        fecha_retiro: nuevoEmp.fecha_retiro || null,
+        cargo: nuevoEmp.cargo || null,
+        dependencia: nuevoEmp.dependencia || null,
+        es_periodo_actual: nuevoEmp.activo !== false,
+        continuidad_laboral: false,
+        observaciones: 'Inicio de contrato inicial',
+      }).catch(err => {
+        console.warn('Nota: no se pudo crear periodo inicial (puede requerir migración SQL):', err)
+      })
     }
   }
 
@@ -263,7 +234,29 @@ export async function actualizarEmpleado(id, payload) {
   return res
 }
 
-export function eliminarEmpleado(id) {
+export async function eliminarEmpleado(id, nombreCompleto = null) {
+  try {
+    if (id) {
+      await supabase.from('empleado_periodos').delete().eq('empleado_id', id)
+      await supabase.from('novedades').delete().eq('empleado_id', id)
+      await supabase.from('vacaciones').delete().eq('empleado_id', id)
+      await supabase.from('procesos_disciplinarios').delete().eq('empleado_id', id)
+      await supabase.from('productividad').delete().eq('empleado_id', id)
+      await supabase.from('productividad_resumen').delete().eq('empleado_id', id)
+      await supabase.from('cierre_meses').delete().eq('empleado_id', id)
+    }
+    if (nombreCompleto) {
+      await supabase.from('novedades').delete().ilike('nombre_empleado', nombreCompleto)
+      await supabase.from('vacaciones').delete().ilike('nombre_empleado', nombreCompleto)
+      await supabase.from('procesos_disciplinarios').delete().ilike('nombre_empleado', nombreCompleto)
+      await supabase.from('productividad').delete().ilike('nombre_empleado', nombreCompleto)
+      await supabase.from('productividad_resumen').delete().ilike('nombre_empleado', nombreCompleto)
+      await supabase.from('cierre_meses').delete().ilike('nombre_empleado', nombreCompleto)
+      await supabase.from('registros_parqueadero').delete().ilike('nombre_empleado', nombreCompleto)
+    }
+  } catch (errRel) {
+    console.warn('Nota al eliminar dependencias de empleado:', errRel)
+  }
   return supabase.from(TABLA).delete().eq('id', id)
 }
 

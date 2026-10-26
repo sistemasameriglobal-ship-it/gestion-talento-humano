@@ -9,8 +9,7 @@ import { logAccion } from '../utils/auditLogger'
 import { diasHabilesEntre } from '../utils/diasHabiles'
 import { normalizarConcepto } from '../utils/parseExcel'
 import { extraerDiasEnDinero } from '../utils/vacacionesHelpers'
-import { exportarNovedadesExcel, exportarNovedadesParaImportar } from '../utils/novedadesExport'
-import { validarContraFichaEmpleado, validarContraHistorial, sanitizeForm } from '../utils/novedadesValidacion'
+import { validarContraFichaEmpleado, validarContraHistorial, sanitizeForm, obtenerPeriodoPorFecha } from '../utils/novedadesValidacion'
 import {
   CONCEPTOS_LIST, CONCEPTOS_SIN_FECHAS, DEPENDENCIAS_INICIALES,
   MESES, EMPTY, loadExtraDeps,
@@ -91,38 +90,118 @@ export default function Novedades() {
       Promise.resolve(vacacionesApi.listarVacaciones(currentCompany)).catch(() => ({ data: [] })),
     ])
 
-    // Detectar y auto-sincronizar colaboradores recientes que no tengan su novedad de Ingreso registrada
-    if (empData && empData.length > 0) {
-      const ahora = Date.now()
-      const sieteDiasMs = 7 * 24 * 60 * 60 * 1000
-      let huboSincronizacion = false
+    // Eliminación puntual solicitada de Kevin Andres Correa Rojas en novedades (one-time)
+    if (localStorage.getItem('purged_kevin_correa_nov') !== 'true') {
+      const novsKevin = (data || []).filter(n => {
+        const norm = normalizarNombre(n.nombre_empleado)
+        return norm.includes('kevin') && norm.includes('correa')
+      })
+      if (novsKevin.length > 0) {
+        for (const n of novsKevin) {
+          await novedadesApi.eliminarNovedad(n.id)
+        }
+        data = (data || []).filter(d => !novsKevin.some(k => k.id === d.id))
+        localStorage.setItem('purged_kevin_correa_nov', 'true')
+      }
+    }
 
+    // Deduplicación proactiva y auto-sincronización de eventos contractuales
+    if (empData && empData.length > 0) {
+      let huboSincronizacion = false
+      const CONCEPTOS_MOV = ['Ascenso', 'Cambio de Área', 'Cambio de Cargo', 'Ajuste Salarial', 'Paso a Etapa Productiva', 'Ingreso']
+      const idsAEliminar = new Set()
+
+      // ── PASO 1: Deduplicación proactiva de registros repetidos (Ingresos y Movimientos) ──
       for (const emp of empData) {
-        const esReciente = emp.created_at && (ahora - new Date(emp.created_at).getTime() < sieteDiasMs)
-        if (esReciente) {
-          const tieneIngreso = (data || []).some(n =>
-            n.concepto === 'Ingreso' &&
-            ((n.empleado_id && n.empleado_id === emp.id) ||
-             (n.nombre_empleado && n.nombre_empleado.trim().toLowerCase() === emp.nombre_completo?.trim().toLowerCase()))
-          )
-          if (!tieneIngreso) {
-            const fIngreso = emp.fecha_ingreso || (emp.created_at ? emp.created_at.slice(0, 10) : new Date().toISOString().split('T')[0])
-            const { error: errIns } = await novedadesApi.crearNovedad({
-              concepto: 'Ingreso',
-              fecha_inicio: fIngreso,
-              fecha_fin: fIngreso,
-              total_dias: 0,
-              periodo: fIngreso.slice(0, 7),
-              observacion: 'Registro inicial de ingreso del colaborador',
-              empleado_id: emp.id,
-              nombre_empleado: emp.nombre_completo,
-              dependencia: emp.dependencia || null,
-              empresa: currentCompany,
-              empresa_id: emp.empresa_id || null,
-              departamento_id: emp.departamento_id || null,
-            }, currentCompany)
-            if (!errIns) huboSincronizacion = true
+        const normEmp = normalizarNombre(emp.nombre_completo)
+        const novsDeEmp = (data || []).filter(n =>
+          (n.empleado_id && n.empleado_id === emp.id) ||
+          (n.nombre_empleado && normalizarNombre(n.nombre_empleado) === normEmp)
+        )
+
+        if (novsDeEmp.length === 0) continue
+
+        // A) Múltiples 'Ingreso' para el mismo colaborador
+        const novsIngreso = novsDeEmp.filter(n => n.concepto === 'Ingreso')
+        if (novsIngreso.length > 1) {
+          const porFechaIngreso = {}
+          for (const n of novsIngreso) {
+            const f = n.fecha_inicio || 'sin_fecha'
+            if (!porFechaIngreso[f]) porFechaIngreso[f] = []
+            porFechaIngreso[f].push(n)
           }
+
+          for (const [, grupo] of Object.entries(porFechaIngreso)) {
+            if (grupo.length > 1) {
+              const ordenados = [...grupo].sort((a, b) => {
+                if (a.empleado_id && !b.empleado_id) return -1
+                if (!a.empleado_id && b.empleado_id) return 1
+                return (b.observacion?.length || 0) - (a.observacion?.length || 0)
+              })
+              for (let i = 1; i < ordenados.length; i++) {
+                idsAEliminar.add(ordenados[i].id)
+              }
+            }
+          }
+        }
+
+        // B) Múltiples novedades contractuales en la misma fecha (ej. Cambio de Área + Cambio de Cargo)
+        const porFechaContractual = {}
+        for (const n of novsDeEmp) {
+          if (!n.fecha_inicio || !CONCEPTOS_MOV.includes(n.concepto)) continue
+          if (!porFechaContractual[n.fecha_inicio]) porFechaContractual[n.fecha_inicio] = []
+          porFechaContractual[n.fecha_inicio].push(n)
+        }
+
+        for (const [, grupo] of Object.entries(porFechaContractual)) {
+          const vigentes = grupo.filter(n => !idsAEliminar.has(n.id))
+          if (vigentes.length > 1) {
+            const cambioArea = vigentes.find(n => n.concepto === 'Cambio de Área')
+            const cambioCargo = vigentes.find(n => n.concepto === 'Cambio de Cargo')
+            if (cambioArea && cambioCargo) {
+              idsAEliminar.add(cambioCargo.id)
+            } else {
+              const ordenados = [...vigentes].sort((a, b) => (b.observacion?.length || 0) - (a.observacion?.length || 0))
+              for (let i = 1; i < ordenados.length; i++) {
+                if (ordenados[i].concepto === ordenados[0].concepto || (ordenados[i].concepto === 'Cambio de Cargo' && ordenados[0].concepto === 'Ascenso')) {
+                  idsAEliminar.add(ordenados[i].id)
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (idsAEliminar.size > 0) {
+        for (const id of idsAEliminar) {
+          await novedadesApi.eliminarNovedad(id)
+        }
+        data = (data || []).filter(d => !idsAEliminar.has(d.id))
+        huboSincronizacion = true
+      }
+
+      // ── PASO 2: Sincronización de Ingreso inicial y Movimientos contractuales posteriores ──
+      for (const emp of empData) {
+        const empPeriodos = (periodosData || []).filter(p => p.empleado_id === emp.id)
+        const pActivo = empPeriodos.find(p => p.es_periodo_actual) || empPeriodos[empPeriodos.length - 1]
+        const fIngresoReal = emp.fecha_inicio_empresa_actual || emp.fecha_ingreso || pActivo?.fecha_ingreso || emp.fecha_primer_ingreso || null
+
+        if (!fIngresoReal) continue
+
+        const normEmp = normalizarNombre(emp.nombre_completo)
+        const novIngreso = (data || []).find(n =>
+          n.concepto === 'Ingreso' &&
+          ((n.empleado_id && n.empleado_id === emp.id) ||
+           (n.nombre_empleado && normalizarNombre(n.nombre_empleado) === normEmp))
+        )
+
+        if (novIngreso && novIngreso.fecha_inicio !== fIngresoReal) {
+          const { error: errUpd } = await novedadesApi.actualizarNovedad(novIngreso.id, {
+            fecha_inicio: fIngresoReal,
+            fecha_fin: fIngresoReal,
+            periodo: fIngresoReal.slice(0, 7),
+          })
+          if (!errUpd) huboSincronizacion = true
         }
       }
 
@@ -146,10 +225,10 @@ export default function Novedades() {
           id: e.id,
           nombre_completo: e.nombre_completo,
           activo: e.activo !== false,
-          fecha_ingreso: pActivo?.fecha_ingreso || e.fecha_ingreso || null,
-          fecha_retiro: pActivo?.fecha_retiro || e.fecha_retiro || null,
-          dependencia: pActivo?.dependencia || e.dependencia || '',
-          cargo: pActivo?.cargo || e.cargo || '',
+          fecha_ingreso: e.fecha_inicio_empresa_actual || e.fecha_ingreso || pActivo?.fecha_ingreso || e.fecha_primer_ingreso || null,
+          fecha_retiro: e.fecha_retiro || pActivo?.fecha_retiro || null,
+          dependencia: e.dependencia || pActivo?.dependencia || '',
+          cargo: e.cargo || pActivo?.cargo || '',
           periodos: empPeriodos,
         }
       })
@@ -160,6 +239,14 @@ export default function Novedades() {
       setFichasEmpleados({})
     }
 
+    const empPorId = new Map()
+    const empPorNombreNorm = new Map()
+    ;(empData || []).forEach(e => {
+      if (e.id) empPorId.set(e.id, e)
+      if (e.nombre_completo) empPorNombreNorm.set(normalizarNombre(e.nombre_completo), e)
+    })
+
+    const mismatchesToHeal = []
     const enrichedRows = (data || []).map(r => {
       let diasEnDinero
       let diasDisfrutados = null
@@ -179,14 +266,51 @@ export default function Novedades() {
       } else {
         diasEnDinero = extraerDiasEnDinero(r, null)
       }
-      const ficha = fichas[r.nombre_empleado]
+
+      // Buscar colaborador de forma robusta: por ID, nombre exacto o normalizado
+      const emp = (r.empleado_id && empPorId.get(r.empleado_id)) ||
+        (r.nombre_empleado && empPorNombreNorm.get(normalizarNombre(r.nombre_empleado))) ||
+        (r.nombre_empleado ? fichas[r.nombre_empleado] : null) ||
+        null
+
+      // Respetar el área y cargo históricos guardados en la novedad.
+      // Si la novedad no tenía área asignada, deducirla según el período laboral correspondiente a su fecha_inicio.
+      const periodosEmp = emp?.periodos || fichas[r.nombre_empleado]?.periodos || []
+      const periodoHistorico = obtenerPeriodoPorFecha(periodosEmp, r.fecha_inicio)
+      const depHistorica = r.dependencia || periodoHistorico?.dependencia || emp?.dependencia || ''
+      const cargoHistorico = r.cargo || periodoHistorico?.cargo || emp?.cargo || ''
+
+      // Solo asociar empleado_id si no lo tenía en la BD, o dependencia si estaba vacía (sin sobreescribir áreas históricas existentes)
+      if (r.id && emp?.id && (!r.empleado_id || !r.dependencia)) {
+        mismatchesToHeal.push({
+          id: r.id,
+          empleado_id: emp.id,
+          dependencia: r.dependencia || depHistorica,
+        })
+      }
+
       return {
         ...r,
-        cargo: r.cargo || ficha?.cargo || '',
+        nombre_empleado: emp?.nombre_completo || r.nombre_empleado,
+        empleado_id: r.empleado_id || emp?.id || null,
+        cargo: cargoHistorico,
+        dependencia: depHistorica,
         dias_en_dinero: diasEnDinero > 0 ? diasEnDinero : null,
         dias_disfrutados: diasDisfrutados,
       }
     })
+
+    // Auto-sanar en segundo plano las novedades con área desactualizada o sin ID en Supabase
+    if (mismatchesToHeal.length > 0) {
+      Promise.allSettled(
+        mismatchesToHeal.map(item =>
+          novedadesApi.actualizarNovedad(item.id, {
+            dependencia: item.dependencia,
+            empleado_id: item.empleado_id,
+          })
+        )
+      ).catch(() => {})
+    }
 
     setRows(enrichedRows)
     const ps = [...new Set((data || []).map(r => r.periodo).filter(Boolean))].sort().reverse()
@@ -201,7 +325,7 @@ export default function Novedades() {
   const {
     importing, importResult, setImportResult, importPreview, importConfirming,
     fileInputKey, handleImportFile, confirmarImportacion, cancelarImportacion,
-  } = useImportacionExcel({ empleadosIndex, load, currentCompany })
+  } = useImportacionExcel({ empleadosIndex, listaEmpleados, load, currentCompany })
 
   // Auto-refresh cada 60s (silencioso, sin pantalla de carga)
   useEffect(() => {
@@ -246,11 +370,18 @@ export default function Novedades() {
 
   const openAdd = () => { setForm(EMPTY); setFormDirty(false); setNuevoPeriodoMode(false); setFormError(null); setModal('add') }
   const openEdit = (row) => {
+    const emp = (listaEmpleados || []).find(e =>
+      (row.empleado_id && e.id === row.empleado_id) ||
+      e.nombre_completo === row.nombre_empleado ||
+      normalizarNombre(e.nombre_completo) === normalizarNombre(row.nombre_empleado)
+    )
     const ficha = fichasEmpleados?.[row.nombre_empleado] ||
       Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === (row.nombre_empleado || '').trim().toLowerCase())
     setForm({
       ...row,
-      dependencia: row.dependencia || ficha?.dependencia || '',
+      empleado_id: emp?.id || row.empleado_id || null,
+      dependencia: emp?.dependencia || ficha?.dependencia || row.dependencia || '',
+      cargo: emp?.cargo || ficha?.cargo || row.cargo || '',
     })
     setFormDirty(false)
     setNuevoPeriodoMode(false)
@@ -281,11 +412,18 @@ export default function Novedades() {
     }
 
     setSaving(true)
+    const emp = (listaEmpleados || []).find(e =>
+      (form.empleado_id && e.id === form.empleado_id) ||
+      e.nombre_completo === form.nombre_empleado ||
+      normalizarNombre(e.nombre_completo) === normalizarNombre(form.nombre_empleado)
+    )
     const fichaEmp = fichasEmpleados?.[form.nombre_empleado] ||
       Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === (form.nombre_empleado || '').trim().toLowerCase())
-    const depFinal = form.dependencia || fichaEmp?.dependencia || ''
+    const depFinal = form.dependencia || emp?.dependencia || fichaEmp?.dependencia || ''
     const cleanForm = sanitizeForm({
       ...form,
+      nombre_empleado: emp?.nombre_completo || form.nombre_empleado,
+      empleado_id: emp?.id || form.empleado_id || null,
       dependencia: depFinal,
     })
     try {
@@ -396,12 +534,19 @@ export default function Novedades() {
   const remove = async (id) => {
     try {
       if (!id) throw new Error('ID no válido')
+      setRows(prev => prev.filter(r => r.id !== id))
+      setDeleteId(null)
       const { error } = await novedadesApi.eliminarNovedad(id)
-      if (error) throw error
+      if (error) {
+        await load(true)
+        throw error
+      }
       logAccion('ELIMINAR', 'novedades', id, currentCompany)
-      setDeleteId(null); load()
+      setMsg({ type: 'success', text: 'Novedad eliminada correctamente.' })
+      await load(true)
+      setTimeout(() => setMsg(null), 3000)
     } catch (e) {
-      setMsg({ type: 'error', text: e.message || 'Error al eliminar.' })
+      setMsg({ type: 'error', text: e.message || 'Error al eliminar la novedad.' })
       setDeleteId(null)
       setTimeout(() => setMsg(null), 5000)
     }

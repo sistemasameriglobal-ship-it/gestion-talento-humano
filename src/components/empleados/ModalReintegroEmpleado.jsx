@@ -20,7 +20,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
   const sugerirEtapaProductiva = esActivo && esColaboradorAprendiz && !yaEstaEnProductiva
 
   const [tipoMovimiento, setTipoMovimiento] = useState(
-    !esActivo ? 'reintegro' : (sugerirEtapaProductiva ? 'etapa_productiva' : 'ascenso')
+    !esActivo ? 'reintegro' : (sugerirEtapaProductiva ? 'etapa_productiva' : 'cambio_cargo')
   )
   const [fechaIngreso, setFechaIngreso] = useState(hoyISO())
   const [cargo, setCargo] = useState(() => {
@@ -44,8 +44,8 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
   })
   const [error, setError] = useState(null)
 
-  const esContinuidad = tipoMovimiento !== 'reintegro'
-  // El ajuste salarial y la transición a etapa productiva son novedades puras: NO crean ni cierran períodos laborales
+  const esContinuidad = tipoMovimiento !== 'reintegro' && tipoMovimiento !== 'etapa_productiva'
+  // Solo el ajuste salarial es novedad pura sin períodos laborales
   const esAjusteSalarial = tipoMovimiento === 'ajuste_salarial'
   const esEtapaProductiva = tipoMovimiento === 'etapa_productiva'
 
@@ -75,34 +75,34 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
 
   const MOVIMIENTOS = [
     {
-      id: 'ascenso',
-      titulo: '🌟 Ascenso / Cambio de Cargo',
-      desc: 'Cambio formal de cargo superior (genera nuevo período auditable).',
+      id: 'cambio_cargo',
+      titulo: '💼 Cambio de Cargo',
+      desc: 'Modificación de cargo o rol laboral (genera nuevo período auditable, conserva fecha de ingreso original y antigüedad).',
       continuidad: true,
     },
     {
       id: 'cambio_area',
-      titulo: '🔄 Ajuste de Rango / Área',
-      desc: 'Movimiento lateral formal de cargo o área (genera nuevo período).',
+      titulo: '🏢 Cambio de Área',
+      desc: 'Traslado o cambio de dependencia o área (genera nuevo período auditable, conserva fecha de ingreso original y antigüedad).',
       continuidad: true,
     },
     {
       id: 'ajuste_salarial',
       titulo: '💰 Ajuste Salarial',
-      desc: 'Incremento de sueldo. Se registra como novedad, sin tocar el período laboral.',
+      desc: 'Incremento de sueldo. Se registra como novedad, sin tocar el período laboral (antigüedad intacta).',
       continuidad: true,
     },
     {
       id: 'etapa_productiva',
       titulo: '🎓 Transición a Etapa Productiva (Aprendiz)',
-      desc: 'Paso de Etapa Lectiva (75%) a Productiva (100% SMMLV + Auxilio + EPS + ARL). Activa el derecho a todas las prestaciones sociales de ley.',
-      continuidad: true,
+      desc: 'Paso a Etapa Productiva (100% SMMLV + Auxilio + EPS + ARL). Inicia un NUEVO contrato laboral (nueva fecha de ingreso y antigüedad desde cero).',
+      continuidad: false,
       destacado: esColaboradorAprendiz,
     },
     {
       id: 'reintegro',
       titulo: '🔁 Reingreso tras retiro',
-      desc: 'Nuevo ciclo tras desvinculación previa (antigüedad desde cero).',
+      desc: 'Nuevo ciclo tras desvinculación previa (nuevo contrato, antigüedad desde cero).',
       continuidad: false,
     },
   ]
@@ -121,12 +121,12 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
       setError('Debes ingresar el monto del Apoyo Productivo (100% SMMLV).')
       return
     }
-    if (tipoMovimiento === 'ascenso' && !cargo.trim()) {
-      setError('Debes ingresar el nuevo cargo para el ascenso.')
+    if ((tipoMovimiento === 'cambio_cargo' || tipoMovimiento === 'ascenso') && !cargo.trim()) {
+      setError('Debes ingresar el nuevo cargo para el Cambio de Cargo.')
       return
     }
-    if (tipoMovimiento === 'cambio_area' && !cargo.trim() && !dependencia) {
-      setError('Debes ingresar el nuevo cargo o área para este movimiento.')
+    if (tipoMovimiento === 'cambio_area' && !dependencia) {
+      setError('Debes seleccionar la nueva área / dependencia para el Cambio de Área.')
       return
     }
     if (emp?.fecha_retiro && !esContinuidad && fechaIngreso < emp.fecha_retiro) {
@@ -137,30 +137,6 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
 
     const salarioActualNum = Number(emp?.salario) || 0
     const salarioFinalNum = nuevoSalario && Number(nuevoSalario) > 0 ? Number(nuevoSalario) : (salarioActualNum > 0 ? salarioActualNum : null)
-
-    // ── Transición a Etapa Productiva (Aprendiz): actualiza salario, auxilio y cargo sin crear nuevo período ──
-    if (esEtapaProductiva) {
-      const auxilioNum = nuevoAuxilio !== '' && Number(nuevoAuxilio) >= 0
-        ? Number(nuevoAuxilio)
-        : AUXILIO_TRANSPORTE_VIGENTE
-      const notasAdicionales = observaciones.trim() || OBS_ETAPA_PRODUCTIVA_DEFAULT
-      const obsNovedad = `Transición a Etapa Productiva. Apoyo: ${formatCOP(nuevoSalario)} + Aux. Transporte: ${formatCOP(auxilioNum)}. ${notasAdicionales}`
-
-      onConfirm({
-        tipo_movimiento: 'etapa_productiva',
-        motivo_transicion: 'etapa_productiva',
-        continuidad_laboral: true,
-        es_novedad_pura: true,
-        nueva_fecha_ingreso: fechaIngreso,
-        cargo: cargo.trim() || 'Aprendiz Etapa Productiva',
-        dependencia: dependencia || emp?.dependencia || null,
-        salario: Number(nuevoSalario),
-        salario_anterior: salarioActualNum,
-        auxilio_transporte: auxilioNum,
-        observaciones: obsNovedad,
-      })
-      return
-    }
 
     // ── Ajuste salarial: novedad pura sin períodos ──
     if (esAjusteSalarial) {
@@ -182,10 +158,12 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
 
     let obsGenerada = observaciones.trim()
     if (!obsGenerada) {
-      if (tipoMovimiento === 'ascenso') {
-        obsGenerada = `Ascenso a cargo "${cargo.trim()}" con continuidad laboral`
+      if (tipoMovimiento === 'cambio_cargo' || tipoMovimiento === 'ascenso') {
+        obsGenerada = `Cambio de cargo a "${cargo.trim()}" con continuidad laboral`
       } else if (tipoMovimiento === 'cambio_area') {
-        obsGenerada = `Cambio de área / cargo a "${cargo.trim() || emp?.cargo}" (${dependencia || emp?.dependencia}) con continuidad laboral`
+        obsGenerada = `Cambio de área a "${dependencia || emp?.dependencia}" (${cargo.trim() || emp?.cargo}) con continuidad laboral`
+      } else if (tipoMovimiento === 'etapa_productiva') {
+        obsGenerada = `Transición a Etapa Productiva (Nuevo Contrato de Aprendizaje Productivo)`
       } else {
         obsGenerada = 'Reintegro bajo nuevo contrato laboral tras retiro externo'
       }
@@ -198,13 +176,18 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
     }
     const observacionesFinal = obsGenerada + textoSalarioAudit
 
+    const auxilioNum = nuevoAuxilio !== '' && Number(nuevoAuxilio) >= 0
+      ? Number(nuevoAuxilio)
+      : (esEtapaProductiva ? AUXILIO_TRANSPORTE_VIGENTE : (emp?.auxilio_transporte ?? null))
+
     onConfirm({
       tipo_movimiento: tipoMovimiento,
       nueva_fecha_ingreso: fechaIngreso,
-      cargo: cargo.trim() || emp?.cargo || null,
+      cargo: cargo.trim() || emp?.cargo || (esEtapaProductiva ? 'Aprendiz Etapa Productiva' : null),
       dependencia: dependencia || emp?.dependencia || null,
       salario: salarioFinalNum,
       salario_anterior: salarioActualNum,
+      auxilio_transporte: auxilioNum,
       observaciones: observacionesFinal,
       continuidad_laboral: esContinuidad,
       motivo_transicion: tipoMovimiento,
@@ -312,13 +295,13 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
               }}>
                 <Info size={16} style={{ flexShrink: 0, marginTop: 2, color: '#2563EB' }} />
                 <div style={{ lineHeight: 1.45 }}>
-                  <strong>🎓 Normativa Contrato de Aprendizaje (Paso a Etapa Productiva):</strong>
+                  <strong>🎓 Transición a Etapa Productiva (Nuevo Contrato de Aprendizaje):</strong>
                   <div style={{ marginTop: 4 }}>
-                    • <strong>Apoyo de sostenimiento:</strong> se actualiza del 75% al <strong>100% del SMMLV</strong>.<br />
-                    • <strong>Auxilio de transporte:</strong> <strong>OBLIGATORIO / ACTIVO</strong> en etapa productiva presencial.<br />
-                    • <strong>Seguridad Social:</strong> cobertura completa de <strong>EPS y ARL</strong>.<br />
-                    • <strong>Prestaciones Sociales:</strong> reconocimiento de <strong>TODAS las prestaciones sociales de ley</strong> (Prima, Cesantías, Intereses y Vacaciones).<br />
-                    • <strong>Continuidad:</strong> <strong>NO</strong> se cierra el contrato ni se crea un nuevo período; el Período #1 continúa <strong>Vigente</strong>.
+                    • <strong>Nuevo contrato:</strong> Inicia formalmente un nuevo contrato para la etapa productiva. La fecha de ingreso y antigüedad comenzarán a contar a partir de la nueva fecha seleccionada.<br />
+                    • <strong>Apoyo de sostenimiento:</strong> se actualiza al <strong>100% del SMMLV</strong>.<br />
+                    • <strong>Auxilio de transporte:</strong> <strong>ACTIVO</strong> ({formatCOP(AUXILIO_TRANSPORTE_VIGENTE)}).<br />
+                    • <strong>Seguridad Social:</strong> cobertura integral de <strong>EPS y ARL</strong>.<br />
+                    • El período anterior de etapa lectiva quedará registrado en el historial laboral como cerrado.
                   </div>
                 </div>
               </div>
@@ -330,7 +313,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
               }}>
                 <Info size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                 <span>
-                  💰 <strong>Novedad salarial:</strong> se actualizará el salario del colaborador y se registrará en el <strong>Historial de Novedades</strong>. <strong>No</strong> se crea un nuevo período ni se cierra el período laboral vigente (antigüedad y vacaciones intactas).
+                  💰 <strong>Ajuste salarial:</strong> se actualizará el salario del colaborador y se registrará en el <strong>Historial de Novedades</strong>. Conserva intacta la fecha de ingreso original, la antigüedad y el saldo de vacaciones.
                 </span>
               </div>
             ) : esContinuidad ? (
@@ -341,7 +324,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
               }}>
                 <Info size={16} style={{ flexShrink: 0, marginTop: 1, color: '#16a34a' }} />
                 <span>
-                  ℹ️ <strong>Continuidad jurídica respetada:</strong> Este movimiento se registra como un <strong>Otrossí contractual</strong>. Se conserva intacta la antigüedad, el saldo acumulado de vacaciones y los beneficios laborales del colaborador.
+                  ℹ️ <strong>Continuidad laboral respetada:</strong> Este movimiento se registra como un <strong>Otrossí contractual</strong>. <strong>Se conserva la fecha de ingreso original y toda la antigüedad acumulada</strong>, así como el saldo de vacaciones y beneficios del colaborador.
                 </span>
               </div>
             ) : (
@@ -352,7 +335,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
               }}>
                 <Info size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                 <span>
-                  El reintegro iniciará un <strong>nuevo contrato</strong>. Su historial anterior se conservará intacto como registro histórico, mientras que sus vacaciones y antigüedad para este nuevo ciclo iniciarán desde cero.
+                  El reintegro iniciará un <strong>nuevo contrato</strong>. Su fecha de ingreso y antigüedad para este nuevo ciclo comenzarán desde la fecha del reintegro. El historial previo se conservará como antecedente.
                 </span>
               </div>
             )}
@@ -522,7 +505,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
                     {esEtapaProductiva ? 'Etapa / Cargo en Etapa Productiva' : esContinuidad ? 'Nuevo Cargo / Posición' : 'Cargo'}
-                    {tipoMovimiento === 'ascenso' && <span style={{ color: '#EF4444' }}> *</span>}
+                    {(tipoMovimiento === 'cambio_cargo' || tipoMovimiento === 'ascenso') && <span style={{ color: '#EF4444' }}> *</span>}
                   </label>
                   <div style={{ position: 'relative' }}>
                     <Briefcase size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
@@ -539,7 +522,8 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
 
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
-                    {esContinuidad ? 'Dependencia / Área' : 'Dependencia / Área'}
+                    Dependencia / Área
+                    {tipoMovimiento === 'cambio_area' && <span style={{ color: '#EF4444' }}> *</span>}
                   </label>
                   <div style={{ position: 'relative' }}>
                     <Building2 size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />

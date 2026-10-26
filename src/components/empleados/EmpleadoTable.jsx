@@ -5,7 +5,7 @@
 // =============================================================
 import { Edit2, Trash2, RotateCcw, Archive, CheckCircle2, Scale, Building2 } from 'lucide-react'
 import PersonCell from '../ui/PersonCell'
-import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual, formatoDias } from '../../utils/vacacionesHelpers'
+import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, getEstadoVacacionActual, formatoDias, obtenerFechaIngresoContinua } from '../../utils/vacacionesHelpers'
 
 export default function EmpleadoTable({
   paged,
@@ -46,6 +46,9 @@ export default function EmpleadoTable({
               const ultimoProc = procesosEmp.length > 0 ? procesosEmp[0] : null
               const vacacionActiva = getEstadoVacacionActual(emp, vacsEmp, nov?.novedades)
               const periodoActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || (emp.fecha_ingreso ? { fecha_ingreso: emp.fecha_ingreso, es_periodo_actual: true } : null)
+              const fIngresoDisplay = (periodoActivo && periodoActivo.continuidad_laboral)
+                ? (obtenerFechaIngresoContinua(periodoActivo, periodosEmp) || emp.fecha_ingreso)
+                : (periodoActivo?.fecha_ingreso || emp.fecha_ingreso)
               const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp, emp)
 
               const ultimoPeriodoCerrado = [...periodosEmp].reverse().find(p => !p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1]
@@ -60,7 +63,7 @@ export default function EmpleadoTable({
                       nombre={emp.nombre_completo}
                       sub={[
                         (emp.numero_documento || emp.tipo_documento) ? `${emp.tipo_documento || 'CC'}: ${emp.numero_documento || '—'}` : null,
-                        emp.fecha_ingreso ? `Ingreso: ${emp.fecha_ingreso}` : null,
+                        fIngresoDisplay ? `Ingreso: ${fIngresoDisplay}` : null,
                         antig?.texto ? `Antigüedad: ${antig.texto}` : null,
                       ].filter(Boolean).join(' • ') || null}
                     />

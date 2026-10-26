@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { X, AlertCircle } from 'lucide-react'
+import { X, AlertCircle, Info } from 'lucide-react'
 import AnimatedModal from '../ui/AnimatedModal'
 import SearchableSelect from '../ui/SearchableSelect'
 import { PILL_STYLES } from './pillsConstants'
@@ -8,6 +8,7 @@ import { hoyISO, formatDuracion } from '../../utils/fecha'
 import { diasHabilesEntre } from '../../utils/diasHabiles'
 import { CONCEPTOS_LIST, ICONOS } from '../../utils/novedadesConstants'
 import { MESES_OPCIONES } from '../../constants'
+import { obtenerPeriodoPorFecha } from '../../utils/novedadesValidacion'
 
 const formatPeriodoLabel = (p) => {
   if (!p) return ''
@@ -38,21 +39,41 @@ export default function NovedadFormModal({
   sinFechas, minFechaForm, maxFechaForm,
   f, save, closeModal,
 }) {
-  // Auto-completar dependencia / área estrictamente con la que tiene el empleado en su perfil
+  // Auto-completar dependencia / área según el período correspondiente a la fecha de la novedad
+  // Si la novedad tiene fecha anterior al cambio de área, se asigna su área anterior histórica.
   useEffect(() => {
     if (!modal || !form.nombre_empleado) return
     const ficha = fichasEmpleados?.[form.nombre_empleado] ||
       Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
-    const depFicha = ficha?.dependencia
-    const depRow = (rows || []).find(r => (r.nombre_empleado || '').trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase() && r.dependencia)?.dependencia
-    const depFinal = depFicha || depRow || ''
-    if (depFinal) {
-      const depMatch = (dependencias || []).find(d => d.trim().toLowerCase() === depFinal.trim().toLowerCase()) || depFinal
-      if (form.dependencia !== depMatch) {
-        setForm(p => ({ ...p, dependencia: depMatch }))
+    if (!ficha) return
+
+    // Buscar si a la fecha de la novedad pertenecía a un período específico (área previa)
+    const periodoFecha = obtenerPeriodoPorFecha(ficha.periodos, form.fecha_inicio)
+    const depObjetivo = periodoFecha?.dependencia || ficha.dependencia || ''
+    const cargoObjetivo = periodoFecha?.cargo || ficha.cargo || ''
+
+    setForm(p => {
+      let changed = false
+      const next = { ...p }
+      if (depObjetivo) {
+        const depMatch = (dependencias || []).find(d => d.trim().toLowerCase() === depObjetivo.trim().toLowerCase()) || depObjetivo
+        if (next.dependencia !== depMatch) {
+          next.dependencia = depMatch
+          next.cargo = cargoObjetivo || next.cargo || ''
+          next.empleado_id = ficha?.id || next.empleado_id || null
+          changed = true
+        }
       }
-    }
-  }, [modal, form.nombre_empleado, form.dependencia, fichasEmpleados, rows, dependencias, setForm])
+      if (modal === 'add' && next.concepto === 'Ingreso' && ficha?.fecha_ingreso && (!next.fecha_inicio || next.fecha_inicio !== ficha.fecha_ingreso)) {
+        next.fecha_inicio = ficha.fecha_ingreso
+        next.fecha_fin = ficha.fecha_ingreso
+        next.periodo = ficha.fecha_ingreso.slice(0, 7)
+        next.total_dias = 0
+        changed = true
+      }
+      return changed ? next : p
+    })
+  }, [modal, form.nombre_empleado, form.fecha_inicio, form.concepto, fichasEmpleados, dependencias, setForm])
 
   return (
     <AnimatedModal open={!!modal} onRequestClose={closeModal}>
@@ -186,27 +207,54 @@ export default function NovedadFormModal({
                   onChange={val => {
                     const ficha = fichasEmpleados?.[val] ||
                       Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === (val || '').trim().toLowerCase())
-                    const depFicha = ficha?.dependencia
-                    const depRow = (rows || []).find(r => (r.nombre_empleado || '').trim().toLowerCase() === (val || '').trim().toLowerCase() && r.dependencia)?.dependencia
-                    const depFinal = depFicha || depRow || ''
-                    const depMatch = depFinal ? ((dependencias || []).find(d => d.trim().toLowerCase() === depFinal.trim().toLowerCase()) || depFinal) : ''
+                    const periodoFecha = obtenerPeriodoPorFecha(ficha?.periodos, form.fecha_inicio)
+                    const depFicha = periodoFecha?.dependencia || ficha?.dependencia || ''
+                    const depMatch = depFicha ? ((dependencias || []).find(d => d.trim().toLowerCase() === depFicha.trim().toLowerCase()) || depFicha) : ''
                     setForm(p => ({
                       ...p,
-                      nombre_empleado: val,
+                      nombre_empleado: ficha?.nombre_completo || val,
+                      empleado_id: ficha?.id || p.empleado_id || null,
                       dependencia: depMatch,
+                      cargo: periodoFecha?.cargo || ficha?.cargo || p.cargo || '',
                     }))
                     setFormDirty(true)
                   }}
                   activos={empleados.activos} inactivos={empleados.inactivos}
                   placeholder="— Seleccionar empleado —"
                 />
-                {form.nombre_empleado && fichasEmpleados[form.nombre_empleado] && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span>💼 <strong>{fichasEmpleados[form.nombre_empleado].cargo || 'Sin cargo'}</strong></span>
-                    <span>·</span>
-                    <span>📍 {form.dependencia || fichasEmpleados[form.nombre_empleado].dependencia || 'Sin área'}</span>
-                  </div>
-                )}
+                {form.nombre_empleado && (() => {
+                  const ficha = fichasEmpleados?.[form.nombre_empleado] ||
+                    Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
+                  if (!ficha) return null
+                  const periodoFecha = obtenerPeriodoPorFecha(ficha.periodos, form.fecha_inicio)
+                  const esAreaHistorica = periodoFecha?.dependencia && periodoFecha.dependencia !== ficha.dependencia
+                  return (
+                    <>
+                      <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span>💼 <strong>{form.cargo || periodoFecha?.cargo || ficha.cargo || 'Sin cargo'}</strong></span>
+                        <span>·</span>
+                        <span>🏢 <strong>{form.dependencia || periodoFecha?.dependencia || ficha.dependencia || 'Sin área'}</strong></span>
+                        {esAreaHistorica && (
+                          <span style={{ fontSize: 10.5, background: '#DBEAFE', color: '#1E40AF', padding: '1px 7px', borderRadius: 99, fontWeight: 700, border: '1px solid #BFDBFE' }}>
+                            Área en fecha de novedad
+                          </span>
+                        )}
+                      </div>
+                      {esAreaHistorica && (
+                        <div style={{
+                          marginTop: 8, fontSize: 11.5, color: '#1E3A8A', background: '#EFF6FF',
+                          border: '1px solid #BFDBFE', borderRadius: 8, padding: '7px 10px',
+                          display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.4,
+                        }}>
+                          <Info size={14} style={{ color: '#2563EB', flexShrink: 0, marginTop: 1 }} />
+                          <div>
+                            <strong>Área histórica detectada:</strong> En la fecha seleccionada ({form.fecha_inicio}), el colaborador pertenecía al área <strong>"{periodoFecha.dependencia}"</strong> (su área actual en ficha es "{ficha.dependencia}"). La novedad se registrará con dicha área para mantener la trazabilidad exacta.
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 {form.nombre_empleado && !fichasEmpleados[form.nombre_empleado]?.activo && (
                   <div style={{
                     marginTop: 8, display: 'flex', alignItems: 'center', gap: 6,
@@ -323,7 +371,23 @@ export default function NovedadFormModal({
                     const col = CONCEPTO_COLORS[normalizarConcepto(c)] || '#374151'
                     return (
                       <button key={c} type="button"
-                        onClick={() => { setForm(p => ({ ...p, concepto: c })); setFormDirty(true) }}
+                        onClick={() => {
+                          setForm(p => {
+                            const next = { ...p, concepto: c }
+                            if (c === 'Ingreso') {
+                              const ficha = fichasEmpleados?.[p.nombre_empleado] ||
+                                Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === (p.nombre_empleado || '').trim().toLowerCase())
+                              if (ficha?.fecha_ingreso) {
+                                next.fecha_inicio = ficha.fecha_ingreso
+                                next.fecha_fin = ficha.fecha_ingreso
+                                next.periodo = ficha.fecha_ingreso.slice(0, 7)
+                                next.total_dias = 0
+                              }
+                            }
+                            return next
+                          })
+                          setFormDirty(true)
+                        }}
                         style={{
                           padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                           border: sel ? `2px solid ${col}` : '1.5px solid var(--border)',
@@ -377,19 +441,13 @@ export default function NovedadFormModal({
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span>Dependencia / Área</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--text-muted)', opacity: 0.85 }}>🔒 Asignada en perfil</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 600, color: '#2563EB' }}>🏢 Auto-asignada según fecha</span>
                     </label>
                     <select
-                      className="form-control bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-not-allowed opacity-75"
+                      className="form-control"
                       value={form.dependencia || ''}
                       onChange={f('dependencia')}
-                      disabled={true}
-                      title="Campo bloqueado: se asigna automáticamente según el área del perfil del empleado."
-                      style={{
-                        cursor: 'not-allowed',
-                        opacity: 0.75,
-                        backgroundColor: 'var(--bg-disabled, rgba(241, 245, 249, 0.85))',
-                      }}
+                      title="Área a la que se cargará la novedad. Se autoasigna según la fecha del evento y los períodos del colaborador."
                     >
                       <option value="">— Sin área asignada —</option>
                       {form.dependencia && !dependencias.includes(form.dependencia) && (
@@ -398,7 +456,7 @@ export default function NovedadFormModal({
                       {dependencias.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                     <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                      Área bloqueada para evitar inconsistencias con la ficha del colaborador.
+                      Se asigna automáticamente con el área del colaborador en la fecha de la novedad. Puedes ajustarla si es necesario.
                     </span>
                   </div>
                   <div>

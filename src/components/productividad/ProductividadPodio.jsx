@@ -10,9 +10,11 @@ export default function ProductividadPodio({ cfg, etiquetaPeriodo, top3, statsPe
         {medalla && <Medal size={16} color="#F59E0B" />}
         <div className="pr-podio-avatar">{iniciales(persona.nombre)}</div>
         <span className="pr-podio-name">{persona.nombre}</span>
-        <span className="pr-podio-total">{st.resu}</span>
+        <span className="pr-podio-total">{cfg.usaClientes ? st.totalGen : st.resu}</span>
         {cfg.usaClientes && (
-          <span className="ci-podio-sub">de {st.asig} asignados ({st.pct}%)</span>
+          <span className="ci-podio-sub">
+            {st.frios > 0 ? `${st.resu} asig. + ${st.frios} fríos` : `de ${st.asig} asignados`} ({st.pct}%)
+          </span>
         )}
         <div className="pr-podio-bar" />
       </div>

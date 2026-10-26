@@ -96,27 +96,48 @@ export default function Productividad() {
   }
 
   // Vista aplanada del año activo: cada persona con sus 12 meses de clientes
-  // asignados y resueltos de ese año. El porcentaje de resolución nunca se
-  // guarda: siempre es resueltos ÷ asignados (solo esos dos valores).
+  // asignados, resueltos y clientes en frío de ese año. El porcentaje de resolución
+  // de asignados es resueltos ÷ asignados (meta: 40%). Clientes en frío suma al total general.
   const datos = useMemo(() => datosCrudos.map(p => {
     const resueltos = p.resueltosPorAnio[anioActivo] || Array(MESES.length).fill(0)
     const asignados = p.asignadosPorAnio[anioActivo] || Array(MESES.length).fill(0)
+    const frios = p.friosPorAnio?.[anioActivo] || Array(MESES.length).fill(0)
     const totalResueltos = resueltos.reduce((s, v) => s + v, 0)
     const totalAsignados = asignados.reduce((s, v) => s + v, 0)
-    return { ...p, resueltos, asignados, totalResueltos, totalAsignados, pct: calcPct(totalResueltos, totalAsignados) }
+    const totalFrios = frios.reduce((s, v) => s + v, 0)
+    const totalResueltosGeneral = totalResueltos + totalFrios
+    return {
+      ...p,
+      resueltos,
+      asignados,
+      frios,
+      totalResueltos,
+      totalAsignados,
+      totalFrios,
+      totalResueltosGeneral,
+      pct: calcPct(totalResueltos, totalAsignados),
+    }
   }), [datosCrudos, anioActivo])
 
   const mesFiltroIdx = mesFiltro === 'todos' ? -1 : Number(mesFiltro)
-  // { asig, resu, pct } de una persona en el período seleccionado (mes o año completo)
+  // { asig, resu, frios, totalGen, pct } de una persona en el período seleccionado (mes o año completo)
   const statsPeriodo = useCallback((v) => {
     if (mesFiltroIdx >= 0) {
-      const asig = v.asignados[mesFiltroIdx]
-      const resu = v.resueltos[mesFiltroIdx]
-      return { asig, resu, pct: calcPct(resu, asig) }
+      const asig = v.asignados[mesFiltroIdx] || 0
+      const resu = v.resueltos[mesFiltroIdx] || 0
+      const frios = v.frios?.[mesFiltroIdx] || 0
+      const totalGen = resu + frios
+      return { asig, resu, frios, totalGen, pct: calcPct(resu, asig) }
     }
-    return { asig: v.totalAsignados, resu: v.totalResueltos, pct: v.pct }
+    return {
+      asig: v.totalAsignados,
+      resu: v.totalResueltos,
+      frios: v.totalFrios,
+      totalGen: v.totalResueltosGeneral,
+      pct: v.pct,
+    }
   }, [mesFiltroIdx])
-  const valorPeriodo = useCallback((v) => statsPeriodo(v).resu, [statsPeriodo])
+  const valorPeriodo = useCallback((v) => statsPeriodo(v).totalGen, [statsPeriodo])
 
   const cargosUnicos = useMemo(
     () => Array.from(new Set(datos.map(v => v.cargo).filter(Boolean))),
@@ -127,16 +148,24 @@ export default function Productividad() {
     () => MESES.map((_, i) => datos.reduce((s, v) => s + v.asignados[i], 0)),
     [datos]
   )
-  const monthlyTotals = useMemo( // clientes resueltos por mes (equipo)
+  const monthlyTotals = useMemo( // clientes resueltos asignados por mes (equipo)
     () => MESES.map((_, i) => datos.reduce((s, v) => s + v.resueltos[i], 0)),
     [datos]
+  )
+  const monthlyFrios = useMemo( // clientes en frío por mes (equipo)
+    () => MESES.map((_, i) => datos.reduce((s, v) => s + (v.frios[i] || 0), 0)),
+    [datos]
+  )
+  const monthlyTotalGen = useMemo( // total resueltos general (asignados resueltos + fríos)
+    () => MESES.map((_, i) => monthlyTotals[i] + monthlyFrios[i]),
+    [monthlyTotals, monthlyFrios]
   )
   const monthlyPct = useMemo(
     () => monthlyTotals.map((r, i) => calcPct(r, monthlyAsignados[i])),
     [monthlyTotals, monthlyAsignados]
   )
-  const maxMensual = Math.max(...monthlyTotals, ...(cfg.usaClientes ? monthlyAsignados : []), 1)
-  const mesesConDatos = monthlyTotals.map((v, i) => ({ v, i })).filter(m => m.v > 0)
+  const maxMensual = Math.max(...monthlyTotalGen, ...(cfg.usaClientes ? monthlyAsignados : []), 1)
+  const mesesConDatos = monthlyTotalGen.map((v, i) => ({ v, i })).filter(m => m.v > 0)
   const mejorMesIdx = mesesConDatos.length
     ? mesesConDatos.reduce((a, b) => (b.v > a.v ? b : a)).i
     : -1
@@ -144,21 +173,24 @@ export default function Productividad() {
   const resumenPeriodo = useMemo(() => {
     const asignados = datos.reduce((s, v) => s + statsPeriodo(v).asig, 0)
     const resueltos = datos.reduce((s, v) => s + statsPeriodo(v).resu, 0)
-    return { asignados, resueltos, pct: calcPct(resueltos, asignados) }
+    const frios = datos.reduce((s, v) => s + statsPeriodo(v).frios, 0)
+    const totalGen = resueltos + frios
+    return { asignados, resueltos, frios, totalGen, pct: calcPct(resueltos, asignados) }
   }, [datos, statsPeriodo])
-  const totalGeneral = resumenPeriodo.resueltos
+  const totalGeneral = resumenPeriodo.totalGen
   const promedioEquipo = datos.length ? totalGeneral / datos.length : 0
-  // Ranking: más clientes resueltos primero; a igualdad, mayor % de resolución
+
+  // Ranking: más clientes resueltos generales primero; a igualdad, mayor % de resolución
   const rankedByPeriodo = useMemo(
     () => [...datos].sort((a, b) => {
       const sa = statsPeriodo(a)
       const sb = statsPeriodo(b)
-      return (sb.resu - sa.resu) || (sb.pct - sa.pct)
+      return (sb.totalGen - sa.totalGen) || (sb.resu - sa.resu) || (sb.pct - sa.pct)
     }),
     [datos, statsPeriodo]
   )
   const top3 = rankedByPeriodo.slice(0, 3)
-  const ultimoMesVacio = monthlyTotals[monthlyTotals.length - 1] === 0
+  const ultimoMesVacio = monthlyTotalGen[monthlyTotalGen.length - 1] === 0
 
   const etiquetaPeriodo = mesFiltroIdx >= 0 ? `${MESES_FULL[mesFiltroIdx]} ${anioActivo}` : `de ${anioActivo}`
 
@@ -171,7 +203,11 @@ export default function Productividad() {
     if (q) list = list.filter(v => v.nombre.toLowerCase().includes(q))
     if (filtroCargo !== 'todos') list = list.filter(v => v.cargo === filtroCargo)
     const dir = ordenDir === 'asc' ? 1 : -1
-    const claveOrden = ordenCol === 'asignados' ? 'asig' : ordenCol === 'pct' ? 'pct' : 'resu'
+    const claveOrden = ordenCol === 'asignados' ? 'asig'
+      : ordenCol === 'pct' ? 'pct'
+      : ordenCol === 'frios' ? 'frios'
+      : ordenCol === 'totalGen' ? 'totalGen'
+      : 'resu'
     list.sort((a, b) => {
       if (ordenCol === 'nombre') return a.nombre.localeCompare(b.nombre) * dir
       if (ordenCol === 'cargo') return a.cargo.localeCompare(b.cargo) * dir
@@ -201,6 +237,7 @@ export default function Productividad() {
         anio: anioActivo,
         asignados: [...v.asignados],
         resueltos: [...v.resueltos],
+        frios: [...(v.frios || Array(MESES.length).fill(0))],
       },
     })
   }
@@ -256,6 +293,7 @@ export default function Productividad() {
             ...detalle,
             asignados: detalle.asignadosPorAnio[anioActivo] || Array(MESES.length).fill(0),
             resueltos: detalle.resueltosPorAnio[anioActivo] || Array(MESES.length).fill(0),
+            frios: detalle.friosPorAnio?.[anioActivo] || Array(MESES.length).fill(0),
           })}
         />
       )}
@@ -333,6 +371,7 @@ export default function Productividad() {
         datos={datos} promedioEquipo={promedioEquipo} resumenPeriodo={resumenPeriodo}
         rankedByPeriodo={rankedByPeriodo} valorPeriodo={valorPeriodo} statsPeriodo={statsPeriodo}
         mejorMesIdx={mejorMesIdx} monthlyTotals={monthlyTotals} MESES={MESES}
+        currentCompany={currentCompany} mesFiltroIdx={mesFiltroIdx}
       />
 
       {/* Podio top 3 */}

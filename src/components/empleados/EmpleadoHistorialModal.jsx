@@ -17,7 +17,7 @@ import { CONCEPTOS_CON_FECHA, calcularEdad, formatCOP } from './empleadosConstan
 import {
   formatFecha, calcAntiguedadEmpleado,
   getEstadoVacacionActual, obtenerPeriodosVacacionesEmpleado,
-  formatoDias, formatoDiasTexto
+  formatoDias, formatoDiasTexto, obtenerFechaIngresoContinua
 } from '../../utils/vacacionesHelpers'
 import { hoyISO } from '../../utils/fecha'
 import { evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
@@ -95,10 +95,12 @@ export default function EmpleadoHistorialModal({
     const tieneDetalleCompleto = propSelectedEmp && (propSelectedEmp.numero_documento || propSelectedEmp.celular || propSelectedEmp.salario_base)
     if (effectiveId && !tieneDetalleCompleto && typeof effectiveId === 'string' && effectiveId.includes('-')) {
       let cancel = false
-      setLoadingAsync(true)
+      queueMicrotask(() => {
+        if (!cancel) setLoadingAsync(true)
+      })
       Promise.allSettled([
         supabase.from('empleados').select('*').eq('id', effectiveId).maybeSingle(),
-        propPeriodos?.length ? Promise.resolve({ data: propPeriodos }) : supabase.from('periodos_laborales').select('*').eq('empleado_id', effectiveId).order('numero_periodo', { ascending: true }),
+        propPeriodos?.length ? Promise.resolve({ data: propPeriodos }) : supabase.from('empleado_periodos').select('*').eq('empleado_id', effectiveId).order('numero_periodo', { ascending: true }),
         propVacaciones?.length ? Promise.resolve({ data: propVacaciones }) : supabase.from('vacaciones').select('*').eq('empleado_id', effectiveId).order('fecha_inicio', { ascending: false }),
         propProcesos?.length ? Promise.resolve({ data: propProcesos }) : supabase.from('procesos_disciplinarios').select('*').eq('empleado_id', effectiveId),
       ]).then(([resEmp, resPer, resVac, resProc]) => {
@@ -191,7 +193,9 @@ export default function EmpleadoHistorialModal({
   const obsLiq = selectedEmp.observacion_liquidacion || ultimoPeriodoCerrado?.observacion_liquidacion || ''
 
   // Fechas contractuales y edad
-  const fechaInicioActual = selectedEmp.fecha_inicio_empresa_actual || periodoActivo?.fecha_ingreso || selectedEmp.fecha_ingreso || ''
+  const fechaInicioActual = (periodoActivo?.continuidad_laboral
+    ? (obtenerFechaIngresoContinua(periodoActivo, listaPeriodos) || selectedEmp.fecha_ingreso || selectedEmp.fecha_inicio_empresa_actual)
+    : (selectedEmp.fecha_inicio_empresa_actual || periodoActivo?.fecha_ingreso || selectedEmp.fecha_ingreso)) || ''
   const fechaPrimerIngreso = selectedEmp.fecha_primer_ingreso || ''
   const fechaTerminacionAnterior = selectedEmp.fecha_terminacion_anterior || ''
   const tieneHistorialPrevio = Boolean(fechaPrimerIngreso || fechaTerminacionAnterior)

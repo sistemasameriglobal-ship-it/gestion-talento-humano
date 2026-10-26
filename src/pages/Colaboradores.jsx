@@ -96,9 +96,16 @@ export default function Colaboradores() {
 
   const colaboradores = useMemo(() => {
     const acc = {}
+    const empMap = new Map()
+    ;(empleadosTodos || []).forEach(e => {
+      if (e.nombre_completo) empMap.set(e.nombre_completo.trim().toLowerCase(), e)
+    })
+
     rowsDelPeriodo.forEach(r => {
       const k = r.nombre_empleado
-      if (!acc[k]) acc[k] = { nombre: k, area: r.dependencia || '—', novedades: [], diasInc: 0, episodiosInc: 0, porConcepto: {} }
+      const emp = empMap.get((k || '').trim().toLowerCase())
+      const areaOficial = emp?.dependencia || r.dependencia || '—'
+      if (!acc[k]) acc[k] = { nombre: k, area: areaOficial, novedades: [], diasInc: 0, episodiosInc: 0, porConcepto: {} }
       acc[k].novedades.push(r)
       const tipo = normalizarConcepto(r.concepto)
       if (tipo === 'Incapacidad') {
@@ -108,7 +115,7 @@ export default function Colaboradores() {
       if (!acc[k].porConcepto[tipo]) acc[k].porConcepto[tipo] = { episodios: 0, dias: 0 }
       acc[k].porConcepto[tipo].episodios++
       acc[k].porConcepto[tipo].dias += parseFloat(r.total_dias) || 0
-      if (r.dependencia) acc[k].area = r.dependencia
+      if (areaOficial && areaOficial !== '—') acc[k].area = areaOficial
     })
     // Con un mes seleccionado no tiene sentido listar a todos los colaboradores
     // "sin novedades" (serían prácticamente todos); solo se muestran cuando
@@ -116,7 +123,7 @@ export default function Colaboradores() {
     if (!filterMes) {
       empleadosTodos.forEach(e => {
         if (e.activo !== false && !acc[e.nombre_completo]) {
-          acc[e.nombre_completo] = { nombre: e.nombre_completo, area: '—', novedades: [], diasInc: 0, episodiosInc: 0, porConcepto: {}, sinNovedades: true }
+          acc[e.nombre_completo] = { nombre: e.nombre_completo, area: e.dependencia || '—', novedades: [], diasInc: 0, episodiosInc: 0, porConcepto: {}, sinNovedades: true }
         }
       })
     }

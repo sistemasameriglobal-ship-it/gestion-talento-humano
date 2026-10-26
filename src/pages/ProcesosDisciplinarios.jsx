@@ -281,9 +281,9 @@ export default function ProcesosDisciplinarios() {
         const insertData = omit(['id', 'created_at', 'updated_at'], clean)
         const empId = empleados?.mapaIds?.[clean.nombre_empleado] || null
         if (empId) insertData.empleado_id = empId
-        const { error, errorNovedad } = await procesosApi.crearProcesoDisciplinario(insertData, currentCompany)
-        if (error) throw error
-        if (errorNovedad) console.warn('Aviso: proceso disciplinario creado pero no se pudo sincronizar en novedades:', errorNovedad)
+        const res = await procesosApi.crearProcesoDisciplinario(insertData, currentCompany)
+        if (res.error) throw res.error
+        if (res.errorNovedad) console.warn('Aviso: proceso disciplinario creado pero no se pudo sincronizar en novedades:', res.errorNovedad)
 
         logAccion('CREAR', 'procesos_disciplinarios', null, currentCompany, { empleado: clean.nombre_empleado, concepto: clean.concepto })
       } else {
@@ -291,7 +291,6 @@ export default function ProcesosDisciplinarios() {
         const rest = omit(['id', 'created_at', 'updated_at'], clean)
         const { error } = await procesosApi.actualizarProcesoDisciplinario(clean.id, rest)
         if (error) throw error
-        if (errorNovedad) console.warn('Aviso: proceso disciplinario creado pero no se pudo sincronizar en novedades:', errorNovedad)
 
         logAccion('ACTUALIZAR', 'procesos_disciplinarios', clean.id, currentCompany, { empleado: clean.nombre_empleado, concepto: clean.concepto })
       }

@@ -102,3 +102,26 @@ export function sanitizeForm(data) {
     total_dias: data.total_dias === '' ? null : data.total_dias,
   }
 }
+
+/**
+ * Obtiene el período laboral exacto que corresponde a una fecha dada.
+ * Si el empleado cambió de área/cargo, permite saber a qué dependencia y cargo
+ * pertenecía en el momento exacto en que ocurrió la novedad.
+ */
+export function obtenerPeriodoPorFecha(periodos = [], fecha) {
+  if (!fecha || !periodos || periodos.length === 0) return null
+  const ordenados = [...periodos].sort((a, b) => (a.fecha_ingreso || '').localeCompare(b.fecha_ingreso || ''))
+  // 1. Coincidencia dentro del rango del periodo
+  const match = ordenados.find(p => {
+    const fIni = p.fecha_ingreso || '0000-00-00'
+    const fFin = p.fecha_retiro || '9999-99-99'
+    return fecha >= fIni && fecha <= fFin
+  })
+  if (match) return match
+  // 2. Si la fecha es anterior al primer período registrado
+  if (fecha < (ordenados[0].fecha_ingreso || '9999-99-99')) {
+    return ordenados[0]
+  }
+  // 3. Si la fecha es posterior al último período registrado
+  return ordenados[ordenados.length - 1]
+}

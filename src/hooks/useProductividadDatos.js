@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import * as empleadosApi from '../api/empleados'
 import * as productividadApi from '../api/productividad'
 import * as procesosApi from '../api/procesosDisciplinarios'
-import { METRICA, METRICA_ASIGNADOS, METRICA_RESUELTOS, MESES, MESES_FULL, ANIO_ACTUAL, normalizeNombre } from '../utils/productividadConstants'
+import { METRICA, METRICA_ASIGNADOS, METRICA_RESUELTOS, METRICA_FRIOS, MESES, MESES_FULL, ANIO_ACTUAL, normalizeNombre } from '../utils/productividadConstants'
 
 // Encapsula la carga de datos (empleados + resumen + productividad + procesos
 // disciplinarios) y las operaciones de guardado/eliminación para la vista
@@ -13,10 +13,11 @@ import { METRICA, METRICA_ASIGNADOS, METRICA_RESUELTOS, MESES, MESES_FULL, ANIO_
 // Modelo de datos por persona:
 //   resueltosPorAnio: { 2026: [12 valores] }  → Clientes Resueltos
 //   asignadosPorAnio: { 2026: [12 valores] }  → Clientes Asignados
+//   friosPorAnio:     { 2026: [12 valores] }  → Clientes en Frío (Redes Sociales / Prospección)
 // (En departamentos sin usaClientes, "resueltos" guarda el valor único
-// "Producción" y "asignados" queda vacío.)
+// "Producción" y "asignados"/"frios" quedan vacíos.)
 export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setModal, setAnioActivo, currentCompany }) {
-  const [datosCrudos, setDatosCrudos] = useState([]) // [{ nombre, cargo, ingreso, procesos, resueltosPorAnio: {2025:[...]}, asignadosPorAnio: {2025:[...]} }]
+  const [datosCrudos, setDatosCrudos] = useState([]) // [{ nombre, cargo, ingreso, procesos, resueltosPorAnio: {2025:[...]}, asignadosPorAnio: {2025:[...]}, friosPorAnio: {2025:[...]} }]
   const [cargando, setCargando] = useState(true)
   const [refrescando, setRefrescando] = useState(false)
   const [errorCarga, setErrorCarga] = useState(null)
@@ -28,12 +29,15 @@ export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setMo
     silencioso ? setRefrescando(true) : setCargando(true)
     setErrorCarga(null)
     try {
-      const [empleadosRes, resumenRes, prodRes, asigRes, procesosRes] = await Promise.all([
+      const [empleadosRes, resumenRes, prodRes, asigRes, friosRes, procesosRes] = await Promise.all([
         empleadosApi.listarEmpleadosActivosPorDependencia(cfg.dependenciaEmpleados, currentCompany),
         productividadApi.listarResumenPorDepartamento(cfg.departamento, currentCompany),
         productividadApi.listarProductividadPorDepartamento(cfg.departamento, cfg.usaClientes ? METRICA_RESUELTOS : METRICA, currentCompany),
         cfg.usaClientes
           ? productividadApi.listarProductividadPorDepartamento(cfg.departamento, METRICA_ASIGNADOS, currentCompany)
+          : Promise.resolve({ data: [], error: null }),
+        cfg.usaClientes
+          ? productividadApi.listarProductividadPorDepartamento(cfg.departamento, METRICA_FRIOS, currentCompany)
           : Promise.resolve({ data: [], error: null }),
         procesosApi.listarProcesosDisciplinariosPorDepartamento(cfg.dependenciaEmpleados, currentCompany),
       ])
@@ -41,6 +45,7 @@ export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setMo
       if (resumenRes.error) throw resumenRes.error
       if (prodRes.error) throw prodRes.error
       if (asigRes.error) throw asigRes.error
+      if (friosRes.error) throw friosRes.error
       // Los procesos disciplinarios son un "plus" informativo: si falla esa consulta
       // (p.ej. permisos) no debe romper toda la vista de Productividad.
       if (procesosRes.error) console.error('No se pudieron cargar procesos disciplinarios:', procesosRes.error)
@@ -72,6 +77,7 @@ export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setMo
           ingreso: e.fecha_ingreso || '',
           resueltosPorAnio: {},
           asignadosPorAnio: {},
+          friosPorAnio: {},
           procesos: procesosPorNombre.get(normalizeNombre(e.nombre_completo)) || [],
         })
       })
@@ -99,6 +105,7 @@ export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setMo
       })
       volcar(prodRes.data, 'resueltosPorAnio')
       volcar(asigRes.data, 'asignadosPorAnio')
+      volcar(friosRes.data, 'friosPorAnio')
 
       setDatosCrudos(Array.from(porNombre.values()))
       if (!silencioso && anioMasReciente) setAnioActivo(anioMasReciente)
@@ -123,11 +130,20 @@ export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setMo
     const anio = Number(form.anio) || ANIO_ACTUAL
 
     try {
-      const totalAnio = form.resueltos.reduce((s, v) => s + (Number(v) || 0), 0)
+      const resueltosArr = form.resueltos || []
+      const friosArr = form.frios || []
+      const totalResuAnio = resueltosArr.reduce((s, v) => s + (Number(v) || 0), 0)
+      const totalFriosAnio = friosArr.reduce((s, v) => s + (Number(v) || 0), 0)
+      const totalAnio = totalResuAnio + totalFriosAnio
+
       // El total_periodo guardado en el resumen refleja el total histórico de
-      // clientes resueltos (todos los años ya cargados + este)
+      // clientes resueltos generales (resueltos asignados + clientes en frío de todos los años)
       const totalHistorico = Object.entries(modal?.persona?.resueltosPorAnio || {})
-        .reduce((s, [a, meses]) => s + (Number(a) === anio ? 0 : meses.reduce((x, y) => x + y, 0)), 0) + totalAnio
+        .reduce((s, [a, meses]) => {
+          if (Number(a) === anio) return s
+          const friosHist = modal?.persona?.friosPorAnio?.[a] || []
+          return s + meses.reduce((x, y) => x + y, 0) + friosHist.reduce((x, y) => x + y, 0)
+        }, 0) + totalAnio
 
       const { error: eResumen } = await productividadApi.upsertResumen({
           nombre_empleado: nombreTrim,
@@ -146,11 +162,15 @@ export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setMo
         periodo,
         metrica,
         anio,
-        valor: Number(valores[i]) || 0,
+        valor: Number(valores?.[i]) || 0,
         updated_at: ahora,
       }))
       const filasProd = cfg.usaClientes
-        ? [...filasDe(METRICA_ASIGNADOS, form.asignados), ...filasDe(METRICA_RESUELTOS, form.resueltos)]
+        ? [
+            ...filasDe(METRICA_ASIGNADOS, form.asignados),
+            ...filasDe(METRICA_RESUELTOS, form.resueltos),
+            ...filasDe(METRICA_FRIOS, form.frios || Array(MESES.length).fill(0)),
+          ]
         : filasDe(METRICA, form.resueltos)
       const { error: eProd } = await productividadApi.upsertProductividad(filasProd, currentCompany)
       if (eProd) throw eProd
@@ -167,14 +187,15 @@ export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setMo
   }
 
   // Importación masiva desde Excel (Ventas / UW-BS). Recibe filas ya validadas:
-  // { nombre, anio, mes, asignados?, resueltos? }. Un valor ausente no se toca.
+  // { nombre, anio, mes, asignados?, resueltos?, frios? }. Un valor ausente no se toca.
   async function importarFilas(filas) {
     const ahora = new Date().toISOString()
     const rows = []
-    filas.forEach(({ nombre, anio, mes, asignados, resueltos }) => {
+    filas.forEach(({ nombre, anio, mes, asignados, resueltos, frios }) => {
       const base = { nombre_empleado: nombre, departamento: cfg.departamento, periodo: mes, anio, updated_at: ahora }
       if (asignados !== undefined) rows.push({ ...base, metrica: METRICA_ASIGNADOS, valor: asignados })
       if (resueltos !== undefined) rows.push({ ...base, metrica: METRICA_RESUELTOS, valor: resueltos })
+      if (frios !== undefined) rows.push({ ...base, metrica: METRICA_FRIOS, valor: frios })
     })
     for (let i = 0; i < rows.length; i += 400) {
       const { error } = await productividadApi.upsertProductividad(rows.slice(i, i + 400), currentCompany)
@@ -193,7 +214,7 @@ export function useProductividadDatos({ cfg, deptoActivo, esCierre, modal, setMo
       if (e2) throw e2
       // Sigue activo(a) en Ventas: se queda en la lista, solo con los datos en 0.
       setDatosCrudos(prev => prev.map(d => d.nombre === nombre
-        ? { ...d, resueltosPorAnio: {}, asignadosPorAnio: {} }
+        ? { ...d, resueltosPorAnio: {}, asignadosPorAnio: {}, friosPorAnio: {} }
         : d))
     } catch (err) {
       console.error(err)

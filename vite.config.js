@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
+    chunkSizeWarningLimit: 1200,
     rolldownOptions: {
       output: {
         codeSplitting: {
@@ -26,6 +27,12 @@ export default defineConfig({
               name: 'icons',
               test: /node_modules[\\/]lucide-react[\\/]/,
               priority: 15,
+            },
+            // Supabase Client
+            {
+              name: 'supabase-vendor',
+              test: /node_modules[\\/]@supabase[\\/]/,
+              priority: 10,
             },
             // NOTA: xlsx y exceljs NO se agrupan aquí a propósito — se importan
             // dinámicamente (solo al importar/exportar), así que Rolldown les

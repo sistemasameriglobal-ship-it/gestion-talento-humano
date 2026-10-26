@@ -17,6 +17,16 @@ export const METRICA = 'Producción'
 // Métricas de los departamentos con usaClientes: true (Ventas, UW-BS)
 export const METRICA_ASIGNADOS = 'Clientes Asignados'
 export const METRICA_RESUELTOS = 'Clientes Resueltos'
+export const METRICA_FRIOS = 'Clientes en Frío'
+
+// Meta de cumplimiento de resolución para asesores de ventas (40%)
+export const META_RESOLUCION_PCT = 40
+
+// Meta mínima individual mensual de clientes en frío por asesor (11)
+export const META_FRIOS_MINIMO = 11
+
+// Meta mensual global del equipo de ventas (por defecto 600 clientes cerrados, editable)
+export const META_EQUIPO_MENSUAL_DEFAULT = 600
 
 export const DEPTOS = {
   ventas: {

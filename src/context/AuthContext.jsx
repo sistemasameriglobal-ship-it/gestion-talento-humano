@@ -25,11 +25,15 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     mounted.current = true
 
-    authApi.obtenerSesion().then(({ data: { session: s } }) => {
+    authApi.obtenerSesion().then(({ data }) => {
       if (!mounted.current) return
+      const s = data?.session ?? null
       setSession(s)
       if (s?.user) loadPerfil(s.user.id)
       setLoading(false)
+    }).catch(err => {
+      console.warn('No se pudo verificar la sesión inicial:', err?.message || err)
+      if (mounted.current) setLoading(false)
     })
 
     const { data: listener } = authApi.suscribirseACambiosDeSesion((event, newSession) => {
@@ -43,7 +47,7 @@ export function AuthProvider({ children }) {
 
     return () => {
       mounted.current = false
-      listener.subscription.unsubscribe()
+      listener?.subscription?.unsubscribe?.()
     }
   }, [loadPerfil])
 

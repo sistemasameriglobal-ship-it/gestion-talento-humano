@@ -30,7 +30,7 @@ export default function VehicleCard({ row, idx, onView, onEdit, onDelete, onHist
               <div style={{ fontWeight: 700, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {row.nombre_empleado}
               </div>
-              <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: isCarro ? 'var(--info-text)' : isBici ? '#047857' : 'var(--warning-text)', letterSpacing: isBici ? 'normal' : '0.06em', fontFamily: isBici ? 'inherit' : 'monospace', marginTop: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: isCarro ? 'var(--info-text)' : isBici ? '#047857' : 'var(--warning-text)', letterSpacing: isBici ? 'normal' : '0.06em', fontFamily: isBici ? 'inherit' : 'monospace', marginTop: 1 }}>
                 {row.placa || '—'}
               </div>
             </div>

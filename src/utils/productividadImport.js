@@ -17,14 +17,14 @@
 import { MESES_FULL } from './productividadConstants'
 import { normalizarNombre, levenshtein } from './novedadesImport'
 
-export const COLS_CLIENTES = ['Nombre', 'Año', 'Mes', 'Clientes Asignados', 'Clientes Resueltos']
+export const COLS_CLIENTES = ['Nombre', 'Año', 'Mes', 'Clientes Asignados', 'Clientes Resueltos', 'Clientes en Frío']
 export const COLS_CIERRE = [...COLS_CLIENTES, 'Monto Total Gestionado', 'Capital Colocado']
-export const ANCHOS_CLIENTES = [30, 8, 14, 20, 20]
+export const ANCHOS_CLIENTES = [30, 8, 14, 20, 20, 20]
 export const ANCHOS_CIERRE = [...ANCHOS_CLIENTES, 24, 20]
 
 // Campos numéricos de cada modo → clave interna
 const CAMPOS = {
-  clientes: ['asignados', 'resueltos'],
+  clientes: ['asignados', 'resueltos', 'frios'],
   cierre: ['asignados', 'resueltos', 'monto', 'capital'],
 }
 
@@ -38,6 +38,7 @@ const ALIAS = {
   mes: ['mes', 'periodo', 'month'],
   asignados: ['clientes asignados', 'asignados', 'casos asignados', 'cierres asignados'],
   resueltos: ['clientes resueltos', 'resueltos', 'casos resueltos', 'cierres cerrados', 'cierres resueltos'],
+  frios: ['clientes en frio', 'clientes frios', 'frios', 'clientes en frío', 'clientes fríos', 'prospeccion', 'redes sociales', 'redes', 'clientes redes'],
   monto: ['monto total gestionado', 'monto total', 'monto', 'total plata', 'total gestionado'],
   capital: ['capital colocado', 'capital', 'plata prestada', 'dinero prestado', 'colocado'],
 }
@@ -82,7 +83,7 @@ export function parseNumero(v) {
 // Una fila por persona × 12 meses del año. Los meses sin datos quedan en
 // blanco (no en 0) y el importador los ignora.
 
-/** datos: personas de la vista (Productividad.jsx) con .asignados[12] y .resueltos[12]. */
+/** datos: personas de la vista (Productividad.jsx) con .asignados[12], .resueltos[12] y .frios[12]. */
 export function filasExportClientes(datos, anio) {
   const filas = []
   const orden = [...datos].sort((a, b) => a.nombre.localeCompare(b.nombre))
@@ -90,11 +91,13 @@ export function filasExportClientes(datos, anio) {
     MESES_FULL.forEach((mes, i) => {
       const asig = p.asignados?.[i] || 0
       const resu = p.resueltos?.[i] || 0
-      const hayDatos = asig > 0 || resu > 0
+      const fr = p.frios?.[i] || 0
+      const hayDatos = asig > 0 || resu > 0 || fr > 0
       filas.push({
         'Nombre': p.nombre, 'Año': anio, 'Mes': mes,
         'Clientes Asignados': hayDatos ? asig : '',
         'Clientes Resueltos': hayDatos ? resu : '',
+        'Clientes en Frío': hayDatos ? fr : '',
       })
     })
   })
@@ -127,6 +130,7 @@ export function filasInstrucciones(modo) {
     { 'Columna': 'Mes', 'Qué poner': 'Nombre del mes (Enero…Diciembre), abreviatura (Ene, Feb…) o número 1–12.' },
     { 'Columna': 'Clientes Asignados', 'Qué poner': 'Número entero ≥ 0. Vacío = no se modifica el valor actual.' },
     { 'Columna': 'Clientes Resueltos', 'Qué poner': 'Número entero ≥ 0. Vacío = no se modifica el valor actual.' },
+    { 'Columna': 'Clientes en Frío', 'Qué poner': 'Número entero ≥ 0 (prospectados en redes sociales). Vacío = no se modifica.' },
   ]
   if (modo === 'cierre') {
     base.push(
@@ -134,7 +138,7 @@ export function filasInstrucciones(modo) {
       { 'Columna': 'Capital Colocado', 'Qué poner': 'Dinero (puede llevar decimales). Vacío = no se modifica.' },
     )
   }
-  base.push({ 'Columna': '% de resolución', 'Qué poner': 'No se escribe: siempre se calcula (resueltos ÷ asignados).' })
+  base.push({ 'Columna': '% de resolución', 'Qué poner': 'No se escribe: siempre se calcula (resueltos ÷ asignados, meta 40%).' })
   base.push({ 'Columna': 'Antes de guardar', 'Qué poner': 'Al importar verás una vista previa: nada se guarda hasta que confirmes.' })
   return base
 }
@@ -235,7 +239,7 @@ export function parsearImportProductividad(raw, { modo, empleadosIndex, anioDefa
 
     const negativo = Object.entries(numeros).find(([, n]) => n < 0)
     if (negativo) return omitir('No se permiten valores negativos')
-    const noEntero = ['asignados', 'resueltos'].find(k => k in numeros && !Number.isInteger(numeros[k]))
+    const noEntero = ['asignados', 'resueltos', 'frios'].find(k => k in numeros && !Number.isInteger(numeros[k]))
     if (noEntero) return omitir(`${cols[claves.indexOf(noEntero)]} debe ser un número entero`)
 
     const advertencias = []

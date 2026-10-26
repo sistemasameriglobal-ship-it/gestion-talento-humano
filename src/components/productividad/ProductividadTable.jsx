@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { Search, ArrowUp, ArrowDown, ArrowUpDown, Eye, Pencil, Trash2, Loader2, ShieldAlert, FileSpreadsheet } from 'lucide-react'
-import { MESES_FULL } from '../../utils/productividadConstants'
+import { MESES_FULL, META_FRIOS_MINIMO } from '../../utils/productividadConstants'
 import { iniciales, fmtFecha, noHabiaIngresado } from '../../utils/productividadHelpers'
 import PctBar from './PctBar'
 import { exportarExcel } from '../../utils/exportarExcel'
@@ -38,7 +38,8 @@ export default function ProductividadTable({
     const i = MESES_FULL.indexOf(mes)
     const asignados = p?.asignadosPorAnio?.[anio]?.[i] || 0
     const resueltos = p?.resueltosPorAnio?.[anio]?.[i] || 0
-    return asignados || resueltos ? { asignados, resueltos } : null
+    const frios = p?.friosPorAnio?.[anio]?.[i] || 0
+    return asignados || resueltos || frios ? { asignados, resueltos, frios } : null
   }, [datosCrudos])
 
   async function handleExportar() {
@@ -137,7 +138,9 @@ export default function ProductividadTable({
                 <>
                   <ThOrdenable col="asignados" center wrap ordenCol={ordenCol} ordenDir={ordenDir} onToggle={toggleOrden}>Clientes asignados</ThOrdenable>
                   <ThOrdenable col="resueltos" center wrap ordenCol={ordenCol} ordenDir={ordenDir} onToggle={toggleOrden}>Clientes resueltos</ThOrdenable>
-                  <ThOrdenable col="pct" center ordenCol={ordenCol} ordenDir={ordenDir} onToggle={toggleOrden}>% Resolución</ThOrdenable>
+                  <ThOrdenable col="pct" center ordenCol={ordenCol} ordenDir={ordenDir} onToggle={toggleOrden}>% Resolución (Meta 40%)</ThOrdenable>
+                  <ThOrdenable col="frios" center wrap ordenCol={ordenCol} ordenDir={ordenDir} onToggle={toggleOrden}>Clientes en frío</ThOrdenable>
+                  <ThOrdenable col="totalGen" center wrap ordenCol={ordenCol} ordenDir={ordenDir} onToggle={toggleOrden}>Total resueltos</ThOrdenable>
                 </>
               ) : (
                 <ThOrdenable col="resueltos" ordenCol={ordenCol} ordenDir={ordenDir} onToggle={toggleOrden}>{mesFiltroIdx >= 0 ? MESES_FULL[mesFiltroIdx] : 'Total'}</ThOrdenable>
@@ -148,7 +151,7 @@ export default function ProductividadTable({
           </thead>
           <tbody>
             {filas.length === 0 ? (
-              <tr><td colSpan={cfg.usaClientes ? 9 : 7} className="pr-empty">
+              <tr><td colSpan={cfg.usaClientes ? 11 : 7} className="pr-empty">
                 {datos.length === 0
                   ? `No hay empleados activos con dependencia ${cfg.dependenciaEmpleados} (${cfg.tabLabel}). Agrégalos o actívalos en la sección Empleados.`
                   : 'No se encontraron resultados para tu búsqueda.'}
@@ -192,7 +195,7 @@ export default function ProductividadTable({
                   </td>
                   {cfg.usaClientes ? (
                     sinIngresoPeriodo ? (
-                      <td colSpan={3} style={{ textAlign: 'center' }}>
+                      <td colSpan={5} style={{ textAlign: 'center' }}>
                         <span className="ci-na-cell" title={`Ingresó el ${fmtFecha(v.ingreso)}`}>N/A</span>
                       </td>
                     ) : (
@@ -200,6 +203,23 @@ export default function ProductividadTable({
                         <td className="pr-num-cell pr-num-cell--muted">{st.asig.toLocaleString('es-CO')}</td>
                         <td className="pr-num-cell">{st.resu.toLocaleString('es-CO')}</td>
                         <td className="pr-pct-wrap"><PctBar value={st.pct} /></td>
+                        <td className="pr-num-cell" style={{ color: st.frios > 0 ? '#0284C7' : 'var(--text-muted)' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}>
+                            <span>{st.frios.toLocaleString('es-CO')}</span>
+                            {mesFiltroIdx >= 0 && (
+                              st.frios >= META_FRIOS_MINIMO ? (
+                                <span className="pr-frio-cumple" title={`Cumple meta mínima (${st.frios} de mín. ${META_FRIOS_MINIMO})`}>✓</span>
+                              ) : (
+                                <span className="pr-frio-alerta" title={`Bajo meta (${st.frios}/${META_FRIOS_MINIMO} en frío)`}>
+                                  {st.frios}/{META_FRIOS_MINIMO}
+                                </span>
+                              )
+                            )}
+                          </div>
+                        </td>
+                        <td className="pr-num-cell" style={{ color: 'var(--primary)', fontWeight: 800 }}>
+                          {st.totalGen.toLocaleString('es-CO')}
+                        </td>
                       </>
                     )
                   ) : (

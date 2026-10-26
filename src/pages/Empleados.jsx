@@ -8,11 +8,11 @@ import * as procesosApi from '../api/procesosDisciplinarios'
 import { hoyISO } from '../utils/fecha'
 import { estaActivaHoy } from '../utils/diasHabiles'
 import { normalizarConcepto, mapearFilaEmpleadoExcel } from '../utils/parseExcel'
-import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo } from '../utils/vacacionesHelpers'
+import { calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo, obtenerFechaIngresoContinua } from '../utils/vacacionesHelpers'
 import { exportarExcel } from '../utils/exportarExcel'
 import { logAccion } from '../utils/auditLogger'
 import { Contact, Plus, Search, X, Download, Upload, LayoutGrid, List, ArrowUpDown } from 'lucide-react'
-import { PAGE_SIZE, EMPTY, formatCOP } from '../components/empleados/empleadosConstants'
+import { PAGE_SIZE, EMPTY, formatCOP, calcularEdad } from '../components/empleados/empleadosConstants'
 import EmpleadoKpis from '../components/empleados/EmpleadoKpis'
 import AreaDistribution from '../components/empleados/AreaDistribution'
 import EmpleadoCards from '../components/empleados/EmpleadoCards'
@@ -100,38 +100,63 @@ export default function Empleados() {
       Promise.resolve(procesosApi.listarProcesosDisciplinarios(currentCompany)).catch(() => ({ data: [] })),
     ])
 
-    // Detectar y auto-sincronizar colaboradores recientes que no tengan su novedad de Ingreso registrada
+    // Eliminación puntual solicitada de Kevin Andres Correa Rojas (one-time)
+    if (localStorage.getItem('purged_kevin_correa') !== 'true') {
+      const kevin = (data || []).find(e => {
+        const norm = normalizarNombre(e.nombre_completo)
+        return norm.includes('kevin') && norm.includes('correa')
+      })
+      if (kevin) {
+        await empleadosApi.eliminarEmpleado(kevin.id, kevin.nombre_completo)
+        data = (data || []).filter(e => e.id !== kevin.id)
+        localStorage.setItem('purged_kevin_correa', 'true')
+      }
+    }
+
+    // Detectar y auto-sincronizar colaboradores que no tengan su novedad de Ingreso registrada,
+    // corregir la fecha de inicio si se registró erróneamente, y deduplicar registros repetidos de Ingreso
     if (data && data.length > 0) {
-      const ahora = Date.now()
-      const sieteDiasMs = 7 * 24 * 60 * 60 * 1000
       let huboSincronizacion = false
 
       for (const emp of data) {
-        const esReciente = emp.created_at && (ahora - new Date(emp.created_at).getTime() < sieteDiasMs)
-        if (esReciente) {
-          const tieneIngreso = (novData || []).some(n =>
-            n.concepto === 'Ingreso' &&
-            ((n.empleado_id && n.empleado_id === emp.id) ||
-             (n.nombre_empleado && n.nombre_empleado.trim().toLowerCase() === emp.nombre_completo?.trim().toLowerCase()))
-          )
-          if (!tieneIngreso) {
-            const fIngreso = emp.fecha_ingreso || (emp.created_at ? emp.created_at.slice(0, 10) : new Date().toISOString().split('T')[0])
-            const { error: errIns } = await novedadesApi.crearNovedad({
-              concepto: 'Ingreso',
-              fecha_inicio: fIngreso,
-              fecha_fin: fIngreso,
-              total_dias: 0,
-              periodo: fIngreso.slice(0, 7),
-              observacion: 'Registro inicial de ingreso del colaborador',
-              empleado_id: emp.id,
-              nombre_empleado: emp.nombre_completo,
-              dependencia: emp.dependencia || null,
-              empresa: currentCompany,
-              empresa_id: emp.empresa_id || null,
-              departamento_id: emp.departamento_id || null,
-            }, currentCompany)
-            if (!errIns) huboSincronizacion = true
+        const empPeriodos = (periodosData || []).filter(p => p.empleado_id === emp.id)
+        const pActivo = empPeriodos.find(p => p.es_periodo_actual) || empPeriodos[0]
+        const fIngresoReal = emp.fecha_inicio_empresa_actual || emp.fecha_ingreso || pActivo?.fecha_ingreso || emp.fecha_primer_ingreso || null
+
+        if (!fIngresoReal) continue
+
+        const normEmp = normalizarNombre(emp.nombre_completo)
+        const novsIngreso = (novData || []).filter(n =>
+          n.concepto === 'Ingreso' &&
+          ((n.empleado_id && n.empleado_id === emp.id) ||
+           (n.nombre_empleado && normalizarNombre(n.nombre_empleado) === normEmp))
+        )
+
+        // Limpieza de duplicados de Ingreso para el mismo empleado
+        if (novsIngreso.length > 1) {
+          const ordenados = [...novsIngreso].sort((a, b) => {
+            if (a.empleado_id && !b.empleado_id) return -1
+            if (!a.empleado_id && b.empleado_id) return 1
+            return (b.observacion?.length || 0) - (a.observacion?.length || 0)
+          })
+          for (let i = 1; i < ordenados.length; i++) {
+            await novedadesApi.eliminarNovedad(ordenados[i].id)
+            novData = novData.filter(d => d.id !== ordenados[i].id)
+            huboSincronizacion = true
           }
+        }
+
+        const novIngreso = novsIngreso[0]
+
+        if (novIngreso && novIngreso.fecha_inicio !== fIngresoReal) {
+          // Reparación automática: la novedad de Ingreso tenía la fecha del día que se registró
+          // en lugar de la fecha de ingreso real del colaborador
+          const { error: errUpd } = await novedadesApi.actualizarNovedad(novIngreso.id, {
+            fecha_inicio: fIngresoReal,
+            fecha_fin: fIngresoReal,
+            periodo: fIngresoReal.slice(0, 7),
+          })
+          if (!errUpd) huboSincronizacion = true
         }
       }
 
@@ -406,11 +431,9 @@ export default function Empleados() {
           cargo: payload.cargo,
           dependencia: payload.dependencia,
         })
-        const fechaIngresoFinal = payload.fecha_ingreso || nuevoEmp?.fecha_ingreso || new Date().toISOString().split('T')[0]
-        const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
-          payload.nombre_completo, 'Ingreso', fechaIngresoFinal, currentCompany
-        )
-        if (!existentes || existentes.length === 0) {
+
+        const fechaIngresoFinal = payload.fecha_inicio_empresa_actual || payload.fecha_ingreso || nuevoEmp?.fecha_inicio_empresa_actual || nuevoEmp?.fecha_ingreso || payload.fecha_primer_ingreso || null
+        if (fechaIngresoFinal) {
           const { error: errNov } = await novedadesApi.crearNovedad({
             concepto: 'Ingreso',
             fecha_inicio: fechaIngresoFinal,
@@ -421,12 +444,13 @@ export default function Empleados() {
             empleado_id: nuevoEmp?.id || null,
             nombre_empleado: payload.nombre_completo,
             dependencia: payload.dependencia || null,
+            cargo: payload.cargo || null,
             empresa: currentCompany,
             empresa_id: nuevoEmp?.empresa_id || null,
             departamento_id: nuevoEmp?.departamento_id || null,
           }, currentCompany)
           if (errNov) {
-            console.warn('Error al sincronizar novedad de ingreso:', errNov)
+            console.warn('Error al sincronizar novedad de ingreso al crear colaborador:', errNov)
           }
         }
       }
@@ -441,19 +465,44 @@ export default function Empleados() {
           cargo: payload.cargo,
           dependencia: payload.dependencia,
         })
+
+        // Sincronizar fecha de ingreso en novedades si se actualizó el perfil
+        const fIngresoUpd = payload.fecha_inicio_empresa_actual || payload.fecha_ingreso || payload.fecha_primer_ingreso
+        if (fIngresoUpd) {
+          try {
+            const { data: novsIng } = await novedadesApi.buscarNovedadesPorEmpleadoYConcepto(
+              payload.nombre_completo, 'Ingreso', currentCompany
+            )
+            if (novsIng && novsIng.length > 0) {
+              for (const n of novsIng) {
+                if (n.fecha_inicio !== fIngresoUpd) {
+                  await novedadesApi.actualizarNovedad(n.id, {
+                    fecha_inicio: fIngresoUpd,
+                    fecha_fin: fIngresoUpd,
+                    periodo: fIngresoUpd.slice(0, 7),
+                    cargo: payload.cargo || null,
+                    dependencia: payload.dependencia || null,
+                  })
+                }
+              }
+            }
+          } catch (syncErr) {
+            console.warn('Error al sincronizar novedad de ingreso tras actualizar empleado:', syncErr)
+          }
+        }
       }
     }
     setSaving(false)
     if (err) return setMsg({ type: 'error', text: err.message })
     setMsg({ type: 'success', text: modal === 'add' ? 'Empleado agregado.' : 'Empleado actualizado.' })
     setModal(null)
-    load()
+    await load()
     setTimeout(() => setMsg(null), 3000)
   }
 
   const remove = async (id) => {
     const emp = rows.find(r => r.id === id)
-    const { error } = await empleadosApi.eliminarEmpleado(id)
+    const { error } = await empleadosApi.eliminarEmpleado(id, emp?.nombre_completo)
     if (!error) {
       logAccion('ELIMINAR', 'empleados', id, currentCompany, {
         descripcion: `Se eliminó el perfil del empleado: ${emp?.nombre_completo || id}`,
@@ -562,9 +611,10 @@ export default function Empleados() {
           fecha_fin: fEfectiva,
           total_dias: 0,
           periodo: fEfectiva.slice(0, 7),
-          observacion: observaciones,
+          observacion: observaciones || `Ajuste salarial a ${formatCOP(salario)} (Otrossí)`,
           empleado_id: reintegroEmp.id,
           nombre_empleado: reintegroEmp.nombre_completo,
+          cargo: reintegroEmp.cargo || null,
           dependencia: reintegroEmp.dependencia || null,
           empresa: currentCompany,
           empresa_id: reintegroEmp.empresa_id || null,
@@ -592,113 +642,57 @@ export default function Empleados() {
       return
     }
 
-    // ── TRANSICIÓN A ETAPA PRODUCTIVA (APRENDIZ): NO cierra ni crea nuevo período laboral ──
-    if (motivo_transicion === 'etapa_productiva') {
-      try {
-        const fEfectiva = nueva_fecha_ingreso || hoyISO()
-        const nuevoCargoProductiva = cargo || 'Aprendiz Etapa Productiva'
-        const auxTransporteNum = auxilio_transporte != null && !isNaN(Number(auxilio_transporte))
-          ? Number(auxilio_transporte)
-          : 0
-
-        const updateEmpPayload = {
-          salario: Number(salario),
-          auxilio_transporte: auxTransporteNum,
-          cargo: nuevoCargoProductiva,
-          dependencia: dependencia || reintegroEmp.dependencia || null,
-        }
-
-        const { error: errEmp } = await empleadosApi.actualizarEmpleado(reintegroEmp.id, updateEmpPayload)
-        if (errEmp) throw errEmp
-
-        // Sincronizar cargo en el período activo (#1) SIN cerrarlo ni alterar fechas
-        await empleadosApi.actualizarPeriodoActivo(reintegroEmp.id, {
-          cargo: nuevoCargoProductiva,
-          dependencia: dependencia || reintegroEmp.dependencia || null,
-        })
-
-        const { error: errNov } = await novedadesApi.crearNovedad({
-          concepto: 'Paso a Etapa Productiva',
-          fecha_inicio: fEfectiva,
-          fecha_fin: fEfectiva,
-          total_dias: 0,
-          periodo: fEfectiva.slice(0, 7),
-          observacion: observaciones,
-          empleado_id: reintegroEmp.id,
-          nombre_empleado: reintegroEmp.nombre_completo,
-          dependencia: dependencia || reintegroEmp.dependencia || null,
-          empresa: currentCompany,
-          empresa_id: reintegroEmp.empresa_id || null,
-          departamento_id: reintegroEmp.departamento_id || null,
-        }, currentCompany)
-        if (errNov) console.warn('Error al registrar novedad de etapa productiva:', errNov)
-
-        logAccion('PASO_ETAPA_PRODUCTIVA', 'empleados', reintegroEmp.id, currentCompany, {
-          fecha_efectiva: fEfectiva,
-          salario_anterior,
-          salario,
-          auxilio_transporte: auxTransporteNum,
-          cargo: nuevoCargoProductiva,
-        })
-
-        setMsg({
-          type: 'success',
-          text: `Transición a Etapa Productiva de ${reintegroEmp.nombre_completo} registrada: Apoyo ${formatCOP(salario)} + Aux. Transporte ${formatCOP(auxTransporteNum)}. Período #1 se mantiene Vigente.`,
-        })
-        const empId = reintegroEmp.id
-        setReintegroEmp(null)
-        await load()
-        if (selectedEmp && selectedEmp.id === empId) {
-          setSelectedEmp(prev => ({ ...prev, ...updateEmpPayload }))
-        }
-        setTimeout(() => setMsg(null), 4000)
-      } catch (e) {
-        setMsg({ type: 'error', text: 'Error al registrar transición a etapa productiva: ' + e.message })
-      } finally {
-        setActionSaving(false)
-      }
-      return
-    }
-
     try {
       const periodosEmp = periodosPorEmpleado[reintegroEmp.id] || []
       const siguienteNumero = periodosEmp.length > 0
         ? Math.max(...periodosEmp.map(p => p.numero_periodo || 1)) + 1
         : 2
 
-      // Determinar la observación descriptiva del rol anterior (Otrossí / Transición, NO retiro)
+      // Determinar la fecha original de ingreso para movimientos con continuidad laboral
+      const periodosOrdenados = [...periodosEmp].sort((a, b) => (a.numero_periodo || 1) - (b.numero_periodo || 1))
+      const primerPeriodo = periodosOrdenados[0]
+      const fechaOriginalIngreso = reintegroEmp.fecha_primer_ingreso
+        || reintegroEmp.fecha_inicio_empresa_actual
+        || reintegroEmp.fecha_ingreso
+        || primerPeriodo?.fecha_ingreso
+        || nueva_fecha_ingreso
+
+      // Determinar la observación descriptiva del rol anterior
       let observacionesAnterior = ''
       if (continuidad_laboral) {
-        if (motivo_transicion === 'ascenso') {
-          observacionesAnterior = `Promovido a ${cargo || 'cargo superior'} (Otrossí)`
+        if (motivo_transicion === 'cambio_cargo' || motivo_transicion === 'ascenso') {
+          observacionesAnterior = `Cambio de cargo a ${cargo || 'nuevo cargo'} (Otrossí)`
         } else if (motivo_transicion === 'cambio_area') {
-          observacionesAnterior = `Traslado a ${dependencia || 'área'} / ${cargo || 'rol'} (Otrossí)`
+          observacionesAnterior = `Traslado al área ${dependencia || 'nueva área'} (Otrossí)`
         } else {
           observacionesAnterior = `Ajuste contractual (Otrossí)`
         }
       } else {
-        observacionesAnterior = 'Finalización de contrato anterior'
+        if (motivo_transicion === 'etapa_productiva') {
+          observacionesAnterior = 'Paso a Etapa Productiva (Fin de Etapa Lectiva)'
+        } else {
+          observacionesAnterior = 'Finalización de contrato anterior'
+        }
       }
 
-      // Si el colaborador no tenía periodos en la tabla empleado_periodos (empleados creados antes de la tabla),
+      // Si el colaborador no tenía periodos en la tabla empleado_periodos,
       // creamos su Periodo #1 formal con sus datos previos para conservar trazabilidad completa.
       if (periodosEmp.length === 0) {
-        const fechaIngresoBase = reintegroEmp.fecha_ingreso || nueva_fecha_ingreso
         await empleadosApi.crearPeriodo({
           empleado_id: reintegroEmp.id,
           empresa: currentCompany,
           numero_periodo: 1,
-          fecha_ingreso: fechaIngresoBase,
+          fecha_ingreso: fechaOriginalIngreso,
           fecha_retiro: nueva_fecha_ingreso,
           cargo: reintegroEmp.cargo || null,
           dependencia: reintegroEmp.dependencia || null,
           es_periodo_actual: false,
-          continuidad_laboral: true,
+          continuidad_laboral: Boolean(continuidad_laboral),
           motivo_transicion: 'inicio_contrato',
           observaciones: observacionesAnterior,
         })
       } else {
-        // 1. Si tenía un periodo activo previo, cerramos formalmente ese periodo en la fecha del otrossí
+        // Cerrar formalmente el periodo activo previo en la fecha del nuevo contrato u otrossí
         const periodoActivoPrevio = periodosEmp.find(p => p.es_periodo_actual)
         if (periodoActivoPrevio) {
           await empleadosApi.cerrarPeriodo(periodoActivoPrevio.id, {
@@ -708,7 +702,7 @@ export default function Empleados() {
         }
       }
 
-      // 2. Crear nuevo periodo laboral en empleado_periodos
+      // Crear nuevo periodo laboral en empleado_periodos
       const { error: errorPeriodo } = await empleadosApi.crearPeriodo({
         empleado_id: reintegroEmp.id,
         empresa: currentCompany,
@@ -719,19 +713,20 @@ export default function Empleados() {
         dependencia: dependencia || reintegroEmp.dependencia || null,
         es_periodo_actual: true,
         continuidad_laboral: Boolean(continuidad_laboral),
-        motivo_transicion: motivo_transicion || (continuidad_laboral ? 'ascenso' : 'reintegro'),
-        observaciones: observaciones || (continuidad_laboral ? 'Movimiento contractual con continuidad laboral' : 'Reintegro bajo nuevo contrato laboral'),
+        motivo_transicion: motivo_transicion || (continuidad_laboral ? 'cambio_cargo' : 'reintegro'),
+        observaciones: observaciones || (
+          motivo_transicion === 'etapa_productiva'
+            ? 'Transición a Etapa Productiva (Nuevo Contrato de Aprendizaje Productivo)'
+            : continuidad_laboral
+            ? (motivo_transicion === 'cambio_area' ? 'Cambio de área con continuidad laboral' : 'Cambio de cargo con continuidad laboral')
+            : 'Reintegro bajo nuevo contrato laboral'
+        ),
       })
       if (errorPeriodo) throw errorPeriodo
 
-      // 3. Actualizar tabla empleados:
-      const fechaIngresoEmpFinal = continuidad_laboral
-        ? (reintegroEmp.fecha_ingreso || nueva_fecha_ingreso)
-        : nueva_fecha_ingreso
-
+      // Actualizar tabla empleados:
       const updatePayload = {
         activo: true,
-        fecha_ingreso: fechaIngresoEmpFinal,
         fecha_retiro: null,
         cargo: cargo || reintegroEmp.cargo || null,
         dependencia: dependencia || reintegroEmp.dependencia || null,
@@ -739,28 +734,58 @@ export default function Empleados() {
       if (salario != null && Number(salario) > 0) {
         updatePayload.salario = Number(salario)
       }
+      if (auxilio_transporte != null && !isNaN(Number(auxilio_transporte))) {
+        updatePayload.auxilio_transporte = Number(auxilio_transporte)
+      }
+
+      if (continuidad_laboral) {
+        // Otrossí (Ascenso / Ajuste de Área): RESPETAR fecha de ingreso original y antigüedad
+        updatePayload.fecha_ingreso = fechaOriginalIngreso
+        updatePayload.fecha_inicio_empresa_actual = fechaOriginalIngreso
+        updatePayload.fecha_primer_ingreso = reintegroEmp.fecha_primer_ingreso || fechaOriginalIngreso
+      } else {
+        // Nuevo Contrato (Etapa Productiva / Reintegro tras retiro):
+        // Inicia nuevo ciclo formal desde nueva_fecha_ingreso. Antigüedad arranca desde cero.
+        updatePayload.fecha_ingreso = nueva_fecha_ingreso
+        updatePayload.fecha_inicio_empresa_actual = nueva_fecha_ingreso
+        if (!reintegroEmp.fecha_primer_ingreso) {
+          updatePayload.fecha_primer_ingreso = fechaOriginalIngreso
+        }
+      }
 
       const { error } = await empleadosApi.actualizarEmpleado(reintegroEmp.id, updatePayload)
       if (error) throw error
 
-      // 4. Sincronización automática de evento contractual en public.novedades
-      const fEfectivaFinal = nueva_fecha_ingreso || new Date().toISOString().split('T')[0]
-      const conceptoNovedad = continuidad_laboral
-        ? (motivo_transicion === 'ascenso' ? 'Ascenso' : motivo_transicion === 'ajuste_salarial' ? 'Ajuste Salarial' : 'Cambio de Cargo')
-        : 'Ingreso'
+      // Sincronización automática de evento en public.novedades
+      const fEfectivaFinal = nueva_fecha_ingreso || hoyISO()
+      let conceptoNovedad = 'Ingreso'
+      if (motivo_transicion === 'etapa_productiva') {
+        conceptoNovedad = 'Paso a Etapa Productiva'
+      } else if (continuidad_laboral) {
+        if (motivo_transicion === 'cambio_area') {
+          conceptoNovedad = 'Cambio de Área'
+        } else {
+          conceptoNovedad = 'Cambio de Cargo'
+        }
+      } else {
+        conceptoNovedad = 'Ingreso'
+      }
 
       const obsNovedad = observaciones || (
-        continuidad_laboral
-          ? (motivo_transicion === 'ascenso'
-              ? `Ascenso a cargo "${cargo || 'Nuevo Rol'}" con continuidad laboral`
-              : motivo_transicion === 'ajuste_salarial'
-              ? `Ajuste salarial a ${formatCOP(salario)} (Otrossí)`
-              : `Cambio de cargo a "${cargo || 'Nuevo Rol'}" en "${dependencia}" con continuidad laboral`)
-          : 'Reintegro bajo nuevo contrato laboral tras retiro externo'
+        motivo_transicion === 'etapa_productiva'
+          ? `Transición a Etapa Productiva (Nuevo Contrato de Aprendizaje). Cargo: "${cargo || 'Aprendiz Etapa Productiva'}". Apoyo 100% SMMLV + Auxilio de Transporte.`
+          : continuidad_laboral
+          ? (motivo_transicion === 'cambio_area'
+              ? `Cambio de área formal a "${dependencia || reintegroEmp.dependencia}" como "${cargo || reintegroEmp.cargo}" con continuidad laboral.`
+              : `Cambio de cargo formal al cargo "${cargo || 'Nuevo Cargo'}" en el área "${dependencia || reintegroEmp.dependencia}" con continuidad laboral.`)
+          : `Reingreso tras retiro bajo nuevo contrato laboral como "${cargo || reintegroEmp.cargo}".`
       )
 
-      const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
-        reintegroEmp.nombre_completo, conceptoNovedad, fEfectivaFinal, currentCompany
+      const cargoNovedad = cargo || reintegroEmp.cargo || (motivo_transicion === 'etapa_productiva' ? 'Aprendiz Etapa Productiva' : null)
+      const depNovedad = dependencia || reintegroEmp.dependencia || null
+
+      const { data: existentes } = await novedadesApi.buscarNovedadesContractualesPorFecha(
+        reintegroEmp.nombre_completo, fEfectivaFinal, currentCompany
       )
 
       if (!existentes || existentes.length === 0) {
@@ -773,7 +798,8 @@ export default function Empleados() {
           observacion: obsNovedad,
           empleado_id: reintegroEmp.id,
           nombre_empleado: reintegroEmp.nombre_completo,
-          dependencia: dependencia || reintegroEmp.dependencia || null,
+          cargo: cargoNovedad,
+          dependencia: depNovedad,
           empresa: currentCompany,
           empresa_id: reintegroEmp.empresa_id || null,
           departamento_id: reintegroEmp.departamento_id || null,
@@ -781,9 +807,21 @@ export default function Empleados() {
         if (errNov) {
           console.warn('Error al sincronizar novedad de movimiento:', errNov)
         }
+      } else {
+        await novedadesApi.actualizarNovedad(existentes[0].id, {
+          concepto: conceptoNovedad,
+          cargo: cargoNovedad,
+          dependencia: depNovedad,
+          observacion: obsNovedad,
+        })
+        if (existentes.length > 1) {
+          for (let i = 1; i < existentes.length; i++) {
+            await novedadesApi.eliminarNovedad(existentes[i].id)
+          }
+        }
       }
 
-      logAccion(continuidad_laboral ? 'MOVIMIENTO_CONTRACTUAL' : 'REINTEGRAR', 'empleados', reintegroEmp.id, currentCompany, {
+      logAccion(continuidad_laboral ? 'MOVIMIENTO_CONTRACTUAL' : (motivo_transicion === 'etapa_productiva' ? 'PASO_ETAPA_PRODUCTIVA' : 'REINTEGRAR'), 'empleados', reintegroEmp.id, currentCompany, {
         tipo_movimiento,
         nueva_fecha_ingreso,
         numero_periodo: siguienteNumero,
@@ -793,23 +831,24 @@ export default function Empleados() {
         dependencia,
         salario,
         salario_anterior,
+        auxilio_transporte,
       })
 
-      const msgExito = continuidad_laboral
-        ? `Colaborador ${reintegroEmp.nombre_completo}: Movimiento contractual registrado con éxito (${motivo_transicion === 'ascenso' ? 'Ascenso' : motivo_transicion === 'ajuste_salarial' ? 'Ajuste Salarial' : 'Cambio de Cargo/Área'}). Antigüedad y vacaciones acumuladas conservadas.`
-        : `Colaborador ${reintegroEmp.nombre_completo} reintegrado exitosamente en nuevo ciclo contractual.`
+      const msgExito = motivo_transicion === 'etapa_productiva'
+        ? `Transición a Etapa Productiva de ${reintegroEmp.nombre_completo} registrada con éxito. Inicia nuevo contrato de aprendizaje productivo desde el ${nueva_fecha_ingreso}.`
+        : continuidad_laboral
+        ? `Colaborador ${reintegroEmp.nombre_completo}: Movimiento contractual registrado con éxito (${motivo_transicion === 'ascenso' ? 'Ascenso' : 'Cambio de Cargo/Área'}). Antigüedad y fecha de ingreso original (${fechaOriginalIngreso}) conservadas.`
+        : `Colaborador ${reintegroEmp.nombre_completo} reintegrado exitosamente en nuevo ciclo contractual desde el ${nueva_fecha_ingreso}.`
 
       setMsg({ type: 'success', text: msgExito })
+      const empId = reintegroEmp.id
       setReintegroEmp(null)
       await load()
 
-      // Si el modal de historial sigue abierto para este empleado, refrescar con datos nuevos
-      if (selectedEmp && selectedEmp.id === reintegroEmp.id) {
+      if (selectedEmp && selectedEmp.id === empId) {
         setSelectedEmp(prev => ({
           ...prev,
-          cargo: cargo || prev.cargo,
-          dependencia: dependencia || prev.dependencia,
-          salario: (salario != null && Number(salario) > 0) ? Number(salario) : prev.salario,
+          ...updatePayload,
         }))
       }
       setTimeout(() => setMsg(null), 4000)
@@ -961,43 +1000,152 @@ export default function Empleados() {
     }
 
     const COLUMNAS_EMPLEADOS = [
+      'Tipo Documento',
+      'Número Documento',
       'Nombre Completo',
-      'Correo',
-      'Dependencia/Área',
+      'Fecha Nacimiento',
+      'Edad',
+      'Tipo Sangre (RH)',
+      'Celular',
+      'Correo Empresarial',
+      'Correo Personal',
+      'Dirección Residencia',
+      'Barrio',
+      'Municipio / Ciudad',
+      'Tiene Vehículo',
+      'Empresa',
+      'Dependencia / Área',
       'Cargo',
-      'Estado (Activo/Inactivo)',
+      'Estado',
       'Fecha Ingreso',
+      'Fecha Inicio Empresa Actual',
+      'Fecha Primer Ingreso (Histórico)',
+      'Fecha Terminación Anterior',
       'Fecha Retiro',
       'Antigüedad',
-      'Saldo Vacaciones',
-      'Empresa',
+      'Días Totales Laborados',
+      'Período Actual',
+      'Continuidad Laboral',
+      'Salario Mensual',
+      'Auxilio de Transporte',
+      'Total Devengado (Salario + Auxilio)',
+      'EPS',
+      'Pensión',
+      'Cesantías',
+      'Banco',
+      'Tipo de Cuenta',
+      'Número de Cuenta',
+      'Contacto Emergencia Principal',
+      'Teléfono Contacto Emergencia',
+      'Parentesco Contacto Emergencia',
+      'Contactos de Emergencia (Detalle)',
+      'Saldo Vacaciones Disponibles',
+      'Días Vacaciones Causados',
+      'Días Vacaciones Disfrutados',
+      'Días Vacaciones Pagados Dinero',
+      'Días Vacaciones Tomados Históricos',
+      'Estado Liquidación',
+      'Fecha Liquidación',
+      'Observación Liquidación',
     ]
 
     const filasMapeadas = dataToExport.map(e => {
       const periodosEmp = periodosPorEmpleado[e.id] || []
       const antig = calcAntiguedadEmpleado(e, periodosEmp)
-      const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1] || { fecha_ingreso: e.fecha_ingreso, es_periodo_actual: true }
+      const pActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[periodosEmp.length - 1] || (e.fecha_ingreso ? { fecha_ingreso: e.fecha_ingreso, es_periodo_actual: true } : null)
+      const fIngresoContinua = (pActivo && pActivo.continuidad_laboral)
+        ? (obtenerFechaIngresoContinua(pActivo, periodosEmp) || e.fecha_ingreso)
+        : (pActivo?.fecha_ingreso || e.fecha_ingreso)
       const vacsEmp = vacacionesPorEmpleado[e.id] || vacacionesPorEmpleado[normalizarNombre(e.nombre_completo)] || []
       const saldo = calcularSaldoVacacionesPeriodo(pActivo, vacsEmp, periodosEmp, e)
 
+      // Liquidación
+      const ultimoPeriodoCerrado = [...periodosEmp].reverse().find(p => !p.es_periodo_actual) || null
+      const estaLiquidado = Boolean(e.liquidado || ultimoPeriodoCerrado?.liquidado)
+      const fechaLiq = e.fecha_liquidacion || ultimoPeriodoCerrado?.fecha_liquidacion || null
+      const obsLiq = e.observacion_liquidacion || ultimoPeriodoCerrado?.observacion_liquidacion || ''
+
+      // Edad
+      const edad = calcularEdad(e.fecha_nacimiento)
+
+      // Contactos de emergencia
+      let contactos = []
+      if (Array.isArray(e.contactos_emergencia)) {
+        contactos = e.contactos_emergencia
+      } else if (typeof e.contactos_emergencia === 'string' && e.contactos_emergencia.trim()) {
+        try {
+          const parsed = JSON.parse(e.contactos_emergencia)
+          if (Array.isArray(parsed)) contactos = parsed
+        } catch {
+          contactos = []
+        }
+      }
+      const cPrincipal = contactos.find(c => c && (c.nombre || c.telefono)) || contactos[0] || null
+      const todosContactosStr = contactos
+        .filter(c => c && (c.nombre || c.telefono))
+        .map(c => [c.nombre, c.telefono, c.parentesco ? `(${c.parentesco})` : null].filter(Boolean).join(' - '))
+        .join(' | ') || (typeof e.contactos_emergencia === 'string' && !e.contactos_emergencia.startsWith('[') ? e.contactos_emergencia : '—')
+
+      // Salarios
+      const salarioNum = Number(e.salario) || 0
+      const auxilioNum = Number(e.auxilio_transporte) || 0
+      const totalDevengado = salarioNum + auxilioNum
+
       return {
+        'Tipo Documento': e.tipo_documento || 'CC',
+        'Número Documento': e.numero_documento || '—',
         'Nombre Completo': e.nombre_completo || '—',
-        'Correo': e.correo || '—',
-        'Dependencia/Área': e.dependencia || '—',
+        'Fecha Nacimiento': e.fecha_nacimiento ? String(e.fecha_nacimiento).slice(0, 10) : '—',
+        'Edad': edad !== null ? `${edad} años` : '—',
+        'Tipo Sangre (RH)': e.tipo_sangre || '—',
+        'Celular': e.celular || '—',
+        'Correo Empresarial': e.correo || '—',
+        'Correo Personal': e.correo_personal || '—',
+        'Dirección Residencia': e.direccion || '—',
+        'Barrio': e.barrio || '—',
+        'Municipio / Ciudad': e.municipio || '—',
+        'Tiene Vehículo': e.tiene_vehiculo ? 'Sí' : 'No',
+        'Empresa': e.empresa || companyConfig.nombre || 'AmeriGlobal',
+        'Dependencia / Área': e.dependencia || '—',
         'Cargo': e.cargo || '—',
-        'Estado (Activo/Inactivo)': e.activo === false ? 'Inactivo' : 'Activo',
-        'Fecha Ingreso': e.fecha_ingreso ? String(e.fecha_ingreso).slice(0, 10) : '—',
+        'Estado': e.activo === false ? 'Inactivo' : 'Activo',
+        'Fecha Ingreso': fIngresoContinua ? String(fIngresoContinua).slice(0, 10) : (e.fecha_ingreso ? String(e.fecha_ingreso).slice(0, 10) : '—'),
+        'Fecha Inicio Empresa Actual': e.fecha_inicio_empresa_actual ? String(e.fecha_inicio_empresa_actual).slice(0, 10) : (fIngresoContinua ? String(fIngresoContinua).slice(0, 10) : '—'),
+        'Fecha Primer Ingreso (Histórico)': e.fecha_primer_ingreso ? String(e.fecha_primer_ingreso).slice(0, 10) : '—',
+        'Fecha Terminación Anterior': e.fecha_terminacion_anterior ? String(e.fecha_terminacion_anterior).slice(0, 10) : '—',
         'Fecha Retiro': (e.activo === false && e.fecha_retiro) ? String(e.fecha_retiro).slice(0, 10) : '—',
         'Antigüedad': antig?.texto || '—',
-        'Saldo Vacaciones': e.activo === false ? '0 días' : `${saldo.saldoPendiente || 0} días`,
-        'Empresa': e.empresa || companyConfig.nombre || 'AmeriGlobal',
+        'Días Totales Laborados': antig?.totalDiasTrabajados ?? 0,
+        'Período Actual': pActivo?.numero_periodo ? `Período #${pActivo.numero_periodo}` : (periodosEmp.length > 0 ? `Período #${periodosEmp.length}` : 'Período #1'),
+        'Continuidad Laboral': pActivo?.continuidad_laboral ? 'Sí (Otrossí)' : 'No',
+        'Salario Mensual': salarioNum,
+        'Auxilio de Transporte': auxilioNum,
+        'Total Devengado (Salario + Auxilio)': totalDevengado,
+        'EPS': e.eps || '—',
+        'Pensión': e.pension || '—',
+        'Cesantías': e.cesantias || '—',
+        'Banco': e.banco || '—',
+        'Tipo de Cuenta': e.tipo_cuenta || '—',
+        'Número de Cuenta': e.numero_cuenta || '—',
+        'Contacto Emergencia Principal': cPrincipal?.nombre || '—',
+        'Teléfono Contacto Emergencia': cPrincipal?.telefono || '—',
+        'Parentesco Contacto Emergencia': cPrincipal?.parentesco || '—',
+        'Contactos de Emergencia (Detalle)': todosContactosStr,
+        'Saldo Vacaciones Disponibles': e.activo === false ? '0 días' : `${saldo.saldoPendiente || 0} días`,
+        'Días Vacaciones Causados': `${saldo.diasCausados || 0} días`,
+        'Días Vacaciones Disfrutados': `${saldo.diasDisfrutados || 0} días`,
+        'Días Vacaciones Pagados Dinero': `${saldo.diasEnDinero || 0} días`,
+        'Días Vacaciones Tomados Históricos': `${e.dias_vacaciones_tomados_manual || 0} días`,
+        'Estado Liquidación': estaLiquidado ? 'Liquidado' : (e.activo === false ? 'Pendiente por liquidar' : 'No aplica'),
+        'Fecha Liquidación': fechaLiq ? String(fechaLiq).slice(0, 10) : '—',
+        'Observación Liquidación': obsLiq || '—',
       }
     })
 
     exportarExcel(filasMapeadas, {
-      nombreHoja: 'Empleados',
-      nombreArchivo: `Empleados_${companyConfig.id || 'AmeriGlobal'}_${hoyISO()}.xlsx`,
-      titulo: `Directorio de Colaboradores - ${companyConfig.nombre || 'AmeriGlobal'}`,
+      nombreHoja: 'Colaboradores',
+      nombreArchivo: `Colaboradores_${companyConfig.id || 'AmeriGlobal'}_${hoyISO()}.xlsx`,
+      titulo: `Reporte Integral de Colaboradores - ${companyConfig.nombre || 'AmeriGlobal'}`,
       marca: true,
       columnasDef: COLUMNAS_EMPLEADOS,
     })

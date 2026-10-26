@@ -102,17 +102,23 @@ export default function Dashboard({ onNavigate }) {
     return { ini, fin }
   }, [filterAnio, filterMeses])
 
-  // Enriquecer allData con cargo desde empleados
+  // Enriquecer allData con cargo y área oficial desde empleados
   const allDataEnriched = useMemo(() => {
     if (!empleados || empleados.length === 0) return allData
     const empMap = new Map()
+    const empIdMap = new Map()
     empleados.forEach(e => {
       if (e.nombre_completo) empMap.set(e.nombre_completo.trim().toLowerCase(), e)
+      if (e.id) empIdMap.set(e.id, e)
     })
     return allData.map(r => {
-      if (r.cargo) return r
-      const e = empMap.get((r.nombre_empleado || '').trim().toLowerCase())
-      return e?.cargo ? { ...r, cargo: e.cargo } : r
+      const e = (r.empleado_id && empIdMap.get(r.empleado_id)) ||
+        empMap.get((r.nombre_empleado || '').trim().toLowerCase())
+      return {
+        ...r,
+        cargo: e?.cargo || r.cargo || '',
+        dependencia: e?.dependencia || r.dependencia || '',
+      }
     })
   }, [allData, empleados])
 

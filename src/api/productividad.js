@@ -20,7 +20,7 @@ export function listarProductividadPorDepartamento(departamento, metrica, empres
  * Solo los campos usados en Colaboradores. Acepta una métrica o una lista:
  * "Producción" (departamentos de un solo valor) y "Clientes Resueltos" (Ventas / UW-BS).
  */
-export function listarProductividadParaColaboradores(metricas = ['Producción', 'Clientes Resueltos'], empresa) {
+export function listarProductividadParaColaboradores(metricas = ['Producción', 'Clientes Resueltos', 'Clientes en Frío'], empresa) {
   let query = supabase
     .from('productividad')
     .select('nombre_empleado, departamento, periodo, anio, valor, metrica, empresa')
@@ -88,3 +88,50 @@ export async function upsertCierreMeses(filas, empresa = 'ameriglobal') {
   const formateados = await resolverIdsEnLote(filas, empresa)
   return supabase.from('cierre_meses').upsert(formateados, { onConflict: 'nombre_empleado,anio,mes' })
 }
+
+// ── Meta mensual grupal del equipo (editable) ──────────────────────────────
+
+export async function obtenerMetaEquipo(departamento, empresa = 'ameriglobal') {
+  const localKey = `meta_equipo_${departamento}_${empresa}`
+  try {
+    const { data, error } = await supabase
+      .from('productividad')
+      .select('valor')
+      .eq('nombre_empleado', '__CONFIG__')
+      .eq('metrica', 'Meta Mensual Equipo')
+      .eq('departamento', departamento)
+      .eq('empresa', empresa)
+      .maybeSingle()
+    if (!error && data?.valor != null) {
+      const val = Number(data.valor)
+      localStorage.setItem(localKey, String(val))
+      return val
+    }
+  } catch (err) {
+    console.error('Error al obtener meta de equipo:', err)
+  }
+  const cached = localStorage.getItem(localKey)
+  return cached ? Number(cached) : 600
+}
+
+export async function guardarMetaEquipo(departamento, empresa = 'ameriglobal', valor) {
+  const n = Number(valor) || 600
+  const localKey = `meta_equipo_${departamento}_${empresa}`
+  localStorage.setItem(localKey, String(n))
+  try {
+    await supabase.from('productividad').upsert({
+      nombre_empleado: '__CONFIG__',
+      departamento,
+      periodo: 'ANUAL',
+      metrica: 'Meta Mensual Equipo',
+      anio: 0,
+      valor: n,
+      empresa,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'nombre_empleado,departamento,periodo,metrica,anio' })
+  } catch (err) {
+    console.error('Error al guardar meta de equipo en Supabase:', err)
+  }
+  return n
+}
+

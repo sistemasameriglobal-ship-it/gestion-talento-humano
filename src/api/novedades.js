@@ -65,6 +65,30 @@ export function buscarNovedadPorEmpleadoConceptoYFecha(nombreEmpleado, concepto,
   return query
 }
 
+/** Busca novedades de movimientos contractuales para un colaborador en una fecha determinada. */
+export function buscarNovedadesContractualesPorFecha(nombreEmpleado, fechaInicio, empresa) {
+  const CONCEPTOS_MOV = ['Ascenso', 'Cambio de Área', 'Cambio de Cargo', 'Ajuste Salarial', 'Paso a Etapa Productiva', 'Ingreso']
+  let query = supabase
+    .from(TABLA)
+    .select('id, concepto, observacion, fecha_inicio, empleado_id, nombre_empleado')
+    .eq('nombre_empleado', nombreEmpleado)
+    .in('concepto', CONCEPTOS_MOV)
+  if (fechaInicio) query = query.eq('fecha_inicio', fechaInicio)
+  if (empresa) query = query.eq('empresa', empresa)
+  return query
+}
+
+/** Busca todas las novedades de un concepto específico para un colaborador. */
+export function buscarNovedadesPorEmpleadoYConcepto(nombreEmpleado, concepto, empresa) {
+  let query = supabase
+    .from(TABLA)
+    .select('id, fecha_inicio, fecha_fin, periodo')
+    .eq('concepto', concepto)
+    .eq('nombre_empleado', nombreEmpleado)
+  if (empresa) query = query.eq('empresa', empresa)
+  return query
+}
+
 export async function actualizarNovedad(id, payload) {
   const dataToUpdate = { ...payload }
   delete dataToUpdate.dias_en_dinero

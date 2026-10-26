@@ -44,10 +44,29 @@ create table if not exists public.empresas (
   id uuid primary key default gen_random_uuid(),
   codigo text not null unique,
   nombre text not null,
+  razon_social text,
+  nit text,
+  tagline text,
+  logo_letra text,
+  icono text default '🏢',
+  color_principal text default '#2563EB',
+  color_secundario text default '#1D4ED8',
+  color_fondo_tag text default '#EFF6FF',
   activo boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.empresas
+  add column if not exists razon_social text,
+  add column if not exists nit text,
+  add column if not exists tagline text,
+  add column if not exists logo_letra text,
+  add column if not exists icono text default '🏢',
+  add column if not exists color_principal text default '#2563EB',
+  add column if not exists color_secundario text default '#1D4ED8',
+  add column if not exists color_fondo_tag text default '#EFF6FF',
+  add column if not exists activo boolean not null default true;
+
 
 -- ── departamentos ─────────────────────────────────────────────────────
 create table if not exists public.departamentos (
@@ -130,6 +149,39 @@ alter table public.empleados
   add column if not exists fecha_terminacion_anterior date,
   add column if not exists fecha_inicio_empresa_actual date;
 
+-- ── empleado_periodos (trazabilidad de contratos, reintegros y traslados) ───
+create table if not exists public.empleado_periodos (
+  id uuid primary key default gen_random_uuid(),
+  empleado_id uuid not null references public.empleados(id) on delete cascade,
+  empresa_id uuid references public.empresas(id),
+  departamento_id uuid references public.departamentos(id),
+  empresa text not null default 'ameriglobal',
+  numero_periodo integer not null default 1,
+  fecha_ingreso date not null,
+  fecha_retiro date,
+  motivo_retiro text,
+  motivo_transicion text not null default 'reintegro',
+  continuidad_laboral boolean not null default false,
+  liquidado boolean not null default false,
+  fecha_liquidacion date,
+  observacion_liquidacion text,
+  salario numeric default 0,
+  observaciones text,
+  cargo text,
+  dependencia text,
+  es_periodo_actual boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table public.empleado_periodos
+  add column if not exists motivo_retiro text,
+  add column if not exists motivo_transicion text not null default 'reintegro',
+  add column if not exists continuidad_laboral boolean not null default false,
+  add column if not exists liquidado boolean not null default false,
+  add column if not exists fecha_liquidacion date,
+  add column if not exists observacion_liquidacion text,
+  add column if not exists salario numeric default 0;
+
 -- ── perfiles (1:1 con auth.users) ────────────────────────────────────
 create table if not exists public.perfiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -168,6 +220,7 @@ create table if not exists public.novedades (
   empresa text default 'ameriglobal'
 );
 alter table public.novedades
+  add column if not exists cargo text,
   add column if not exists empleado_id uuid references public.empleados(id),
   add column if not exists departamento_id uuid references public.departamentos(id),
   add column if not exists empresa_id uuid references public.empresas(id);
@@ -200,7 +253,12 @@ create table if not exists public.vacaciones (
 alter table public.vacaciones
   add column if not exists empleado_id uuid references public.empleados(id),
   add column if not exists departamento_id uuid references public.departamentos(id),
-  add column if not exists empresa_id uuid references public.empresas(id);
+  add column if not exists empresa_id uuid references public.empresas(id),
+  add column if not exists periodo_id uuid references public.empleado_periodos(id) on delete set null,
+  add column if not exists dias_tiempo numeric(5,2),
+  add column if not exists dias_dinero numeric(5,2),
+  add column if not exists dias_solicitados numeric(5,2);
+
 
 -- ── procesos_disciplinarios ──────────────────────────────────────────
 create table if not exists public.procesos_disciplinarios (
@@ -337,6 +395,13 @@ create index if not exists idx_empleados_empresa on public.empleados (empresa);
 create index if not exists idx_empleados_empresa_id on public.empleados (empresa_id);
 create index if not exists idx_empleados_nombre on public.empleados (nombre_completo);
 
+create index if not exists idx_empleado_periodos_empleado_id on public.empleado_periodos (empleado_id);
+create index if not exists idx_empleado_periodos_empresa on public.empleado_periodos (empresa);
+create index if not exists idx_empleado_periodos_fechas on public.empleado_periodos (fecha_ingreso, fecha_retiro);
+create index if not exists idx_empleado_periodos_continuidad on public.empleado_periodos (empleado_id, continuidad_laboral);
+create unique index if not exists idx_empleado_un_solo_periodo_activo on public.empleado_periodos (empleado_id) where (es_periodo_actual = true);
+
+
 create index if not exists idx_novedades_departamento_id on public.novedades (departamento_id);
 create index if not exists idx_novedades_empleado_id on public.novedades (empleado_id);
 create index if not exists idx_novedades_empresa on public.novedades (empresa);
@@ -377,6 +442,8 @@ create index if not exists idx_vacaciones_empresa_id on public.vacaciones (empre
 create index if not exists idx_vacaciones_estado on public.vacaciones (estado);
 create index if not exists idx_vacaciones_fecha_ini on public.vacaciones (fecha_inicio);
 create index if not exists idx_vacaciones_nombre on public.vacaciones (nombre_empleado);
+create index if not exists idx_vacaciones_periodo_id on public.vacaciones (periodo_id);
+
 
 
 -- =====================================================================
@@ -415,38 +482,118 @@ as $function$
   SELECT COALESCE((SELECT es_admin FROM perfiles WHERE id = auth.uid()), FALSE);
 $function$;
 
--- Crea automáticamente un perfil (inactivo, no-admin) cuando alguien
--- se registra en auth.users. Un admin debe activarlo manualmente después.
-create or replace function public.handle_new_user()
+-- Auto-confirmar email inmediatamente al insertar en auth.users
+create or replace function public.auto_confirmar_usuario()
 returns trigger
 language plpgsql
 security definer
-set search_path to 'public'
+set search_path = public, auth
 as $function$
 BEGIN
-  INSERT INTO public.perfiles (id, correo, nombre_completo, activo, es_admin)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'nombre_completo', NEW.email),
-    FALSE,
-    FALSE
-  )
-  ON CONFLICT (id) DO NOTHING;
+  IF NEW.email_confirmed_at IS NULL THEN
+    NEW.email_confirmed_at = NOW();
+  END IF;
   RETURN NEW;
 END;
 $function$;
 
+-- Crea automáticamente un perfil cuando alguien se registra en auth.users.
+-- Si fue creado por admin, nace de inmediato con activo = true.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $function$
+DECLARE
+  v_creado_por_admin BOOLEAN;
+  v_es_admin_creador BOOLEAN;
+  v_activo_inicial BOOLEAN;
+BEGIN
+  v_creado_por_admin := COALESCE((NEW.raw_user_meta_data->>'creado_por_admin')::boolean, FALSE);
+  v_es_admin_creador := COALESCE(public.es_admin(), FALSE);
+  v_activo_inicial   := (v_creado_por_admin OR v_es_admin_creador);
+
+  INSERT INTO public.perfiles (
+    id,
+    correo,
+    nombre_completo,
+    activo,
+    es_admin,
+    empresas,
+    permisos,
+    rol
+  )
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'nombre_completo', NEW.email),
+    v_activo_inicial,
+    FALSE,
+    ARRAY['ameriglobal', 'global_link'],
+    '{"ameriglobal": ["all"], "global_link": ["all"]}'::jsonb,
+    'operativo'
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    activo = EXCLUDED.activo OR public.perfiles.activo,
+    correo = EXCLUDED.correo;
+
+  RETURN NEW;
+END;
+$function$;
+
+-- Sincronizar automáticamente columnas alias en inserción/actualización de vacaciones
+create or replace function public.trg_vacaciones_sync_decimales()
+returns trigger
+language plpgsql
+set search_path = public
+as $function$
+BEGIN
+  IF NEW.dias_tiempo IS NULL AND NEW.dias_disfrutados IS NOT NULL THEN
+    NEW.dias_tiempo := NEW.dias_disfrutados;
+  ELSIF NEW.dias_disfrutados IS NULL AND NEW.dias_tiempo IS NOT NULL THEN
+    NEW.dias_disfrutados := NEW.dias_tiempo;
+  END IF;
+
+  IF NEW.dias_dinero IS NULL AND NEW.dias_en_dinero IS NOT NULL THEN
+    NEW.dias_dinero := NEW.dias_en_dinero;
+  ELSIF NEW.dias_en_dinero IS NULL AND NEW.dias_dinero IS NOT NULL THEN
+    NEW.dias_en_dinero := NEW.dias_dinero;
+  END IF;
+
+  IF NEW.dias_solicitados IS NULL AND NEW.total_dias IS NOT NULL THEN
+    NEW.dias_solicitados := NEW.total_dias;
+  ELSIF NEW.total_dias IS NULL AND NEW.dias_solicitados IS NOT NULL THEN
+    NEW.total_dias := NEW.dias_solicitados;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
 
 -- =====================================================================
 -- 5. TRIGGERS
 -- =====================================================================
+drop trigger if exists trg_auto_confirmar_usuario on auth.users;
+create trigger trg_auto_confirmar_usuario
+  before insert on auth.users
+  for each row execute function public.auto_confirmar_usuario();
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
 drop trigger if exists trg_departamentos_updated_at on public.departamentos;
 create trigger trg_departamentos_updated_at before update on public.departamentos
   for each row execute function public.update_updated_at();
 
 drop trigger if exists trg_empleados_updated_at on public.empleados;
 create trigger trg_empleados_updated_at before update on public.empleados
+  for each row execute function public.update_updated_at();
+
+drop trigger if exists trg_empleado_periodos_updated_at on public.empleado_periodos;
+create trigger trg_empleado_periodos_updated_at before update on public.empleado_periodos
   for each row execute function public.update_updated_at();
 
 drop trigger if exists trg_perfiles_updated_at on public.perfiles;
@@ -457,10 +604,11 @@ drop trigger if exists trg_vacaciones_updated_at on public.vacaciones;
 create trigger trg_vacaciones_updated_at before update on public.vacaciones
   for each row execute function public.update_updated_at();
 
--- Al crear un usuario en Supabase Auth, se le crea su fila en perfiles.
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created after insert on auth.users
-  for each row execute function public.handle_new_user();
+drop trigger if exists trg_sync_vacaciones_decimales on public.vacaciones;
+create trigger trg_sync_vacaciones_decimales
+  before insert or update on public.vacaciones
+  for each row execute function public.trg_vacaciones_sync_decimales();
+
 
 
 -- =====================================================================
@@ -469,6 +617,7 @@ create trigger on_auth_user_created after insert on auth.users
 alter table public.empresas enable row level security;
 alter table public.departamentos enable row level security;
 alter table public.empleados enable row level security;
+alter table public.empleado_periodos enable row level security;
 alter table public.perfiles enable row level security;
 alter table public.novedades enable row level security;
 alter table public.vacaciones enable row level security;
@@ -509,6 +658,15 @@ create policy "Admins pueden gestionar departamentos" on public.departamentos
 drop policy if exists "empleados_acceso_usuario_activo" on public.empleados;
 create policy "empleados_acceso_usuario_activo" on public.empleados
   for all using (usuario_activo()) with check (usuario_activo());
+
+-- ── empleado_periodos ─────────────────────────────────────────────────
+drop policy if exists "empleado_periodos_acceso_usuario_activo" on public.empleado_periodos;
+create policy "empleado_periodos_acceso_usuario_activo" on public.empleado_periodos
+  for all using (usuario_activo()) with check (usuario_activo());
+drop policy if exists "empleado_periodos_delete" on public.empleado_periodos;
+create policy "empleado_periodos_delete" on public.empleado_periodos
+  for delete using (true);
+
 
 -- ── perfiles ──────────────────────────────────────────────────────────
 drop policy if exists "Ver propio perfil" on public.perfiles;
@@ -586,13 +744,136 @@ create policy "PD adjuntos: borrar autenticado" on storage.objects
   for delete using (bucket_id = 'procesos-disciplinarios' and auth.role() = 'authenticated');
 
 
+-- ── 7.1. FUNCIÓN RPC: Sustitución Patronal (Cambio de Razón Social) ─────────
+create or replace function public.ejecutar_sustitucion_patronal(
+  p_empleado_id uuid,
+  p_empresa_destino text,
+  p_fecha_sustitucion date,
+  p_dependencia text default null,
+  p_cargo text default null,
+  p_observaciones text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_emp record;
+  v_empresa_id uuid := null;
+  v_dep_id uuid := null;
+  v_next_num int := 1;
+  v_dep_final text;
+  v_cargo_final text;
+  v_obs_final text;
+  v_periodo_mes text;
+begin
+  select * into v_emp from public.empleados where id = p_empleado_id;
+  if not found then
+    raise exception 'Empleado con ID % no encontrado.', p_empleado_id;
+  end if;
+
+  v_dep_final := coalesce(nullif(trim(p_dependencia), ''), v_emp.dependencia);
+  v_cargo_final := coalesce(nullif(trim(p_cargo), ''), v_emp.cargo);
+  v_obs_final := coalesce(
+    nullif(trim(p_observaciones), ''),
+    'Sustitución patronal de ' || coalesce(v_emp.empresa, 'origen') || ' hacia ' || p_empresa_destino || '. Conserva antigüedad laboral, fecha de ingreso original e historial disciplinario/productividad.'
+  );
+  v_periodo_mes := to_char(p_fecha_sustitucion, 'YYYY-MM');
+
+  begin
+    select id into v_empresa_id from public.empresas where slug = p_empresa_destino or codigo = p_empresa_destino limit 1;
+  exception when others then
+    v_empresa_id := null;
+  end;
+
+  begin
+    if v_empresa_id is not null and v_dep_final is not null then
+      select id into v_dep_id from public.departamentos where empresa_id = v_empresa_id and upper(trim(nombre)) = upper(trim(v_dep_final)) limit 1;
+    end if;
+  exception when others then
+    v_dep_id := null;
+  end;
+
+  update public.empleados
+  set
+    empresa = p_empresa_destino,
+    dependencia = v_dep_final,
+    cargo = v_cargo_final,
+    activo = true,
+    empresa_id = coalesce(v_empresa_id, empresa_id),
+    departamento_id = coalesce(v_dep_id, departamento_id),
+    updated_at = now()
+  where id = p_empleado_id;
+
+  begin
+    update public.empleado_periodos
+    set
+      fecha_retiro = p_fecha_sustitucion,
+      motivo_retiro = 'Sustitución Patronal',
+      observaciones = 'Sustitución patronal hacia ' || p_empresa_destino,
+      es_periodo_actual = false
+    where empleado_id = p_empleado_id and es_periodo_actual = true;
+
+    select coalesce(max(numero_periodo), 0) + 1 into v_next_num from public.empleado_periodos where empleado_id = p_empleado_id;
+
+    insert into public.empleado_periodos (
+      empleado_id, empresa, empresa_id, departamento_id, numero_periodo,
+      fecha_ingreso, fecha_retiro, cargo, dependencia, es_periodo_actual,
+      continuidad_laboral, motivo_transicion, observaciones
+    ) values (
+      p_empleado_id, p_empresa_destino, v_empresa_id, v_dep_id, v_next_num,
+      p_fecha_sustitucion, null, v_cargo_final, v_dep_final, true,
+      true, 'sustitucion_patronal', v_obs_final
+    );
+  exception when others then
+    null;
+  end;
+
+  begin
+    update public.novedades set empresa = p_empresa_destino, empresa_id = coalesce(v_empresa_id, empresa_id)
+    where empleado_id = p_empleado_id or (v_emp.nombre_completo is not null and lower(trim(nombre_empleado)) = lower(trim(v_emp.nombre_completo)));
+  exception when others then null; end;
+
+  begin
+    insert into public.novedades (concepto, fecha_inicio, fecha_fin, total_dias, periodo, observacion, empleado_id, nombre_empleado, dependencia, empresa, empresa_id, departamento_id)
+    values ('Sustitución Patronal', p_fecha_sustitucion, p_fecha_sustitucion, 0, v_periodo_mes, v_obs_final, p_empleado_id, v_emp.nombre_completo, v_dep_final, p_empresa_destino, v_empresa_id, v_dep_id);
+  exception when others then null; end;
+
+  begin update public.procesos_disciplinarios set empresa = p_empresa_destino where empleado_id = p_empleado_id or (v_emp.nombre_completo is not null and lower(trim(nombre_empleado)) = lower(trim(v_emp.nombre_completo))); exception when others then null; end;
+  begin update public.productividad set empresa = p_empresa_destino where empleado_id = p_empleado_id or (v_emp.nombre_completo is not null and lower(trim(nombre_empleado)) = lower(trim(v_emp.nombre_completo))); exception when others then null; end;
+  begin update public.vacaciones set empresa = p_empresa_destino where empleado_id = p_empleado_id or (v_emp.nombre_completo is not null and lower(trim(nombre_empleado)) = lower(trim(v_emp.nombre_completo))); exception when others then null; end;
+  begin update public.registros_parqueadero set empresa = p_empresa_destino where empleado_id = p_empleado_id or (v_emp.nombre_completo is not null and lower(trim(nombre_empleado)) = lower(trim(v_emp.nombre_completo))); exception when others then null; end;
+
+  return jsonb_build_object(
+    'success', true,
+    'empleado_id', p_empleado_id,
+    'empresa_origen', v_emp.empresa,
+    'empresa_destino', p_empresa_destino,
+    'fecha_sustitucion', p_fecha_sustitucion
+  );
+end;
+$$;
+grant execute on function public.ejecutar_sustitucion_patronal(uuid, text, date, text, text, text) to authenticated, service_role;
+
+
 -- =====================================================================
 -- 8. DATOS DE CATÁLOGO (empresas + departamentos)
 -- =====================================================================
-insert into public.empresas (codigo, nombre) values
-  ('ameriglobal', 'Ameriglobal'),
-  ('global_link', 'Global Link')
-on conflict (codigo) do nothing;
+insert into public.empresas (
+  codigo, nombre, razon_social, tagline, logo_letra, icono, color_principal, color_secundario, color_fondo_tag, activo
+) values
+  ('ameriglobal', 'AmeriGlobal', 'AmeriGlobal S.A.S.', 'Gestión Humana & Operaciones', 'A', '🏢', '#2563EB', '#1E40AF', '#EFF6FF', true),
+  ('global_link', 'Global Link', 'Global Link S.A.S.', 'Cobranza & Operaciones', 'GL', '🌐', '#0D9488', '#0F766E', '#F0FDFA', true)
+on conflict (codigo) do update set
+  nombre = excluded.nombre,
+  razon_social = excluded.razon_social,
+  tagline = excluded.tagline,
+  logo_letra = excluded.logo_letra,
+  icono = excluded.icono,
+  color_principal = excluded.color_principal,
+  color_secundario = excluded.color_secundario,
+  color_fondo_tag = excluded.color_fondo_tag;
 
 insert into public.departamentos (nombre, empresa, activo)
 select nombre, empresa, true
@@ -606,8 +887,81 @@ where not exists (
   where d.empresa = emp.empresa and d.nombre = dep.nombre
 );
 
+-- ---------------------------------------------------------------------
+-- 8.1 SINCRONIZACIÓN AUTOMÁTICA DE CARGO Y DEPENDENCIA EN NOVEDADES
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.fn_sincronizar_novedad_con_empleado()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_emp RECORD;
+BEGIN
+  IF NEW.empleado_id IS NOT NULL THEN
+    SELECT id, dependencia, cargo, empresa_id, nombre_completo
+    INTO v_emp
+    FROM public.empleados
+    WHERE id = NEW.empleado_id;
+  ELSIF NEW.nombre_empleado IS NOT NULL AND TRIM(NEW.nombre_empleado) <> '' THEN
+    SELECT id, dependencia, cargo, empresa_id, nombre_completo
+    INTO v_emp
+    FROM public.empleados
+    WHERE UPPER(TRIM(nombre_completo)) = UPPER(TRIM(NEW.nombre_empleado))
+    LIMIT 1;
+    
+    IF FOUND THEN
+      NEW.empleado_id := v_emp.id;
+    END IF;
+  END IF;
 
--- =====================================================================
+  IF FOUND AND v_emp.id IS NOT NULL THEN
+    IF v_emp.dependencia IS NOT NULL AND TRIM(v_emp.dependencia) <> '' THEN
+      NEW.dependencia := v_emp.dependencia;
+    END IF;
+
+    IF v_emp.cargo IS NOT NULL AND TRIM(v_emp.cargo) <> '' THEN
+      NEW.cargo := v_emp.cargo;
+    END IF;
+
+    IF NEW.empresa_id IS NULL AND v_emp.empresa_id IS NOT NULL THEN
+      NEW.empresa_id := v_emp.empresa_id;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_novedades_sync_empleado ON public.novedades;
+
+CREATE TRIGGER trg_novedades_sync_empleado
+BEFORE INSERT OR UPDATE ON public.novedades
+FOR EACH ROW
+EXECUTE FUNCTION public.fn_sincronizar_novedad_con_empleado();
+
+-- 8.4 CORRECCIÓN DE FECHAS DE NOVEDADES CON CONCEPTO 'Ingreso'
+-- Asegura que las novedades de tipo 'Ingreso' tengan la fecha de ingreso real del colaborador
+UPDATE public.novedades n
+SET
+  fecha_inicio = COALESCE(e.fecha_inicio_empresa_actual, e.fecha_ingreso, p.fecha_ingreso, e.fecha_primer_ingreso),
+  fecha_fin = COALESCE(e.fecha_inicio_empresa_actual, e.fecha_ingreso, p.fecha_ingreso, e.fecha_primer_ingreso),
+  periodo = TO_CHAR(COALESCE(e.fecha_inicio_empresa_actual, e.fecha_ingreso, p.fecha_ingreso, e.fecha_primer_ingreso)::date, 'YYYY-MM'),
+  cargo = COALESCE(n.cargo, e.cargo),
+  dependencia = COALESCE(n.dependencia, e.dependencia)
+FROM public.empleados e
+LEFT JOIN LATERAL (
+  SELECT ep.fecha_ingreso
+  FROM public.empleado_periodos ep
+  WHERE ep.empleado_id = e.id AND ep.fecha_ingreso IS NOT NULL
+  ORDER BY ep.numero_periodo ASC
+  LIMIT 1
+) p ON true
+WHERE n.concepto = 'Ingreso'
+  AND (n.empleado_id = e.id OR LOWER(TRIM(n.nombre_empleado)) = LOWER(TRIM(e.nombre_completo)))
+  AND COALESCE(e.fecha_inicio_empresa_actual, e.fecha_ingreso, p.fecha_ingreso, e.fecha_primer_ingreso) IS NOT NULL
+  AND n.fecha_inicio IS DISTINCT FROM COALESCE(e.fecha_inicio_empresa_actual, e.fecha_ingreso, p.fecha_ingreso, e.fecha_primer_ingreso);
+
 -- 9. DESPUÉS DE CORRER ESTE SCRIPT
 -- =====================================================================
 -- 1. Registra tu primer usuario desde la pantalla de login de la app
@@ -622,3 +976,4 @@ where not exists (
 -- 3. Desde la app, con ese usuario admin, ya puedes crear el resto de
 --    usuarios, empleados, etc.
 -- =====================================================================
+

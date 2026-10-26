@@ -200,6 +200,8 @@ export default function ImportExportProductividad({
                     <tr>
                       <th>#</th><th>Nombre</th><th>Año</th><th>Mes</th>
                       <th>Asignados</th><th>Resueltos</th><th>%</th>
+                      {!esCierre && <th>Clientes en Frío</th>}
+                      {!esCierre && <th>Total Resueltos</th>}
                       {esCierre && <><th>Monto total</th><th>Capital colocado</th></>}
                       <th>Estado</th>
                     </tr>
@@ -210,13 +212,14 @@ export default function ImportExportProductividad({
                         return (
                           <tr key={i} style={{ opacity: .6 }}>
                             <td>{i + 1}</td>
-                            <td colSpan={esCierre ? 8 : 6}>{(f.filaOriginal || []).slice(0, 3).filter(c => c !== '' && c != null).join(' · ') || '(fila vacía)'}</td>
+                            <td colSpan={esCierre ? 8 : 8}>{(f.filaOriginal || []).slice(0, 3).filter(c => c !== '' && c != null).join(' · ') || '(fila vacía)'}</td>
                             <td><span className="pr-imp-tag pr-imp-tag--omitida" title={f.motivoOmision}>Omitida — {f.motivoOmision}</span></td>
                           </tr>
                         )
                       }
                       const p = f.payload
                       const est = ESTADO_TXT[f.estado]
+                      const totalGenFila = (Number(p.resueltos) || 0) + (Number(p.frios) || 0)
                       return (
                         <tr key={i}>
                           <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
@@ -226,6 +229,8 @@ export default function ImportExportProductividad({
                           <td>{fmt(p.asignados)}</td>
                           <td>{fmt(p.resueltos)}</td>
                           <td>{p.asignados !== undefined && p.resueltos !== undefined && p.asignados > 0 ? `${calcPct(p.resueltos, p.asignados)}%` : '—'}</td>
+                          {!esCierre && <td>{p.frios !== undefined ? fmt(p.frios) : '—'}</td>}
+                          {!esCierre && <td style={{ fontWeight: 700, color: 'var(--primary)' }}>{fmt(totalGenFila)}</td>}
                           {esCierre && <><td>{p.monto !== undefined ? `$ ${fmt(p.monto)}` : '—'}</td><td>{p.capital !== undefined ? `$ ${fmt(p.capital)}` : '—'}</td></>}
                           <td>
                             {f.advertencias.length > 0

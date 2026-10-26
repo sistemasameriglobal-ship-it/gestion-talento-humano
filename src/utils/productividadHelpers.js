@@ -1,4 +1,4 @@
-import { MESES_FULL } from './productividadConstants'
+import { MESES_FULL, META_RESOLUCION_PCT, META_FRIOS_MINIMO } from './productividadConstants'
 
 export function fmtMoneda(v) {
   const n = Number(v) || 0
@@ -13,11 +13,20 @@ export function calcPct(resueltos, asignados) {
   return a > 0 ? Math.round((r / a) * 100) : 0
 }
 
-// Escala de color de desempeño para las métricas en % (semáforo simple con buen contraste)
+export function cumpleMetaResolucion(pct) {
+  return Number(pct) >= META_RESOLUCION_PCT
+}
+
+export function cumpleMetaFrios(frios) {
+  return Number(frios) >= META_FRIOS_MINIMO
+}
+
+// Escala de color de desempeño para las métricas en % con base en la meta del 40%
 export function colorPct(v) {
-  if (v >= 80) return '#10B981'
-  if (v >= 50) return '#F59E0B'
-  return '#EF4444'
+  if (v >= 60) return '#10B981' // Supera con creces
+  if (v >= META_RESOLUCION_PCT) return '#059669' // Cumple meta (>= 40%)
+  if (v >= 30) return '#F59E0B' // Cerca de la meta
+  return '#EF4444' // No cumple (< 30%)
 }
 
 // ¿Esta persona todavía no había ingresado en el mes/año dado?

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { X, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
-import { diasHabilesEntre } from '../../utils/diasHabiles'
 import {
-  calcAntiguedad, calcDias, calcularDiasHabiles, calcularAniosCumplidos,
+  calcAntiguedad, calcularDiasHabiles, calcularAniosCumplidos,
   obtenerFechaIngresoContinua, aFechaInputDate,
   obtenerPeriodosVacacionesEmpleado, normalizarPeriodoVacaciones,
   formatoDias, formatoDiasTexto

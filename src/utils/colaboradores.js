@@ -53,14 +53,18 @@ export function construirProductividad(prodRows, cierreRows, { usaClientes = tru
     const anio = r.anio
     const dep = r.departamento
     if (!anio || !dep) return
-    const metricaEsperada = usaClientes && DEPTS_CLIENTES.includes(dep) ? METRICA_RESUELTOS : METRICA
-    if (r.metrica && r.metrica !== metricaEsperada) return
+    const esDeptoClientes = usaClientes && DEPTS_CLIENTES.includes(dep)
+    if (esDeptoClientes) {
+      if (r.metrica !== METRICA_RESUELTOS && r.metrica !== 'Clientes en Frío') return
+    } else {
+      if (r.metrica && r.metrica !== METRICA) return
+    }
     if (!data[anio]) data[anio] = {}
     if (!data[anio][dep]) data[anio][dep] = {}
     const key = normalizeNombreProd(r.nombre_empleado)
     if (!key) return
     if (!data[anio][dep][key]) data[anio][dep][key] = {}
-    data[anio][dep][key][r.periodo] = Number(r.valor) || 0
+    data[anio][dep][key][r.periodo] = (data[anio][dep][key][r.periodo] || 0) + (Number(r.valor) || 0)
   })
   ;(cierreRows || []).forEach(r => {
     const anio = r.anio

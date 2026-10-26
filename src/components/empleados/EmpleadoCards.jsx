@@ -6,7 +6,8 @@
 import { Edit2, Trash2, RotateCcw, Archive, Briefcase, Mail, Calendar, Scale, AlertTriangle, CheckCircle2, ArrowRight, FileText, Building2 } from 'lucide-react'
 import {
   calcAntiguedadEmpleado, calcularSaldoVacacionesPeriodo,
-  getEstadoVacacionActual, formatoDias, formatoDiasTexto
+  getEstadoVacacionActual, formatoDias, formatoDiasTexto,
+  obtenerFechaIngresoContinua
 } from '../../utils/vacacionesHelpers'
 import { normalizarConcepto } from '../../utils/parseExcel'
 import { estaActivaHoy } from '../../utils/diasHabiles'
@@ -58,6 +59,9 @@ export default function EmpleadoCards({
           const ultimoProceso = procesosEmp.length > 0 ? procesosEmp[0] : null
           const vacacionActiva = getEstadoVacacionActual(emp, vacsEmp, nov?.novedades)
           const periodoActivo = periodosEmp.find(p => p.es_periodo_actual) || periodosEmp[0] || (emp.fecha_ingreso ? { fecha_ingreso: emp.fecha_ingreso, es_periodo_actual: true } : null)
+          const fIngresoDisplay = (periodoActivo && periodoActivo.continuidad_laboral)
+            ? (obtenerFechaIngresoContinua(periodoActivo, periodosEmp) || emp.fecha_ingreso)
+            : (periodoActivo?.fecha_ingreso || emp.fecha_ingreso)
           const saldoVac = calcularSaldoVacacionesPeriodo(periodoActivo, vacsEmp, periodosEmp, emp)
 
           // Incapacidades activas hoy (solo hoy >= fecha_inicio && hoy < fechaRegresoLaboral)
@@ -189,7 +193,7 @@ export default function EmpleadoCards({
               {emp.fecha_ingreso && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                   <Calendar size={12} style={{ flexShrink: 0 }} />
-                  <span>Ingreso: {emp.fecha_ingreso}</span>
+                  <span>Ingreso: {fIngresoDisplay || emp.fecha_ingreso}</span>
                   {antig?.texto && (
                     <span style={{ color: 'var(--text-muted)' }}>
                       • Antigüedad: <strong style={{ fontWeight: 600, color: 'var(--text)' }}>{antig.texto}</strong>
