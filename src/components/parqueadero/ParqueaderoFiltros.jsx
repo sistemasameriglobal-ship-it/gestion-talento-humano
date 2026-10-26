@@ -2,7 +2,7 @@ import { Search, X, LayoutGrid, List } from 'lucide-react'
 import { MESES, TIPOS } from '../../utils/parqueaderoConstants'
 
 export default function ParqueaderoFiltros({
-  rows, carros, motos, exentos, sinReporte,
+  rows, carros, motos, bicicletas = 0, exentos, sinReporte,
   filterTab, setFilterTab, setFilterTipo,
   vista, setVista,
   search, setSearch,
@@ -18,6 +18,7 @@ export default function ParqueaderoFiltros({
     { val: '', label: `Todos (${rows.length})` },
     { val: 'CARRO', label: `🚗 Carros (${carros})` },
     { val: 'MOTO', label: `🏍 Motos (${motos})` },
+    { val: 'BICICLETA', label: `🚲 Bicicletas (${bicicletas})` },
     { val: 'exentos', label: `✓ Exentos (${exentos})` },
     ...(sinReporte > 0 ? [{ val: 'sin_rep', label: `📤 Sin reporte (${sinReporte})`, warn: true }] : []),
   ]

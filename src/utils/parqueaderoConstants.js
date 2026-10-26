@@ -4,7 +4,7 @@ export { MESES, ANIOS }
 
 export const PAGE_SIZE = 15
 
-export const TIPOS = ['CARRO', 'MOTO']
+export const TIPOS = ['CARRO', 'MOTO', 'BICICLETA']
 
 export const EMPTY = {
   nombre_empleado: '', anio: '', mes: '', placa: '', cedula: '', telefono: '',

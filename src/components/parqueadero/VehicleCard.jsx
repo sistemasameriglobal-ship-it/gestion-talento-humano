@@ -2,6 +2,7 @@ import { Eye, Edit2, Trash2 } from 'lucide-react'
 
 export default function VehicleCard({ row, idx, onView, onEdit, onDelete, onHistorial }) {
   const isCarro = row.tipo === 'CARRO'
+  const isBici = row.tipo === 'BICICLETA'
   const isExento = row.observacion === 'EXENTOS DE PAGO'
   const hasReporte = !!row.fecha_envio_reporte
   return (
@@ -14,7 +15,7 @@ export default function VehicleCard({ row, idx, onView, onEdit, onDelete, onHist
     }}>
 
       {/* Franja tipo */}
-      <div style={{ height: 4, background: row.retirado ? '#DC2626' : (isCarro ? '#3B82F6' : '#F59E0B') }} />
+      <div style={{ height: 4, background: row.retirado ? '#DC2626' : (isCarro ? '#3B82F6' : isBici ? '#10B981' : '#F59E0B') }} />
 
       <div style={{ padding: '14px 16px', flex: 1 }}>
         {/* Header */}
@@ -23,13 +24,13 @@ export default function VehicleCard({ row, idx, onView, onEdit, onDelete, onHist
             <div style={{
               width: 40, height: 40, borderRadius: 10, flexShrink: 0, fontSize: 20,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: isCarro ? 'var(--info-bg)' : 'var(--warning-bg)',
-            }}>{isCarro ? '🚗' : '🏍'}</div>
+              background: isCarro ? 'var(--info-bg)' : isBici ? '#D1FAE5' : 'var(--warning-bg)',
+            }}>{isCarro ? '🚗' : isBici ? '🚲' : '🏍'}</div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {row.nombre_empleado}
               </div>
-              <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: isCarro ? 'var(--info-text)' : 'var(--warning-text)', letterSpacing: '0.06em', marginTop: 1 }}>
+              <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: isCarro ? 'var(--info-text)' : isBici ? '#047857' : 'var(--warning-text)', letterSpacing: isBici ? 'normal' : '0.06em', fontFamily: isBici ? 'inherit' : 'monospace', marginTop: 1 }}>
                 {row.placa || '—'}
               </div>
             </div>

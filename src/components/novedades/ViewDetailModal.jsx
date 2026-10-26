@@ -22,18 +22,29 @@ function Field({ label, value, full = false }) {
   )
 }
 
-export default function ViewDetailModal({ viewRow, onClose, onEdit }) {
+export default function ViewDetailModal({ viewRow, fichasEmpleados, onClose, onEdit }) {
   return (
     <AnimatedModal open={!!viewRow} onRequestClose={onClose} maxWidth={600}>
       {viewRow && (() => {
         const tipo = normalizarConcepto(viewRow.concepto)
         const color = CONCEPTO_COLORS[tipo] || '#374151'
+        const cargoEmpleado = viewRow.cargo || fichasEmpleados?.[viewRow.nombre_empleado]?.cargo || ''
+        const cargoYArea = cargoEmpleado && viewRow.dependencia
+          ? `${cargoEmpleado} - ${viewRow.dependencia}`
+          : (cargoEmpleado || viewRow.dependencia || '')
         return (
           <>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className="badge tag-c" style={{ '--tag': color, fontSize: 13, padding: '4px 12px' }}>{viewRow.concepto}</span>
-                <h2 style={{ margin: 0, fontSize: 16 }}>{viewRow.nombre_empleado}</h2>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 16 }}>{viewRow.nombre_empleado}</h2>
+                  {cargoYArea && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {cargoYArea}
+                    </div>
+                  )}
+                </div>
               </div>
               <button className="modal-close" onClick={onClose}><X size={18} /></button>
             </div>
@@ -61,7 +72,9 @@ export default function ViewDetailModal({ viewRow, onClose, onEdit }) {
                 })()}
                 <Field label="Jornada" value={viewRow.jornada === 'Medio día' ? '🕐 Medio día' : (viewRow.concepto === 'LNR' || viewRow.concepto === 'LR') ? 'Día completo' : null} />
                 <Field label="Diagnóstico" value={viewRow.diagnostico} />
-                <Field label="Dependencia / Área" value={viewRow.dependencia} full />
+                <Field label="Cargo" value={cargoEmpleado} />
+                <Field label="Dependencia / Área" value={viewRow.dependencia} />
+                <Field label="Cargo / Área" value={cargoYArea} full />
               </Section>
               <Section title="Estados y validaciones">
                 {[

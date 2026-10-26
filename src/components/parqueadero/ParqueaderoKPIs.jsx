@@ -2,7 +2,7 @@ import { ParkingSquare, Car, Bike, BadgeCheck, Send } from 'lucide-react'
 import KpiCard, { KpiGrid } from '../ui/KpiCard'
 
 export default function ParqueaderoKPIs({
-  rowsBase, carros, motos, exentos, total, sinReporte,
+  rowsBase, carros, motos, bicicletas = 0, exentos, total, sinReporte,
   mesBase, anioBase, mesActual, anioActual, filterTab,
   setFilterTab, setFilterTipo, setFilterMes, setFilterAnio, setPage,
 }) {
@@ -18,9 +18,14 @@ export default function ParqueaderoKPIs({
       onClick: () => { setFilterTab('CARRO'); setFilterTipo(''); setPage(1) },
     },
     {
-      label: 'Motos', val: motos, sub: `${((motos / total) * 100).toFixed(0)}% · ${mesBase} ${anioBase}`, icon: Bike, tone: 'warning',
+      label: 'Motos', val: motos, sub: `${total > 0 ? ((motos / total) * 100).toFixed(0) : 0}% · ${mesBase} ${anioBase}`, icon: Bike, tone: 'warning',
       activo: filterTab === 'MOTO',
       onClick: () => { setFilterTab('MOTO'); setFilterTipo(''); setPage(1) },
+    },
+    {
+      label: 'Bicicletas', val: bicicletas, sub: `${total > 0 ? ((bicicletas / total) * 100).toFixed(0) : 0}% · ${mesBase} ${anioBase}`, icon: Bike, tone: 'success',
+      activo: filterTab === 'BICICLETA',
+      onClick: () => { setFilterTab('BICICLETA'); setFilterTipo(''); setPage(1) },
     },
     {
       label: 'Exentos de pago', val: exentos, sub: `${((exentos / total) * 100).toFixed(0)}% · ${mesBase} ${anioBase}`, icon: BadgeCheck, tone: 'success',

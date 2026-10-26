@@ -3,7 +3,7 @@ export const CONCEPTOS_CANONICOS = [
   'Incapacidad','Vacaciones','LNR','LR','1/2 LR y 1/2 LNR','Maternidad','Paternidad',
   'Calamidad/Luto','Renuncia/Retiro','Ingreso','Terminación','No renovación de contrato',
   'Ascenso','Cambio de Cargo','Cambio de Área','Ajuste Salarial','Paso a Etapa Productiva',
-  'Día Familia','Hospitalización','Embargo','Suspensión','Ausente','Sustitución Patronal','Falta Reglamento Interno','Productividad','Otro'
+  'Día Familia','Hospitalización','Embargo','Suspensión','Ausente','Sustitución Patronal','Falta Reglamento Interno','Productividad','Horas extras con recargos','Otro'
 ]
 
 export function normalizarConcepto(concepto) {
@@ -29,6 +29,7 @@ export function normalizarConcepto(concepto) {
   if (c.includes('suspension') || c.includes('suspensión')) return 'Suspensión'
   if (c.includes('ausen')) return 'Ausente'
   if (c.includes('sustitucion') || c.includes('sustitución')) return 'Sustitución Patronal'
+  if (c.includes('recargo') || c.includes('hora extra') || c.includes('horas extras') || c.includes('dominical') || c.includes('festivo')) return 'Horas extras con recargos'
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
@@ -303,5 +304,7 @@ export const CONCEPTO_COLORS = {
   'Ajuste Salarial':      '#059669',
   'Paso a Etapa Productiva': '#0284C7',
   'Sustitución Patronal': '#4338CA',
+  'Horas extras con recargos': '#059669',
+  'Recargo Dominical o Festivos': '#059669',
   'Otro':                 '#6366F1',
 }

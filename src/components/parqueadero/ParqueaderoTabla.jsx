@@ -14,7 +14,7 @@ export default function ParqueaderoTabla({
         <table>
           <thead>
             <tr>
-              <th>Empleado</th><th>Mes / Año</th><th>Placa</th>
+              <th>Empleado</th><th>Mes / Año</th><th>Placa / Marca</th>
               <th>Cédula</th><th>Teléfono</th>
               <th style={{ textAlign: 'center' }}>Tipo</th>
               <th>F. Ingreso</th><th>F. Retiro</th>
@@ -36,7 +36,7 @@ export default function ParqueaderoTabla({
                   <PersonCell nombre={row.nombre_empleado} color={row.retirado ? '#DC2626' : undefined} />
                 </td>
                 <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{[row.mes, row.anio].filter(Boolean).join(' ') || '—'}</td>
-                <td style={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>{row.placa || '—'}</td>
+                <td style={{ fontFamily: row.tipo === 'BICICLETA' ? 'inherit' : 'monospace', fontWeight: 700, letterSpacing: row.tipo === 'BICICLETA' ? 'normal' : '0.05em' }}>{row.placa || '—'}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{row.cedula || '—'}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{row.telefono || '—'}</td>
                 <td style={{ textAlign: 'center' }}>{row.tipo ? <TipoBadge tipo={row.tipo} /> : '—'}</td>

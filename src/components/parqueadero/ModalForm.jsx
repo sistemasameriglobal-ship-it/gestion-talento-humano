@@ -53,6 +53,8 @@ export default function ModalForm({
         <div style={{
           background: form.tipo === 'MOTO'
             ? 'linear-gradient(135deg,#78350F 0%,#D97706 100%)'
+            : form.tipo === 'BICICLETA'
+            ? 'linear-gradient(135deg,#065F46 0%,#059669 100%)'
             : 'linear-gradient(135deg,#1E3A5F 0%,#2563EB 100%)',
           padding: '22px 24px 18px', transition: 'background .4s ease',
         }}>
@@ -65,7 +67,7 @@ export default function ModalForm({
               fontSize: 32, transition: 'all .3s ease',
               boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
             }}>
-              {form.tipo === 'MOTO' ? '🏍' : form.tipo === 'CARRO' ? '🚗' : modal === 'add' ? '🅿️' : '✏️'}
+              {form.tipo === 'MOTO' ? '🏍' : form.tipo === 'CARRO' ? '🚗' : form.tipo === 'BICICLETA' ? '🚲' : modal === 'add' ? '🅿️' : '✏️'}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>
@@ -79,10 +81,14 @@ export default function ModalForm({
                   <span style={{
                     background: 'rgba(255,255,255,0.2)', color: '#fff',
                     padding: '2px 10px', borderRadius: 999, fontSize: 13,
-                    fontFamily: 'monospace', fontWeight: 800, letterSpacing: '0.12em',
+                    fontFamily: form.tipo === 'BICICLETA' ? 'inherit' : 'monospace',
+                    fontWeight: 800,
+                    letterSpacing: form.tipo === 'BICICLETA' ? 'normal' : '0.12em',
                   }}>{form.placa}</span>
                 ) : (
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>Sin placa</span>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>
+                    {form.tipo === 'BICICLETA' ? 'Sin marca' : 'Sin placa'}
+                  </span>
                 )}
                 {form.mes && form.anio && (
                   <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>
@@ -182,10 +188,11 @@ export default function ModalForm({
             {/* Selector tipo: tarjetas grandes */}
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, display: 'block' }}>Tipo de vehículo *</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
                 {[
                   { val: 'CARRO', icon: '🚗', label: 'Carro', desc: 'Automóvil / Camioneta', color: '#1E40AF', bg: '#DBEAFE', border: '#93C5FD', grad: 'linear-gradient(135deg,#1E40AF,#3B82F6)' },
                   { val: 'MOTO', icon: '🏍', label: 'Moto', desc: 'Motocicleta / Scooter', color: '#92400E', bg: '#FEF3C7', border: '#FCD34D', grad: 'linear-gradient(135deg,#92400E,#D97706)' },
+                  { val: 'BICICLETA', icon: '🚲', label: 'Bicicleta', desc: 'Ruta / MTB / Urbana', color: '#047857', bg: '#D1FAE5', border: '#6EE7B7', grad: 'linear-gradient(135deg,#047857,#10B981)' },
                 ].map(opt => {
                   const sel = form.tipo === opt.val
                   return (
@@ -220,10 +227,27 @@ export default function ModalForm({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Placa *</label>
-                <input className="form-control" value={form.placa} onChange={f('placa')}
-                  placeholder="Ej: ABC123"
-                  style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 16, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>
+                  {form.tipo === 'BICICLETA' ? 'Marca *' : 'Placa *'}
+                </label>
+                <input
+                  className="form-control"
+                  value={form.placa}
+                  onChange={f('placa')}
+                  placeholder={form.tipo === 'BICICLETA' ? 'Ej: Trek, GW, Specialized' : 'Ej: ABC123'}
+                  style={form.tipo === 'BICICLETA' ? {
+                    fontWeight: 600,
+                    fontSize: 14,
+                    textAlign: 'left',
+                  } : {
+                    fontFamily: 'monospace',
+                    fontWeight: 800,
+                    fontSize: 16,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    textAlign: 'center',
+                  }}
+                />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Observación</label>
@@ -345,7 +369,7 @@ export default function ModalForm({
         }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
             {[form.nombre_empleado && '👤 ' + form.nombre_empleado.split(' ')[0],
-            form.tipo && (form.tipo === 'CARRO' ? '🚗' : '🏍') + ' ' + form.tipo,
+            form.tipo && (form.tipo === 'CARRO' ? '🚗' : form.tipo === 'MOTO' ? '🏍' : '🚲') + ' ' + form.tipo,
             form.placa && form.placa,
             form.mes && form.anio && form.mes.slice(0, 3) + ' ' + form.anio,
             ].filter(Boolean).join(' · ') || 'Completa los campos obligatorios *'}

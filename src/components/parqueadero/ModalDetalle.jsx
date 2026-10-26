@@ -16,13 +16,13 @@ export default function ModalDetalle({ row, onClose, onEdit }) {
       <div className="modal" style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: row.tipo === 'CARRO' ? 'var(--info-bg)' : 'var(--warning-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
-              {row.tipo === 'CARRO' ? '🚗' : '🏍'}
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: row.tipo === 'CARRO' ? 'var(--info-bg)' : row.tipo === 'BICICLETA' ? '#D1FAE5' : 'var(--warning-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
+              {row.tipo === 'CARRO' ? '🚗' : row.tipo === 'BICICLETA' ? '🚲' : '🏍'}
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: 16 }}>{row.nombre_empleado}</h2>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>{row.placa}</span>
+                <span style={{ fontFamily: row.tipo === 'BICICLETA' ? 'inherit' : 'monospace', fontWeight: 700, letterSpacing: row.tipo === 'BICICLETA' ? 'normal' : '0.05em' }}>{row.placa}</span>
                 · {row.mes} {row.anio}
               </div>
             </div>
@@ -32,7 +32,7 @@ export default function ModalDetalle({ row, onClose, onEdit }) {
         <div className="modal-body">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px', marginBottom: 16 }}>
             <Field label="Nombre completo" value={row.nombre_empleado} />
-            <Field label="Placa" value={<span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15 }}>{row.placa}</span>} />
+            <Field label={row.tipo === 'BICICLETA' ? 'Marca' : 'Placa'} value={<span style={{ fontFamily: row.tipo === 'BICICLETA' ? 'inherit' : 'monospace', fontWeight: 700, fontSize: 15 }}>{row.placa}</span>} />
             <Field label="Tipo de vehículo" value={<TipoBadge tipo={row.tipo} />} />
             <Field label="Mes / Año" value={[row.mes, row.anio].filter(Boolean).join(' ') || '—'} />
             <Field label="Cédula" value={row.cedula} />

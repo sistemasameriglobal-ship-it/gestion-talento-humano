@@ -22,7 +22,7 @@ export async function listarEmpleadosParaNovedades(empresa) {
   try {
     let query = supabase
       .from(TABLA)
-      .select('id, nombre_completo, numero_documento, activo, fecha_ingreso, fecha_retiro, dependencia, empresa, created_at')
+      .select('id, nombre_completo, numero_documento, cargo, activo, fecha_ingreso, fecha_retiro, dependencia, empresa, created_at')
       .order('nombre_completo')
     if (empresa) query = query.eq('empresa', empresa)
     return await query

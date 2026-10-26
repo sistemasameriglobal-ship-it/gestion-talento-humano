@@ -47,7 +47,7 @@ export default function UltimasNovedadesTabla({
             <tr>
               <th>Colaborador</th>
               <th>Concepto</th>
-              <th>Área / Dependencia</th>
+              <th>Cargo / Área</th>
               <th>Fechas y Días</th>
               <th>Estado / Validación</th>
               <th style={{ textAlign: 'right' }}>Acción</th>
@@ -105,9 +105,16 @@ export default function UltimasNovedadesTabla({
                     </span>
                   </td>
 
-                  {/* Área */}
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    📍 {r.dependencia || 'Sin área'}
+                  {/* Cargo / Área */}
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }} title={r.cargo && r.dependencia ? `${r.cargo} - ${r.dependencia}` : (r.cargo || r.dependencia || '')}>
+                    📍 {r.cargo && r.dependencia ? (
+                      <span>
+                        <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{r.cargo}</strong>
+                        <span style={{ opacity: 0.75 }}> - {r.dependencia}</span>
+                      </span>
+                    ) : (
+                      r.cargo || r.dependencia || 'Sin área'
+                    )}
                   </td>
 
                   {/* Fechas */}

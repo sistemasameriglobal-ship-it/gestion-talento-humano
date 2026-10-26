@@ -102,10 +102,24 @@ export default function Dashboard({ onNavigate }) {
     return { ini, fin }
   }, [filterAnio, filterMeses])
 
+  // Enriquecer allData con cargo desde empleados
+  const allDataEnriched = useMemo(() => {
+    if (!empleados || empleados.length === 0) return allData
+    const empMap = new Map()
+    empleados.forEach(e => {
+      if (e.nombre_completo) empMap.set(e.nombre_completo.trim().toLowerCase(), e)
+    })
+    return allData.map(r => {
+      if (r.cargo) return r
+      const e = empMap.get((r.nombre_empleado || '').trim().toLowerCase())
+      return e?.cargo ? { ...r, cargo: e.cargo } : r
+    })
+  }, [allData, empleados])
+
   // Datos filtrados
-  const data = useMemo(() => filtrarNovedades(allData, {
+  const data = useMemo(() => filtrarNovedades(allDataEnriched, {
     filterPeriodo, filterConcepto, filterDependencia, filterAnio, filterMeses, rangoMes,
-  }), [allData, filterAnio, filterMeses, filterPeriodo, filterConcepto, filterDependencia, rangoMes])
+  }), [allDataEnriched, filterAnio, filterMeses, filterPeriodo, filterConcepto, filterDependencia, rangoMes])
 
   // Datos con los mismos filtros EXCEPTO el de concepto — se usan como base
   // para el denominador de "tasa de ausentismo", que siempre debe representar
@@ -113,9 +127,9 @@ export default function Dashboard({ onNavigate }) {
   // esté seleccionado. Si se usara `data` (ya filtrada por concepto) el
   // denominador cambiaría según el filtro y la tasa dejaría de ser comparable
   // entre Incapacidad, LNR, etc.
-  const dataBase = useMemo(() => filtrarNovedades(allData, {
+  const dataBase = useMemo(() => filtrarNovedades(allDataEnriched, {
     filterPeriodo, filterDependencia, filterAnio, filterMeses, rangoMes, incluirConcepto: false,
-  }), [allData, filterAnio, filterMeses, filterPeriodo, filterDependencia, rangoMes])
+  }), [allDataEnriched, filterAnio, filterMeses, filterPeriodo, filterDependencia, rangoMes])
 
   const hasFilter = filterAnio || filterMeses.length > 0 || filterPeriodo || filterDependencia || (filterConcepto && filterConcepto !== 'Incapacidad')
 
@@ -226,8 +240,8 @@ export default function Dashboard({ onNavigate }) {
   // ── Estadísticas derivadas ──────────────────────────────────────────────────
   // La lógica completa vive en utils/dashboardStats.js (calcularStats).
   const stats = useMemo(
-    () => calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo),
-    [data, allData, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo]
+    () => calcularStats(data, allDataEnriched, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo),
+    [data, allDataEnriched, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo]
   )
 
   // ── Export Excel ────────────────────────────────────────────────────────────

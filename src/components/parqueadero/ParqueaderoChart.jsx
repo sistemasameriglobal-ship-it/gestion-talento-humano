@@ -35,6 +35,7 @@ export default function ParqueaderoChart({
               <div style={{ display: 'flex', gap: 4, minWidth: 60 }}>
                 {e.carros > 0 && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 999, background: 'var(--info-bg)', color: 'var(--info-text)' }}>{e.carros}🚗</span>}
                 {e.motos > 0 && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 999, background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>{e.motos}🏍</span>}
+                {e.bicicletas > 0 && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 999, background: '#D1FAE5', color: '#047857' }}>{e.bicicletas}🚲</span>}
               </div>
             </div>
           )

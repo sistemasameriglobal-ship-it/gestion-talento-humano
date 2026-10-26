@@ -630,8 +630,8 @@ export default function EmpleadoFormModal({
                         </label>
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           {etapaAprendizaje === 'lectiva'
-                            ? 'Apoyo 75% SMMLV · Sin auxilio transporte'
-                            : 'Apoyo 100% SMMLV · Auxilio obligatorio'
+                            ? 'Apoyo 75% SMMLV · Afiliación obligatoria a EPS y ARL'
+                            : 'Apoyo 100% SMMLV + Auxilio · Todas las prestaciones de ley'
                           }
                         </span>
                       </div>
@@ -689,11 +689,11 @@ export default function EmpleadoFormModal({
                       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4 }}>
                         {etapaAprendizaje === 'lectiva' ? (
                           <span>
-                            📘 <strong>Etapa Lectiva seleccionada:</strong> Sugerido 75% del SMMLV (<strong>{formatCOP(APOYO_LECTIVA_75)}</strong>) y Auxilio de transporte <strong>$0</strong> (no obligatorio en lectiva).
+                            📘 <strong>Etapa Lectiva seleccionada:</strong> Apoyo del 75% del SMMLV (<strong>{formatCOP(APOYO_LECTIVA_75)}</strong>). Incluye afiliación obligatoria a Salud (EPS) y Riesgos Laborales (ARL).
                           </span>
                         ) : (
                           <span>
-                            🛠️ <strong>Etapa Productiva seleccionada:</strong> Sugerido 100% del SMMLV (<strong>{formatCOP(SMMLV_VIGENTE)}</strong>) y Auxilio de transporte legal (<strong>{formatCOP(AUXILIO_TRANSPORTE_VIGENTE)}</strong>, obligatorio en productiva).
+                            🛠️ <strong>Etapa Productiva seleccionada:</strong> Apoyo del 100% del SMMLV (<strong>{formatCOP(SMMLV_VIGENTE)}</strong>) + Auxilio de transporte (<strong>{formatCOP(AUXILIO_TRANSPORTE_VIGENTE)}</strong>). Incluye EPS, ARL y el reconocimiento de TODAS las prestaciones sociales de ley (Prima, Cesantías, Intereses y Vacaciones).
                           </span>
                         )}
                       </div>

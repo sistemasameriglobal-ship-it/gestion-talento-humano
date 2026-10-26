@@ -8,7 +8,7 @@ import {
 } from './empleadosConstants'
 
 const OBS_ETAPA_PRODUCTIVA_DEFAULT =
-  'Inicio de Etapa Productiva. Incremento de apoyo al 100% SMMLV y asignación de auxilio de transporte según normativa legal'
+  'Inicio de Etapa Productiva. Incremento de apoyo al 100% SMMLV, auxilio de transporte y reconocimiento de prestaciones sociales de ley'
 
 export default function ModalReintegroEmpleado({ emp, departamentos, onClose, onConfirm, saving }) {
   const listaDepartamentos = departamentos && departamentos.length > 0 ? departamentos : DEPENDENCIAS
@@ -95,7 +95,7 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
     {
       id: 'etapa_productiva',
       titulo: '🎓 Transición a Etapa Productiva (Aprendiz)',
-      desc: 'Paso de Etapa Lectiva (75%) a Productiva (100% SMMLV + Auxilio + ARL). Mantiene Período #1 Vigente.',
+      desc: 'Paso de Etapa Lectiva (75%) a Productiva (100% SMMLV + Auxilio + EPS + ARL). Activa el derecho a todas las prestaciones sociales de ley.',
       continuidad: true,
       destacado: esColaboradorAprendiz,
     },
@@ -316,7 +316,8 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
                   <div style={{ marginTop: 4 }}>
                     • <strong>Apoyo de sostenimiento:</strong> se actualiza del 75% al <strong>100% del SMMLV</strong>.<br />
                     • <strong>Auxilio de transporte:</strong> <strong>OBLIGATORIO / ACTIVO</strong> en etapa productiva presencial.<br />
-                    • <strong>Seguridad Social:</strong> se activa cobertura de <strong>ARL</strong> además de EPS.<br />
+                    • <strong>Seguridad Social:</strong> cobertura completa de <strong>EPS y ARL</strong>.<br />
+                    • <strong>Prestaciones Sociales:</strong> reconocimiento de <strong>TODAS las prestaciones sociales de ley</strong> (Prima, Cesantías, Intereses y Vacaciones).<br />
                     • <strong>Continuidad:</strong> <strong>NO</strong> se cierra el contrato ni se crea un nuevo período; el Período #1 continúa <strong>Vigente</strong>.
                   </div>
                 </div>

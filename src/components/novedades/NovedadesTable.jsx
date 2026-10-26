@@ -47,7 +47,7 @@ export default function NovedadesTable({
               <Th field="fecha_inicio" sortField={sortField} sortDir={sortDir} onSort={onSort}>Inicio</Th>
               <Th field="fecha_fin" sortField={sortField} sortDir={sortDir} onSort={onSort}>Fin</Th>
               <Th field="total_dias" style={{ textAlign: 'center' }} sortField={sortField} sortDir={sortDir} onSort={onSort}>Días</Th>
-              <Th field="dependencia" sortField={sortField} sortDir={sortDir} onSort={onSort}>Área</Th>
+              <Th field="dependencia" sortField={sortField} sortDir={sortDir} onSort={onSort}>Cargo / Área</Th>
               <Th field="periodo" sortField={sortField} sortDir={sortDir} onSort={onSort}>Periodo</Th>
               <th style={{ minWidth: 80 }}>Diag.</th>
               <th style={{ textAlign: 'center', minWidth: 80, borderLeft: '2px solid var(--border)' }}>Válid. Inc.</th>
@@ -71,7 +71,7 @@ export default function NovedadesTable({
                   style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }}
                 >
                   <td style={{ maxWidth: 230 }}>
-                    <PersonCell nombre={row.nombre_empleado}>
+                    <PersonCell nombre={row.nombre_empleado} sub={row.cargo}>
                       <IncompleteIndicator row={row} />
                     </PersonCell>
                   </td>
@@ -151,7 +151,19 @@ export default function NovedadesTable({
                       )
                     })()}
                   </td>
-                  <td style={{ color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.dependencia || '—'}</td>
+                  <td
+                    style={{ color: 'var(--text-muted)', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={row.cargo && row.dependencia ? `${row.cargo} - ${row.dependencia}` : (row.cargo || row.dependencia || '')}
+                  >
+                    {row.cargo && row.dependencia ? (
+                      <span>
+                        <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{row.cargo}</strong>
+                        <span style={{ opacity: 0.75 }}> - {row.dependencia}</span>
+                      </span>
+                    ) : (
+                      row.cargo || row.dependencia || '—'
+                    )}
+                  </td>
                   <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.periodo || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {row.diagnostico

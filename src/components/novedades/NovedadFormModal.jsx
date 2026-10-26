@@ -199,6 +199,13 @@ export default function NovedadFormModal({
                   activos={empleados.activos} inactivos={empleados.inactivos}
                   placeholder="— Seleccionar empleado —"
                 />
+                {form.nombre_empleado && fichasEmpleados[form.nombre_empleado] && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>💼 <strong>{fichasEmpleados[form.nombre_empleado].cargo || 'Sin cargo'}</strong></span>
+                    <span>·</span>
+                    <span>📍 {form.dependencia || fichasEmpleados[form.nombre_empleado].dependencia || 'Sin área'}</span>
+                  </div>
+                )}
                 {form.nombre_empleado && !fichasEmpleados[form.nombre_empleado]?.activo && (
                   <div style={{
                     marginTop: 8, display: 'flex', alignItems: 'center', gap: 6,

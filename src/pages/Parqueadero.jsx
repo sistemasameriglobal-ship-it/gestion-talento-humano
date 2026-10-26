@@ -89,6 +89,7 @@ export default function Parqueadero() {
     const matchTab = !filterTab ||
       (filterTab === 'CARRO'   && r.tipo === 'CARRO') ||
       (filterTab === 'MOTO'    && r.tipo === 'MOTO') ||
+      (filterTab === 'BICICLETA' && r.tipo === 'BICICLETA') ||
       (filterTab === 'exentos' && r.observacion === 'EXENTOS DE PAGO') ||
       (filterTab === 'sin_rep' && !r.fecha_envio_reporte)
     const matchEstado = !filterEstado ||
@@ -110,14 +111,15 @@ export default function Parqueadero() {
   const mesBase  = filterMes  || mesActual
   const anioBase = filterAnio || anioActual
   const rowsBase = rows.filter(r => r.mes===mesBase && r.anio===anioBase)
-  const carros  = rowsBase.filter(r => r.tipo==='CARRO').length
-  const motos   = rowsBase.filter(r => r.tipo==='MOTO').length
-  const exentos = rowsBase.filter(r => r.observacion==='EXENTOS DE PAGO').length
+  const carros     = rowsBase.filter(r => r.tipo==='CARRO').length
+  const motos      = rowsBase.filter(r => r.tipo==='MOTO').length
+  const bicicletas = rowsBase.filter(r => r.tipo==='BICICLETA').length
+  const exentos    = rowsBase.filter(r => r.observacion==='EXENTOS DE PAGO').length
   const total   = rowsBase.length || 1
 
   const openAdd  = () => { setForm({ ...EMPTY, mes: mesActual, anio: anioActual }); setDupWarn(false); setModal('add') }
   const openEdit = (row) => { setForm({...row}); setDupWarn(false); setModal('edit') }
-  const f = k => e => { let v = e.target.value; if (k==='placa') v=v.toUpperCase(); setForm(p=>({...p,[k]:v})) }
+  const f = k => e => { let v = e.target.value; if (k==='placa' && form.tipo !== 'BICICLETA') v=v.toUpperCase(); setForm(p=>({...p,[k]:v})) }
 
   const save = async () => {
     if (!form.nombre_empleado || !form.placa || !form.tipo)
@@ -208,7 +210,7 @@ export default function Parqueadero() {
     filterAnio && !filterMes && { label:filterAnio,                  clear:()=>{setFilterAnio('');setPage(1)} },
     !filterAnio && filterMes && { label:filterMes,                   clear:()=>{setFilterMes('');setPage(1)} },
     filterTipo && { label:filterTipo,         clear:()=>{setFilterTipo('');setPage(1)} },
-    filterTab  && { label:{CARRO:'Carros',MOTO:'Motos',exentos:'Exentos',sin_rep:'Sin reporte'}[filterTab], clear:()=>{setFilterTab('');setPage(1)} },
+    filterTab  && { label:{CARRO:'Carros',MOTO:'Motos',BICICLETA:'Bicicletas',exentos:'Exentos',sin_rep:'Sin reporte'}[filterTab], clear:()=>{setFilterTab('');setPage(1)} },
     filterEstado && { label:filterEstado==='retirados'?'Retirados':'Activos', clear:()=>{setFilterEstado('');setPage(1)} },
   ].filter(Boolean)
 
@@ -218,10 +220,11 @@ export default function Parqueadero() {
     rows.forEach(r => {
       if (!r.mes || !r.anio) return
       const key = `${r.mes}|${r.anio}`
-      if (!acc[key]) acc[key] = { mes:r.mes, anio:r.anio, total:0, carros:0, motos:0 }
+      if (!acc[key]) acc[key] = { mes:r.mes, anio:r.anio, total:0, carros:0, motos:0, bicicletas:0 }
       acc[key].total++
       if (r.tipo==='CARRO') acc[key].carros++
       if (r.tipo==='MOTO')  acc[key].motos++
+      if (r.tipo==='BICICLETA') acc[key].bicicletas++
     })
     return Object.values(acc).sort((a,b) => {
       const ya=parseInt(a.anio), yb=parseInt(b.anio)
@@ -271,7 +274,7 @@ export default function Parqueadero() {
       {/* ── KPIs animados ── */}
       {!loading && (
         <ParqueaderoKPIs
-          rowsBase={rowsBase} carros={carros} motos={motos} exentos={exentos} total={total} sinReporte={sinReporte}
+          rowsBase={rowsBase} carros={carros} motos={motos} bicicletas={bicicletas} exentos={exentos} total={total} sinReporte={sinReporte}
           mesBase={mesBase} anioBase={anioBase} mesActual={mesActual} anioActual={anioActual} filterTab={filterTab}
           setFilterTab={setFilterTab} setFilterTipo={setFilterTipo} setFilterMes={setFilterMes} setFilterAnio={setFilterAnio} setPage={setPage}
         />
@@ -298,7 +301,7 @@ export default function Parqueadero() {
 
       <div className="card">
         <ParqueaderoFiltros
-          rows={rows} carros={carros} motos={motos} exentos={exentos} sinReporte={sinReporte}
+          rows={rows} carros={carros} motos={motos} bicicletas={bicicletas} exentos={exentos} sinReporte={sinReporte}
           filterTab={filterTab} setFilterTab={setFilterTab} setFilterTipo={setFilterTipo}
           vista={vista} setVista={setVista}
           search={search} setSearch={setSearch}

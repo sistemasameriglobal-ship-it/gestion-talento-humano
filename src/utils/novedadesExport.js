@@ -38,7 +38,7 @@ export const LISTA_CONCEPTOS_VALIDACION = [
   'Cambio de Cargo',
   'Cambio de Área',
   'Suspensión',
-  'Recargo Dominical o Festivos',
+  'Horas extras con recargos',
   'Ausente',
   'Otros',
 ]

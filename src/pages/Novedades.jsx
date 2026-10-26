@@ -132,42 +132,13 @@ export default function Novedades() {
       }
     }
 
-    const enrichedRows = (data || []).map(r => {
-      let diasEnDinero
-      let diasDisfrutados = null
-      const esVac = r.concepto === 'Vacaciones' || (r.concepto || '').toLowerCase().includes('vacacion')
-      if (esVac) {
-        const rNombre = (r.nombre_empleado || '').trim().toLowerCase()
-        const vacMatch = (vacData || []).find(v => {
-          const vNombre = (v.nombre_empleado || '').trim().toLowerCase()
-          if (vNombre !== rNombre) return false
-          if (v.fecha_inicio && r.fecha_inicio) return v.fecha_inicio === r.fecha_inicio
-          return true
-        })
-        diasEnDinero = extraerDiasEnDinero(r, vacMatch)
-        diasDisfrutados = vacMatch?.dias_disfrutados != null
-          ? Number(vacMatch.dias_disfrutados)
-          : (r.fecha_inicio && r.fecha_fin ? diasHabilesEntre(r.fecha_inicio, r.fecha_fin) : null)
-      } else {
-        diasEnDinero = extraerDiasEnDinero(r, null)
-      }
-      return {
-        ...r,
-        dias_en_dinero: diasEnDinero > 0 ? diasEnDinero : null,
-        dias_disfrutados: diasDisfrutados,
-      }
-    })
-
-    setRows(enrichedRows)
-    const ps = [...new Set((data || []).map(r => r.periodo).filter(Boolean))].sort().reverse()
-    setPeriodos(ps)
+    const fichas = {}
     if (empData && empData.length > 0) {
       setListaEmpleados(empData)
       setEmpleados({
         activos: empData.filter(e => e.activo !== false).map(e => e.nombre_completo),
         inactivos: empData.filter(e => e.activo === false).map(e => e.nombre_completo),
       })
-      const fichas = {}
       empData.forEach(e => {
         const empPeriodos = (periodosData || []).filter(p => p.empleado_id === e.id)
         const pActivo = empPeriodos.find(p => p.es_periodo_actual) || empPeriodos[empPeriodos.length - 1]
@@ -188,6 +159,38 @@ export default function Novedades() {
       setEmpleados({ activos: [], inactivos: [] })
       setFichasEmpleados({})
     }
+
+    const enrichedRows = (data || []).map(r => {
+      let diasEnDinero
+      let diasDisfrutados = null
+      const esVac = r.concepto === 'Vacaciones' || (r.concepto || '').toLowerCase().includes('vacacion')
+      if (esVac) {
+        const rNombre = (r.nombre_empleado || '').trim().toLowerCase()
+        const vacMatch = (vacData || []).find(v => {
+          const vNombre = (v.nombre_empleado || '').trim().toLowerCase()
+          if (vNombre !== rNombre) return false
+          if (v.fecha_inicio && r.fecha_inicio) return v.fecha_inicio === r.fecha_inicio
+          return true
+        })
+        diasEnDinero = extraerDiasEnDinero(r, vacMatch)
+        diasDisfrutados = vacMatch?.dias_disfrutados != null
+          ? Number(vacMatch.dias_disfrutados)
+          : (r.fecha_inicio && r.fecha_fin ? diasHabilesEntre(r.fecha_inicio, r.fecha_fin) : null)
+      } else {
+        diasEnDinero = extraerDiasEnDinero(r, null)
+      }
+      const ficha = fichas[r.nombre_empleado]
+      return {
+        ...r,
+        cargo: r.cargo || ficha?.cargo || '',
+        dias_en_dinero: diasEnDinero > 0 ? diasEnDinero : null,
+        dias_disfrutados: diasDisfrutados,
+      }
+    })
+
+    setRows(enrichedRows)
+    const ps = [...new Set((data || []).map(r => r.periodo).filter(Boolean))].sort().reverse()
+    setPeriodos(ps)
     setLastUpdated(new Date())
     if (!silent) setLoading(false)
     setRefreshing(false)
@@ -599,6 +602,7 @@ export default function Novedades() {
       {/* ── Modal ver detalle ────────────────────────────────────────────────── */}
       <ViewDetailModal
         viewRow={viewRow}
+        fichasEmpleados={fichasEmpleados}
         onClose={() => setViewRow(null)}
         onEdit={(row) => { setViewRow(null); openEdit(row) }}
       />
