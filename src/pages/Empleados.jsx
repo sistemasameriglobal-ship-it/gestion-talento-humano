@@ -100,18 +100,6 @@ export default function Empleados() {
       Promise.resolve(procesosApi.listarProcesosDisciplinarios(currentCompany)).catch(() => ({ data: [] })),
     ])
 
-    // Eliminación puntual solicitada de Kevin Andres Correa Rojas (one-time)
-    if (localStorage.getItem('purged_kevin_correa') !== 'true') {
-      const kevin = (data || []).find(e => {
-        const norm = normalizarNombre(e.nombre_completo)
-        return norm.includes('kevin') && norm.includes('correa')
-      })
-      if (kevin) {
-        await empleadosApi.eliminarEmpleado(kevin.id, kevin.nombre_completo)
-        data = (data || []).filter(e => e.id !== kevin.id)
-        localStorage.setItem('purged_kevin_correa', 'true')
-      }
-    }
 
     // Detectar y auto-sincronizar colaboradores que no tengan su novedad de Ingreso registrada,
     // corregir la fecha de inicio si se registró erróneamente, y deduplicar registros repetidos de Ingreso
@@ -432,7 +420,7 @@ export default function Empleados() {
           dependencia: payload.dependencia,
         })
 
-        const fechaIngresoFinal = payload.fecha_inicio_empresa_actual || payload.fecha_ingreso || nuevoEmp?.fecha_inicio_empresa_actual || nuevoEmp?.fecha_ingreso || payload.fecha_primer_ingreso || null
+        const fechaIngresoFinal = payload.fecha_inicio_empresa_actual || payload.fecha_ingreso || nuevoEmp?.fecha_inicio_empresa_actual || nuevoEmp?.fecha_ingreso || payload.fecha_primer_ingreso || hoyISO()
         if (fechaIngresoFinal) {
           const { error: errNov } = await novedadesApi.crearNovedad({
             concepto: 'Ingreso',
@@ -441,7 +429,7 @@ export default function Empleados() {
             total_dias: 0,
             periodo: fechaIngresoFinal.slice(0, 7),
             observacion: 'Registro inicial de ingreso del colaborador',
-            empleado_id: nuevoEmp?.id || null,
+            empleado_id: nuevoId,
             nombre_empleado: payload.nombre_completo,
             dependencia: payload.dependencia || null,
             cargo: payload.cargo || null,
@@ -450,7 +438,7 @@ export default function Empleados() {
             departamento_id: nuevoEmp?.departamento_id || null,
           }, currentCompany)
           if (errNov) {
-            console.warn('Error al sincronizar novedad de ingreso al crear colaborador:', errNov)
+            console.error('Error al sincronizar novedad de ingreso al crear colaborador:', errNov)
           }
         }
       }
@@ -784,8 +772,9 @@ export default function Empleados() {
       const cargoNovedad = cargo || reintegroEmp.cargo || (motivo_transicion === 'etapa_productiva' ? 'Aprendiz Etapa Productiva' : null)
       const depNovedad = dependencia || reintegroEmp.dependencia || null
 
-      const { data: existentes } = await novedadesApi.buscarNovedadesContractualesPorFecha(
-        reintegroEmp.nombre_completo, fEfectivaFinal, currentCompany
+      // Buscar si ya existe una novedad con ESTE MISMO CONCEPTO en esta fecha
+      const { data: existentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
+        reintegroEmp.nombre_completo, conceptoNovedad, fEfectivaFinal, currentCompany
       )
 
       if (!existentes || existentes.length === 0) {
@@ -805,20 +794,14 @@ export default function Empleados() {
           departamento_id: reintegroEmp.departamento_id || null,
         }, currentCompany)
         if (errNov) {
-          console.warn('Error al sincronizar novedad de movimiento:', errNov)
+          console.error('Error al sincronizar novedad de movimiento:', errNov)
         }
       } else {
         await novedadesApi.actualizarNovedad(existentes[0].id, {
-          concepto: conceptoNovedad,
           cargo: cargoNovedad,
           dependencia: depNovedad,
           observacion: obsNovedad,
         })
-        if (existentes.length > 1) {
-          for (let i = 1; i < existentes.length; i++) {
-            await novedadesApi.eliminarNovedad(existentes[i].id)
-          }
-        }
       }
 
       logAccion(continuidad_laboral ? 'MOVIMIENTO_CONTRACTUAL' : (motivo_transicion === 'etapa_productiva' ? 'PASO_ETAPA_PRODUCTIVA' : 'REINTEGRAR'), 'empleados', reintegroEmp.id, currentCompany, {

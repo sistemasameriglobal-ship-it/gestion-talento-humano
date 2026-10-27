@@ -90,20 +90,6 @@ export default function Novedades() {
       Promise.resolve(vacacionesApi.listarVacaciones(currentCompany)).catch(() => ({ data: [] })),
     ])
 
-    // Eliminación puntual solicitada de Kevin Andres Correa Rojas en novedades (one-time)
-    if (localStorage.getItem('purged_kevin_correa_nov') !== 'true') {
-      const novsKevin = (data || []).filter(n => {
-        const norm = normalizarNombre(n.nombre_empleado)
-        return norm.includes('kevin') && norm.includes('correa')
-      })
-      if (novsKevin.length > 0) {
-        for (const n of novsKevin) {
-          await novedadesApi.eliminarNovedad(n.id)
-        }
-        data = (data || []).filter(d => !novsKevin.some(k => k.id === d.id))
-        localStorage.setItem('purged_kevin_correa_nov', 'true')
-      }
-    }
 
     // Deduplicación proactiva y auto-sincronización de eventos contractuales
     if (empData && empData.length > 0) {
@@ -145,28 +131,25 @@ export default function Novedades() {
           }
         }
 
-        // B) Múltiples novedades contractuales en la misma fecha (ej. Cambio de Área + Cambio de Cargo)
-        const porFechaContractual = {}
+        // B) Deduplicación de novedades contractuales con el MISMO concepto en la misma fecha
+        const porConceptoYFecha = {}
         for (const n of novsDeEmp) {
           if (!n.fecha_inicio || !CONCEPTOS_MOV.includes(n.concepto)) continue
-          if (!porFechaContractual[n.fecha_inicio]) porFechaContractual[n.fecha_inicio] = []
-          porFechaContractual[n.fecha_inicio].push(n)
+          const key = `${n.concepto}_${n.fecha_inicio}`
+          if (!porConceptoYFecha[key]) porConceptoYFecha[key] = []
+          porConceptoYFecha[key].push(n)
         }
 
-        for (const [, grupo] of Object.entries(porFechaContractual)) {
+        for (const [, grupo] of Object.entries(porConceptoYFecha)) {
           const vigentes = grupo.filter(n => !idsAEliminar.has(n.id))
           if (vigentes.length > 1) {
-            const cambioArea = vigentes.find(n => n.concepto === 'Cambio de Área')
-            const cambioCargo = vigentes.find(n => n.concepto === 'Cambio de Cargo')
-            if (cambioArea && cambioCargo) {
-              idsAEliminar.add(cambioCargo.id)
-            } else {
-              const ordenados = [...vigentes].sort((a, b) => (b.observacion?.length || 0) - (a.observacion?.length || 0))
-              for (let i = 1; i < ordenados.length; i++) {
-                if (ordenados[i].concepto === ordenados[0].concepto || (ordenados[i].concepto === 'Cambio de Cargo' && ordenados[0].concepto === 'Ascenso')) {
-                  idsAEliminar.add(ordenados[i].id)
-                }
-              }
+            const ordenados = [...vigentes].sort((a, b) => {
+              if (a.empleado_id && !b.empleado_id) return -1
+              if (!a.empleado_id && b.empleado_id) return 1
+              return (b.observacion?.length || 0) - (a.observacion?.length || 0)
+            })
+            for (let i = 1; i < ordenados.length; i++) {
+              idsAEliminar.add(ordenados[i].id)
             }
           }
         }
@@ -195,7 +178,30 @@ export default function Novedades() {
            (n.nombre_empleado && normalizarNombre(n.nombre_empleado) === normEmp))
         )
 
-        if (novIngreso && novIngreso.fecha_inicio !== fIngresoReal) {
+        if (!novIngreso) {
+          // Si el colaborador no tiene su novedad de Ingreso inicial, crearla automáticamente
+          const { data: novCreada, error: errCrea } = await novedadesApi.crearNovedad({
+            concepto: 'Ingreso',
+            fecha_inicio: fIngresoReal,
+            fecha_fin: fIngresoReal,
+            total_dias: 0,
+            periodo: fIngresoReal.slice(0, 7),
+            observacion: 'Registro inicial de ingreso del colaborador',
+            empleado_id: emp.id,
+            nombre_empleado: emp.nombre_completo,
+            dependencia: emp.dependencia || pActivo?.dependencia || null,
+            cargo: emp.cargo || pActivo?.cargo || null,
+            empresa: currentCompany,
+            empresa_id: emp.empresa_id || null,
+            departamento_id: emp.departamento_id || null,
+          }, currentCompany)
+          if (!errCrea) {
+            huboSincronizacion = true
+            if (novCreada && novCreada[0]) {
+              data.push(novCreada[0])
+            }
+          }
+        } else if (novIngreso.fecha_inicio !== fIngresoReal) {
           const { error: errUpd } = await novedadesApi.actualizarNovedad(novIngreso.id, {
             fecha_inicio: fIngresoReal,
             fecha_fin: fIngresoReal,

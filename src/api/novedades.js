@@ -43,7 +43,7 @@ export async function crearNovedad(payload, empresa = 'ameriglobal') {
   delete cleanPayload.dias_en_dinero
   delete cleanPayload.dias_disfrutados
 
-  return supabase.from(TABLA).insert([{
+  let res = await supabase.from(TABLA).insert([{
     ...cleanPayload,
     periodo: periodoCalculado,
     empresa: empresaFinal,
@@ -51,13 +51,45 @@ export async function crearNovedad(payload, empresa = 'ameriglobal') {
     departamento_id: payload.departamento_id || rel.departamento_id,
     empresa_id: payload.empresa_id || rel.empresa_id,
   }]).select()
+
+  // Fallback seguro si la columna cargo o columnas relacionales aún no existen en la BD
+  if (res.error && res.error.message && (
+    res.error.message.includes('cargo') ||
+    res.error.message.includes('departamento_id') ||
+    res.error.message.includes('empresa_id') ||
+    res.error.message.includes('empleado_id')
+  )) {
+    const fallbackPayload = { ...cleanPayload }
+    const omitCargo = res.error.message.includes('cargo')
+    const omitDep = res.error.message.includes('departamento_id')
+    const omitEmp = res.error.message.includes('empresa_id')
+    const omitEmpId = res.error.message.includes('empleado_id')
+
+    if (omitCargo) delete fallbackPayload.cargo
+    if (omitDep) delete fallbackPayload.departamento_id
+    if (omitEmp) delete fallbackPayload.empresa_id
+    if (omitEmpId) delete fallbackPayload.empleado_id
+
+    const fallbackObj = {
+      ...fallbackPayload,
+      periodo: periodoCalculado,
+      empresa: empresaFinal,
+    }
+    if (!omitEmpId) fallbackObj.empleado_id = payload.empleado_id || rel.empleado_id
+    if (!omitDep) fallbackObj.departamento_id = payload.departamento_id || rel.departamento_id
+    if (!omitEmp) fallbackObj.empresa_id = payload.empresa_id || rel.empresa_id
+
+    res = await supabase.from(TABLA).insert([fallbackObj]).select()
+  }
+
+  return res
 }
 
-/** Busca una novedad existente por empleado + concepto + fecha de inicio (evita duplicados al reflejar vacaciones). */
+/** Busca una novedad existente por empleado + concepto + fecha de inicio (evita duplicados al reflejar vacaciones y movimientos). */
 export function buscarNovedadPorEmpleadoConceptoYFecha(nombreEmpleado, concepto, fechaInicio, empresa) {
   let query = supabase
     .from(TABLA)
-    .select('id')
+    .select('id, concepto, observacion, fecha_inicio, empleado_id, nombre_empleado')
     .eq('nombre_empleado', nombreEmpleado)
     .eq('concepto', concepto)
   if (fechaInicio) query = query.eq('fecha_inicio', fechaInicio)
@@ -115,7 +147,12 @@ export async function actualizarNovedad(id, payload) {
     dataToUpdate.empresa_id = empresa_id
   }
 
-  return supabase.from(TABLA).update(dataToUpdate).eq('id', id).select()
+  let res = await supabase.from(TABLA).update(dataToUpdate).eq('id', id).select()
+  if (res.error && res.error.message && res.error.message.includes('cargo')) {
+    delete dataToUpdate.cargo
+    res = await supabase.from(TABLA).update(dataToUpdate).eq('id', id).select()
+  }
+  return res
 }
 
 /** Actualiza un solo campo de una novedad (edición inline en la tabla). */
