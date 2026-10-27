@@ -370,8 +370,8 @@ export default function Productividad() {
         cfg={cfg} etiquetaPeriodo={etiquetaPeriodo} totalGeneral={totalGeneral}
         datos={datos} promedioEquipo={promedioEquipo} resumenPeriodo={resumenPeriodo}
         rankedByPeriodo={rankedByPeriodo} valorPeriodo={valorPeriodo} statsPeriodo={statsPeriodo}
-        mejorMesIdx={mejorMesIdx} monthlyTotals={monthlyTotals} MESES={MESES}
-        currentCompany={currentCompany} mesFiltroIdx={mesFiltroIdx}
+        mejorMesIdx={mejorMesIdx} monthlyTotals={monthlyTotals} monthlyTotalGen={monthlyTotalGen} MESES={MESES}
+        currentCompany={currentCompany} mesFiltroIdx={mesFiltroIdx} anioActivo={anioActivo}
       />
 
       {/* Podio top 3 */}

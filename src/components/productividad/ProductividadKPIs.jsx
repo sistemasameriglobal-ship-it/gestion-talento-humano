@@ -1,49 +1,45 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Trophy, Target, Percent, Users, Edit3, Check, X, Loader2, Snowflake } from 'lucide-react'
+import { Calendar, Trophy, Target, Percent, Users, Edit3, Check, X, Loader2, Snowflake, Sliders } from 'lucide-react'
 import { colorPct } from '../../utils/productividadHelpers'
 import { META_EQUIPO_MENSUAL_DEFAULT, META_FRIOS_MINIMO } from '../../utils/productividadConstants'
-import { obtenerMetaEquipo, guardarMetaEquipo } from '../../api/productividad'
+import { obtenerMetasEquipo, guardarMetaMesRapida, guardarMetasEquipo } from '../../api/productividad'
+import ModalMetasEquipo from './ModalMetasEquipo'
 
 export default function ProductividadKPIs({
   cfg, etiquetaPeriodo, totalGeneral, datos, promedioEquipo, resumenPeriodo,
-  rankedByPeriodo, valorPeriodo, statsPeriodo, mejorMesIdx, monthlyTotals, MESES,
-  currentCompany = 'ameriglobal', mesFiltroIdx = -1,
+  rankedByPeriodo, valorPeriodo, statsPeriodo, mejorMesIdx, monthlyTotals = [], monthlyTotalGen = [], MESES,
+  currentCompany = 'ameriglobal', mesFiltroIdx = -1, anioActivo = new Date().getFullYear(),
 }) {
   const mejor = rankedByPeriodo[0]
   const nombreMejor = mejor?.nombre.split(' ').slice(0, 2).join(' ') || '—'
 
-  // Estado para la meta mensual de clientes cerrados del equipo
-  const [metaEquipo, setMetaEquipo] = useState(META_EQUIPO_MENSUAL_DEFAULT)
-  const [editandoMeta, setEditandoMeta] = useState(false)
-  const [inputMeta, setInputMeta] = useState(String(META_EQUIPO_MENSUAL_DEFAULT))
-  const [guardandoMeta, setGuardandoMeta] = useState(false)
+  // Configuración completa de metas (12 meses + anual)
+  const [metasConfig, setMetasConfig] = useState({
+    anual: META_EQUIPO_MENSUAL_DEFAULT * 12,
+    anualFijada: null,
+    mensuales: Array(12).fill(META_EQUIPO_MENSUAL_DEFAULT),
+    metaBase: META_EQUIPO_MENSUAL_DEFAULT,
+  })
 
+  // Modal completo de metas
+  const [modalMetasOpen, setModalMetasOpen] = useState(false)
+
+  // Edición rápida inline desde el banner
+  const [editandoRapido, setEditandoRapido] = useState(false)
+  const [inputRapido, setInputRapido] = useState(String(META_EQUIPO_MENSUAL_DEFAULT))
+  const [guardandoRapido, setGuardandoRapido] = useState(false)
+
+  // Carga de metas según departamento, año y empresa
   useEffect(() => {
     if (!cfg.usaClientes) return
     let cancelado = false
-    obtenerMetaEquipo(cfg.id, currentCompany).then(val => {
-      if (!cancelado) {
-        setMetaEquipo(val)
-        setInputMeta(String(val))
+    obtenerMetasEquipo(cfg.id, anioActivo, currentCompany).then(val => {
+      if (!cancelado && val) {
+        setMetasConfig(val)
       }
     })
     return () => { cancelado = true }
-  }, [cfg.id, currentCompany, cfg.usaClientes])
-
-  const handleGuardarMeta = async (e) => {
-    e?.preventDefault()
-    const num = Math.round(Number(inputMeta))
-    if (!num || num <= 0) return
-    setGuardandoMeta(true)
-    try {
-      const guardado = await guardarMetaEquipo(cfg.id, currentCompany, num)
-      setMetaEquipo(guardado)
-      setInputMeta(String(guardado))
-      setEditandoMeta(false)
-    } finally {
-      setGuardandoMeta(false)
-    }
-  }
+  }, [cfg.id, anioActivo, currentCompany, cfg.usaClientes])
 
   // Departamentos con Clientes Asignados / Resueltos (Ventas, UW-BS)
   if (cfg.usaClientes) {
@@ -52,62 +48,125 @@ export default function ProductividadKPIs({
 
     // Cálculo de meta grupal (mensual o anual)
     const esMes = mesFiltroIdx >= 0
-    const metaReferencia = esMes ? metaEquipo : (metaEquipo * 12)
-    const cerradosActuales = totalGen
+    const metaMesActual = (metasConfig.mensuales && metasConfig.mensuales[mesFiltroIdx] != null)
+      ? metasConfig.mensuales[mesFiltroIdx]
+      : (metasConfig.metaBase || META_EQUIPO_MENSUAL_DEFAULT)
+
+    const metaReferencia = esMes
+      ? metaMesActual
+      : (metasConfig.anual || (metasConfig.metaBase * 12) || (META_EQUIPO_MENSUAL_DEFAULT * 12))
+
+    // Clientes cerrados en el período actual
+    const cerradosActuales = esMes
+      ? ((monthlyTotalGen && monthlyTotalGen[mesFiltroIdx] != null) ? monthlyTotalGen[mesFiltroIdx] : totalGen)
+      : totalGen
+
     const pctMeta = metaReferencia > 0 ? Math.round((cerradosActuales / metaReferencia) * 100) : 0
     const restantes = Math.max(0, metaReferencia - cerradosActuales)
     const promedioMes = (!esMes && totalGen > 0) ? (totalGen / 12).toFixed(0) : 0
+
+    // Total general acumulado de todo el año
+    const totalAnualCerrados = (monthlyTotalGen && monthlyTotalGen.length)
+      ? monthlyTotalGen.reduce((s, v) => s + (v || 0), 0)
+      : totalGen
+    const pctAnual = metasConfig.anual > 0 ? Math.round((totalAnualCerrados / metasConfig.anual) * 100) : 0
 
     // Conteo de asesores que cumplen el mínimo de 11 clientes en frío
     const asesoresCumplenFrios = datos.filter(p => (statsPeriodo(p)?.frios || 0) >= META_FRIOS_MINIMO).length
     const pctAsesoresFrios = datos.length > 0 ? Math.round((asesoresCumplenFrios / datos.length) * 100) : 0
 
+    // Guardado rápido desde el input inline del banner
+    const handleGuardarRapido = async (e) => {
+      e?.preventDefault()
+      const num = Math.round(Number(inputRapido))
+      if (!num || num <= 0) return
+      setGuardandoRapido(true)
+      try {
+        if (esMes) {
+          const actualizados = await guardarMetaMesRapida(cfg.id, anioActivo, mesFiltroIdx, num, currentCompany)
+          setMetasConfig(actualizados)
+        } else {
+          const actualizados = await guardarMetasEquipo({
+            departamento: cfg.id,
+            anio: anioActivo,
+            empresa: currentCompany,
+            mensuales: metasConfig.mensuales,
+            anual: num,
+          })
+          setMetasConfig(actualizados)
+        }
+        setEditandoRapido(false)
+      } finally {
+        setGuardandoRapido(false)
+      }
+    }
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Banner de Meta Mensual del Equipo (Editable) */}
+        {/* Banner de Meta Mensual y Anual del Equipo (Editable con Gestión Completa) */}
         <div className="pr-meta-banner">
           <div className="pr-meta-top">
             <div className="pr-meta-title-group">
               <div className="pr-meta-icon"><Target size={20} /></div>
               <div>
                 <div className="pr-meta-title">
-                  Meta {esMes ? `de ${MESES[mesFiltroIdx]}` : 'Mensual'} del Equipo: Clientes Cerrados
+                  Meta {esMes ? `de ${MESES[mesFiltroIdx]} (${anioActivo})` : `Anual (${anioActivo})`} del Equipo: Clientes Cerrados
                 </div>
                 <div className="pr-meta-subtitle">
                   {esMes
-                    ? `Objetivo del mes: ${metaEquipo.toLocaleString('es-CO')} clientes cerrados entre todo el equipo`
-                    : `Objetivo base: ${metaEquipo.toLocaleString('es-CO')} clientes cerrados por mes (${metaReferencia.toLocaleString('es-CO')} en el año)`}
+                    ? `Objetivo del mes: ${metaReferencia.toLocaleString('es-CO')} clientes cerrados entre todo el equipo (Meta Anual: ${metasConfig.anual.toLocaleString('es-CO')})`
+                    : `Objetivo anual: ${metaReferencia.toLocaleString('es-CO')} clientes cerrados en el año (Planificado mes a mes)`}
                 </div>
               </div>
             </div>
 
             <div className="pr-meta-actions">
-              {editandoMeta ? (
-                <form className="pr-meta-edit-form" onSubmit={handleGuardarMeta}>
+              {/* Botón principal: Modal completo para asignar metas por mes y anuales */}
+              <button
+                type="button"
+                className="pr-btn pr-btn--primary"
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  borderRadius: 8,
+                  gap: 6,
+                  fontWeight: 700,
+                  boxShadow: '0 2px 8px color-mix(in srgb, var(--primary) 28%, transparent)'
+                }}
+                onClick={() => setModalMetasOpen(true)}
+                title="Abrir panel completo para asignar metas por mes y metas anuales"
+              >
+                <Sliders size={13} />
+                <span>Asignar Metas (Mes y Año)</span>
+              </button>
+
+              {/* Botón secundario: Edición rápida inline */}
+              {editandoRapido ? (
+                <form className="pr-meta-edit-form" onSubmit={handleGuardarRapido}>
                   <input
                     type="number"
                     min="1"
                     step="1"
                     className="pr-meta-input"
-                    value={inputMeta}
-                    onChange={e => setInputMeta(e.target.value)}
+                    value={inputRapido}
+                    onChange={e => setInputRapido(e.target.value)}
                     autoFocus
-                    placeholder="Ej. 600"
+                    placeholder={String(metaReferencia)}
                   />
                   <button
                     type="submit"
                     className="pr-btn pr-btn--primary"
                     style={{ padding: '5px 10px', fontSize: 12 }}
-                    disabled={guardandoMeta}
-                    title="Guardar meta"
+                    disabled={guardandoRapido}
+                    title="Guardar meta rápida"
                   >
-                    {guardandoMeta ? <Loader2 size={13} className="pr-spin" /> : <Check size={13} />}
+                    {guardandoRapido ? <Loader2 size={13} className="pr-spin" /> : <Check size={13} />}
                   </button>
                   <button
                     type="button"
                     className="pr-btn pr-btn--outline"
                     style={{ padding: '5px 10px', fontSize: 12 }}
-                    onClick={() => { setEditandoMeta(false); setInputMeta(String(metaEquipo)) }}
+                    onClick={() => { setEditandoRapido(false); setInputRapido(String(metaReferencia)) }}
                     title="Cancelar"
                   >
                     <X size={13} />
@@ -117,11 +176,11 @@ export default function ProductividadKPIs({
                 <button
                   type="button"
                   className="pr-meta-edit-btn"
-                  onClick={() => setEditandoMeta(true)}
-                  title="Haz clic para modificar el objetivo mensual de clientes cerrados"
+                  onClick={() => { setInputRapido(String(metaReferencia)); setEditandoRapido(true) }}
+                  title={esMes ? `Cambio rápido de meta de ${MESES[mesFiltroIdx]}` : `Cambio rápido de meta anual ${anioActivo}`}
                 >
                   <Edit3 size={13} />
-                  <span>Editar Meta ({metaEquipo})</span>
+                  <span>{esMes ? `Meta ${MESES[mesFiltroIdx]}` : 'Meta Anual'} ({metaReferencia})</span>
                 </button>
               )}
             </div>
@@ -157,20 +216,57 @@ export default function ProductividadKPIs({
           <div className="pr-meta-bottom">
             <span>
               {pctMeta >= 100 ? (
-                <b style={{ color: '#059669' }}>✓ ¡Excelente trabajo! El equipo ha alcanzado y superado la meta propuesta.</b>
+                <b style={{ color: '#059669' }}>✓ ¡Excelente trabajo! El equipo ha alcanzado y superado la meta {esMes ? `de ${MESES[mesFiltroIdx]}` : 'anual'}.</b>
               ) : (
-                <>Faltan <b style={{ color: 'var(--text)' }}>{restantes.toLocaleString('es-CO')}</b> clientes cerrados para cumplir la meta {esMes ? `de ${MESES[mesFiltroIdx]}` : 'anual'}.</>
+                <>Faltan <b style={{ color: 'var(--text)' }}>{restantes.toLocaleString('es-CO')}</b> clientes cerrados para cumplir la meta {esMes ? `de ${MESES[mesFiltroIdx]}` : `anual (${anioActivo})`}.</>
               )}
             </span>
 
-            <div className="pr-meta-frios-chip" title={`Meta individual: al menos ${META_FRIOS_MINIMO} clientes en frío por asesor`}>
-              <Snowflake size={13} />
-              <span>
-                <b>Mínimo {META_FRIOS_MINIMO} en frío:</b> {asesoresCumplenFrios} de {datos.length} asesores cumplen ({pctAsesoresFrios}%)
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {esMes && (
+                <div
+                  className="pr-meta-frios-chip"
+                  style={{
+                    background: 'color-mix(in srgb, var(--primary) 10%, var(--surface))',
+                    color: 'var(--primary)',
+                    borderColor: 'color-mix(in srgb, var(--primary) 25%, transparent)',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setModalMetasOpen(true)}
+                  title="Haz clic para ver o ajustar las metas del año"
+                >
+                  <Target size={13} />
+                  <span>
+                    <b>Meta Anual ({anioActivo}):</b> {totalAnualCerrados.toLocaleString('es-CO')} / {metasConfig.anual.toLocaleString('es-CO')} ({pctAnual}%)
+                  </span>
+                </div>
+              )}
+
+              <div className="pr-meta-frios-chip" title={`Meta individual: al menos ${META_FRIOS_MINIMO} clientes en frío por asesor`}>
+                <Snowflake size={13} />
+                <span>
+                  <b>Mínimo {META_FRIOS_MINIMO} en frío:</b> {asesoresCumplenFrios} de {datos.length} asesores cumplen ({pctAsesoresFrios}%)
+                </span>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Modal de Asignación y Gestión de Metas */}
+        <ModalMetasEquipo
+          open={modalMetasOpen}
+          onClose={() => setModalMetasOpen(false)}
+          cfg={cfg}
+          anio={anioActivo}
+          currentCompany={currentCompany}
+          metasConfig={metasConfig}
+          monthlyTotals={monthlyTotalGen && monthlyTotalGen.length ? monthlyTotalGen : monthlyTotals}
+          onSave={guardado => {
+            setMetasConfig(guardado)
+            setInputRapido(String(esMes ? guardado.mensuales[mesFiltroIdx] : guardado.anual))
+          }}
+          mesFiltroIdx={mesFiltroIdx}
+        />
 
         {/* Tarjetas resumen de KPIs */}
         <div className="pr-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
