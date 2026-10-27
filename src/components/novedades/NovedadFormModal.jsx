@@ -610,12 +610,42 @@ export default function NovedadFormModal({
                       { label: 'Válid. Incapacidad', field: 'validacion_incapacidad', ops: ['', 'OK', 'Validar', 'N/A'] },
                       { label: 'Prórroga', field: 'prorroga', ops: ['', 'Sí', 'No', 'N/A'] },
                       { label: 'Rad. Incapacidad', field: 'radicacion_incapacidad', ops: ['', 'OK', 'Validar', 'N/A'] },
-                    ].map(({ label, field, ops }) => (
-                      <div key={field}>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>{label}</label>
-                        <PillBtn field={field} opciones={ops} />
-                      </div>
-                    ))}
+                    ].map(({ label, field, ops }) => {
+                      const esRadicacion = field === 'radicacion_incapacidad'
+                      const esIncapacidad = normalizarConcepto(form.concepto) === 'Incapacidad'
+                      const diasNum = parseFloat(form.total_dias) || 0
+
+                      return (
+                        <div key={field}>
+                          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>
+                            {label}
+                            {esRadicacion && esIncapacidad && diasNum > 0 && (
+                              <span style={{
+                                marginLeft: 4,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: diasNum < 3 ? '#059669' : '#2563EB'
+                              }}>
+                                {diasNum < 3 ? '(<3d Empresa)' : '(≥3d EPS)'}
+                              </span>
+                            )}
+                          </label>
+                          <PillBtn field={field} opciones={ops} />
+                          {esRadicacion && esIncapacidad && diasNum > 0 && (
+                            <div style={{
+                              fontSize: 10,
+                              lineHeight: 1.25,
+                              marginTop: 5,
+                              color: diasNum < 3 ? '#059669' : (form.radicacion_incapacidad ? '#059669' : '#D97706'),
+                            }}>
+                              {diasNum < 3
+                                ? '🏢 No requiere EPS (1-2 días)'
+                                : (form.radicacion_incapacidad ? '✓ Radicación EPS registrada' : '⚠️ Radicar ante EPS (≥3 días)')}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                   {[
                     { label: 'Obs. Contabilidad', field: 'observacion_contabilidad' },

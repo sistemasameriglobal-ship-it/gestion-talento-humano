@@ -353,7 +353,17 @@ export default function Novedades() {
         const dias = form.concepto === 'Vacaciones'
           ? diasHabilesEntre(form.fecha_inicio, form.fecha_fin)
           : Math.round((fin - ini) / (1000 * 60 * 60 * 24)) + 1
-        Promise.resolve().then(() => setForm(p => ({ ...p, total_dias: dias })))
+        Promise.resolve().then(() => setForm(p => {
+          const next = { ...p, total_dias: dias }
+          if (normalizarConcepto(next.concepto) === 'Incapacidad') {
+            if (dias < 3 && !next.radicacion_incapacidad) {
+              next.radicacion_incapacidad = 'N/A'
+            } else if (dias >= 3 && next.radicacion_incapacidad === 'N/A') {
+              next.radicacion_incapacidad = ''
+            }
+          }
+          return next
+        }))
       }
     }
   }, [form.fecha_inicio, form.fecha_fin, form.concepto])
@@ -455,6 +465,13 @@ export default function Novedades() {
           cleanForm.total_dias = diasFisicos + diasDinero
         } else if (!cleanForm.total_dias) {
           cleanForm.total_dias = diasDinero
+        }
+      }
+
+      if (normalizarConcepto(cleanForm.concepto) === 'Incapacidad') {
+        const diasIncap = parseFloat(cleanForm.total_dias) || 0
+        if (diasIncap > 0 && diasIncap < 3 && !cleanForm.radicacion_incapacidad) {
+          cleanForm.radicacion_incapacidad = 'N/A'
         }
       }
 
@@ -564,6 +581,19 @@ export default function Novedades() {
     setFormError(null)
     if (k === 'concepto' && CONCEPTOS_SIN_FECHAS.includes(val)) {
       setForm(p => ({ ...p, concepto: val, fecha_inicio: '', fecha_fin: '', total_dias: '' }))
+    } else if (k === 'total_dias') {
+      const diasNum = parseFloat(val) || 0
+      setForm(p => {
+        const next = { ...p, total_dias: val }
+        if (normalizarConcepto(p.concepto) === 'Incapacidad') {
+          if (diasNum > 0 && diasNum < 3 && !next.radicacion_incapacidad) {
+            next.radicacion_incapacidad = 'N/A'
+          } else if (diasNum >= 3 && next.radicacion_incapacidad === 'N/A') {
+            next.radicacion_incapacidad = ''
+          }
+        }
+        return next
+      })
     } else {
       setForm(p => ({ ...p, [k]: val }))
     }
@@ -731,7 +761,9 @@ export default function Novedades() {
             {filtered.some(r => {
               if (normalizarConcepto(r.concepto) !== 'Incapacidad') return false
               const v = (r.validacion_incapacidad || '').toLowerCase().trim()
-              return !(r.radicacion_incapacidad || '').trim() || !(r.nomina_electronica || '').trim() || !(r.seguridad_social || '').trim() || v === '' || v === 'validar'
+              const dias = parseFloat(r.total_dias) || 0
+              const faltaRadicacion = dias >= 3 && !(r.radicacion_incapacidad || '').trim()
+              return faltaRadicacion || !(r.nomina_electronica || '').trim() || !(r.seguridad_social || '').trim() || v === '' || v === 'validar'
             }) && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--warning-text)', fontWeight: 600, fontSize: 12 }}>
                 <AlertCircle size={12} /> hay registros incompletos

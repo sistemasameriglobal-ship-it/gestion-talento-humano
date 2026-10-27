@@ -166,7 +166,11 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
     const depOrdenadas = Object.entries(porDep).sort((a, b) => b[1] - a[1])
 
     // Alertas (campos de gestión vacíos)
-    const sinRadicacion = allData.filter(r => normalizarConcepto(r.concepto) === concepto && !(r.radicacion_incapacidad || '').trim())
+    const sinRadicacion = allData.filter(r => {
+      if (normalizarConcepto(r.concepto) !== concepto) return false
+      const dias = parseFloat(r.total_dias) || 0
+      return dias >= 3 && !(r.radicacion_incapacidad || '').trim()
+    })
     const sinNomina     = allData.filter(r => normalizarConcepto(r.concepto) === concepto && !(r.nomina_electronica || '').trim())
     const sinSegSocial  = allData.filter(r => normalizarConcepto(r.concepto) === concepto && !(r.seguridad_social || '').trim())
     const pendientesValidar = allData.filter(r => {

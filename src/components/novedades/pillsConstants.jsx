@@ -49,7 +49,8 @@ export const CICLOS = {
 export function camposFaltantes(row) {
   const campos = []
   if (normalizarConcepto(row.concepto) === 'Incapacidad') {
-    if (!(row.radicacion_incapacidad || '').trim()) campos.push('Sin radicación')
+    const dias = parseFloat(row.total_dias) || 0
+    if (dias >= 3 && !(row.radicacion_incapacidad || '').trim()) campos.push('Sin radicación (≥3 días)')
     if (!(row.nomina_electronica || '').trim()) campos.push('Sin nómina e.')
     if (!(row.seguridad_social || '').trim()) campos.push('Sin seg. social')
     const v = (row.validacion_incapacidad || '').toLowerCase().trim()
