@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import * as departamentosApi from '../api/departamentos'
+import * as cargosApi from '../api/cargos'
 import * as empresasApi from '../api/empresas'
 import { DEPENDENCIAS, EMPRESAS_DISPONIBLES } from '../constants'
 
@@ -96,6 +97,34 @@ export function CompanyProvider({ children }) {
     Promise.resolve().then(() => cargarDepartamentos())
   }, [cargarDepartamentos])
 
+  // Cargos dinámicos de la empresa activa
+  const [cargos, setCargos] = useState([])
+  const [cargosCompletos, setCargosCompletos] = useState([])
+  const [, setLoadingCargos] = useState(false)
+
+  const cargarCargos = useCallback(async () => {
+    setLoadingCargos(true)
+    try {
+      const { data, error } = await cargosApi.listarCargos(currentCompany)
+      if (!error && data && data.length > 0) {
+        setCargosCompletos(data)
+        setCargos(data.map(c => c.nombre))
+      } else {
+        setCargos([])
+        setCargosCompletos([])
+      }
+    } catch {
+      setCargos([])
+      setCargosCompletos([])
+    } finally {
+      setLoadingCargos(false)
+    }
+  }, [currentCompany])
+
+  useEffect(() => {
+    Promise.resolve().then(() => cargarCargos())
+  }, [cargarCargos])
+
   // Obtiene el nivel de acceso para una sección en la empresa actual:
   // Retorna 'total' (ver y modificar), 'lectura' (solo ver información), o 'none' (sin acceso)
   const getSectionAccess = useCallback((sectionId) => {
@@ -163,6 +192,9 @@ export function CompanyProvider({ children }) {
     getSectionAccess,
     departamentos,
     reloadDepartamentos: cargarDepartamentos,
+    cargos,
+    cargosCompletos,
+    reloadCargos: cargarCargos,
   }
 
   return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>

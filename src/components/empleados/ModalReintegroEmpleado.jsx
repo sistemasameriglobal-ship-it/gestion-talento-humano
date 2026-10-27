@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { X, Calendar, UserCheck, Briefcase, Building2, Info, Award, DollarSign } from 'lucide-react'
 import { hoyISO } from '../../utils/fecha'
+import { useCompany } from '../../context/CompanyContext'
 import {
   DEPENDENCIAS, formatCOP,
   SMMLV_VIGENTE, AUXILIO_TRANSPORTE_VIGENTE, calcularApoyoProductivoSugerido,
@@ -11,6 +12,7 @@ const OBS_ETAPA_PRODUCTIVA_DEFAULT =
   'Inicio de Etapa Productiva. Incremento de apoyo al 100% SMMLV, auxilio de transporte y reconocimiento de prestaciones sociales de ley'
 
 export default function ModalReintegroEmpleado({ emp, departamentos, onClose, onConfirm, saving }) {
+  const { cargos, cargosCompletos } = useCompany()
   const listaDepartamentos = departamentos && departamentos.length > 0 ? departamentos : DEPENDENCIAS
 
   // Si el colaborador está activo, se asume por defecto Ascenso / Continuidad
@@ -43,6 +45,30 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
     return ''
   })
   const [error, setError] = useState(null)
+  const [modoOtroCargo, setModoOtroCargo] = useState(false)
+
+  const listaCargosReintegro = useMemo(() => {
+    let base = cargos && cargos.length > 0 ? cargos : []
+    if (base.length === 0) {
+      base = [
+        'ASESOR COMERCIAL', 'ANALISTA DE CARTERA', 'ANALISTA DE UNDERWRITING',
+        'ANALISTA DE VERIFICACIÓN', 'ANALISTA CONTABLE', 'COORDINADOR DE OPERACIONES',
+        'SUPERVISOR DE ÁREA', 'ANALISTA DE RRHH', 'SOPORTE TI', 'SERVICIOS GENERALES',
+        'APRENDIZ ETAPA LECTIVA', 'APRENDIZ ETAPA PRODUCTIVA'
+      ]
+    }
+    if (cargosCompletos && cargosCompletos.length > 0 && dependencia) {
+      const depNorm = normalizarTexto(dependencia)
+      const delDep = cargosCompletos
+        .filter(c => c.departamento && normalizarTexto(c.departamento) === depNorm)
+        .map(c => c.nombre)
+      const otros = cargosCompletos
+        .filter(c => !c.departamento || normalizarTexto(c.departamento) !== depNorm)
+        .map(c => c.nombre)
+      return [...new Set([...delDep, ...otros])]
+    }
+    return [...new Set(base)]
+  }, [cargos, cargosCompletos, dependencia])
 
   const esContinuidad = tipoMovimiento !== 'reintegro' && tipoMovimiento !== 'etapa_productiva'
   // Solo el ajuste salarial es novedad pura sin períodos laborales
@@ -503,21 +529,65 @@ export default function ModalReintegroEmpleado({ emp, departamentos, onClose, on
             {!esAjusteSalarial && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'block' }}>
-                    {esEtapaProductiva ? 'Etapa / Cargo en Etapa Productiva' : esContinuidad ? 'Nuevo Cargo / Posición' : 'Cargo'}
-                    {(tipoMovimiento === 'cambio_cargo' || tipoMovimiento === 'ascenso') && <span style={{ color: '#EF4444' }}> *</span>}
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <Briefcase size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="text"
-                      className="emp-form-input"
-                      style={{ paddingLeft: 34, width: '100%' }}
-                      value={cargo}
-                      onChange={e => setCargo(e.target.value)}
-                      placeholder={esEtapaProductiva ? 'Aprendiz Etapa Productiva' : esContinuidad ? 'Ej. Coordinador Senior' : 'Cargo actual'}
-                    />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+                      {esEtapaProductiva ? 'Etapa / Cargo en Etapa Productiva' : esContinuidad ? 'Nuevo Cargo / Posición' : 'Cargo'}
+                      {(tipoMovimiento === 'cambio_cargo' || tipoMovimiento === 'ascenso') && <span style={{ color: '#EF4444' }}> *</span>}
+                    </label>
                   </div>
+                  <div style={{ position: 'relative' }}>
+                    <Briefcase size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none', zIndex: 1 }} />
+                    <select
+                      className="emp-form-input"
+                      style={{ paddingLeft: 34, width: '100%', appearance: 'auto', cursor: 'pointer' }}
+                      value={modoOtroCargo ? '__OTRO__' : (cargo || '')}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        if (val === '__OTRO__') {
+                          setModoOtroCargo(true)
+                          setCargo('')
+                        } else {
+                          setModoOtroCargo(false)
+                          setCargo(val)
+                        }
+                      }}
+                      required={!modoOtroCargo && (tipoMovimiento === 'cambio_cargo' || tipoMovimiento === 'ascenso')}
+                    >
+                      <option value="">-- Selecciona el Cargo --</option>
+                      {cargo && !listaCargosReintegro.includes(cargo) && !modoOtroCargo && (
+                        <option value={cargo}>{cargo} (Actual)</option>
+                      )}
+                      {listaCargosReintegro.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="__OTRO__">✏️ + Otro cargo personalizado...</option>
+                    </select>
+                  </div>
+
+                  {modoOtroCargo && (
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="emp-form-input"
+                        placeholder="Escribe el nuevo cargo..."
+                        value={cargo}
+                        onChange={e => setCargo(e.target.value)}
+                        autoFocus
+                        style={{ textTransform: 'uppercase' }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setModoOtroCargo(false)
+                          if (listaCargosReintegro.length > 0) setCargo(listaCargosReintegro[0])
+                        }}
+                        style={{ fontSize: 11.5, padding: '6px 10px', whiteSpace: 'nowrap' }}
+                      >
+                        ← Volver a la lista
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>

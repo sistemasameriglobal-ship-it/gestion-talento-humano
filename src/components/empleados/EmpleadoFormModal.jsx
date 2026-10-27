@@ -39,12 +39,36 @@ const TABS = [
 export default function EmpleadoFormModal({
   modal, form, setForm, f, onNombreChange, duplicadoWarning, saving, save, msg, onClose,
 }) {
-  const { currentCompany, departamentos } = useCompany()
+  const { currentCompany, departamentos, cargos, cargosCompletos } = useCompany()
   const [activeTab, setActiveTab] = useState('todos')
   const [prevEmpId, setPrevEmpId] = useState(form.id)
   const [tieneVinculoPrevio, setTieneVinculoPrevio] = useState(() =>
     Boolean(form.fecha_primer_ingreso || form.fecha_terminacion_anterior)
   )
+  const [modoOtroCargo, setModoOtroCargo] = useState(false)
+
+  const listaCargosFiltrados = useMemo(() => {
+    let base = cargos && cargos.length > 0 ? cargos : []
+    if (base.length === 0) {
+      base = [
+        'ASESOR COMERCIAL', 'ANALISTA DE CARTERA', 'ANALISTA DE UNDERWRITING',
+        'ANALISTA DE VERIFICACIÓN', 'ANALISTA CONTABLE', 'COORDINADOR DE OPERACIONES',
+        'SUPERVISOR DE ÁREA', 'ANALISTA DE RRHH', 'SOPORTE TI', 'SERVICIOS GENERALES',
+        'APRENDIZ ETAPA LECTIVA', 'APRENDIZ ETAPA PRODUCTIVA'
+      ]
+    }
+    if (cargosCompletos && cargosCompletos.length > 0 && form.dependencia) {
+      const depNorm = normalizarTexto(form.dependencia)
+      const delDep = cargosCompletos
+        .filter(c => c.departamento && normalizarTexto(c.departamento) === depNorm)
+        .map(c => c.nombre)
+      const otros = cargosCompletos
+        .filter(c => !c.departamento || normalizarTexto(c.departamento) !== depNorm)
+        .map(c => c.nombre)
+      return [...new Set([...delDep, ...otros])]
+    }
+    return [...new Set(base)]
+  }, [cargos, cargosCompletos, form.dependencia])
 
   const detectarEtapa = (cargo) => {
     const c = normalizarTexto(cargo)
@@ -556,29 +580,85 @@ export default function EmpleadoFormModal({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label className="emp-form-label">Cargo <span style={{ color: '#EF4444' }}>*</span></label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <label className="emp-form-label" style={{ margin: 0 }}>
+                      Cargo <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {listaCargosFiltrados.length} cargos disponibles desde Usuarios
+                    </span>
+                  </div>
                   <div style={{ position: 'relative' }}>
-                    <Briefcase size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
+                    <Briefcase size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none', zIndex: 1 }} />
+                    <select
                       className="emp-form-input"
-                      style={{ paddingLeft: 36 }}
-                      value={form.cargo || ''}
+                      style={{ paddingLeft: 36, width: '100%', appearance: 'auto', cursor: 'pointer' }}
+                      value={modoOtroCargo ? '__OTRO__' : (form.cargo || '')}
                       onChange={(e) => {
                         const val = e.target.value
-                        f('cargo')(e)
-                        const valNorm = normalizarTexto(val)
-                        if (valNorm.includes('productiv')) {
-                          setEtapaAprendizaje('productiva')
-                        } else if (valNorm.includes('lectiv')) {
-                          setEtapaAprendizaje('lectiva')
+                        if (val === '__OTRO__') {
+                          setModoOtroCargo(true)
+                          setForm(prev => ({ ...prev, cargo: '' }))
+                        } else {
+                          setModoOtroCargo(false)
+                          setForm(prev => ({ ...prev, cargo: val }))
+                          const valNorm = normalizarTexto(val)
+                          if (valNorm.includes('productiv')) {
+                            setEtapaAprendizaje('productiva')
+                          } else if (valNorm.includes('lectiv')) {
+                            setEtapaAprendizaje('lectiva')
+                          }
                         }
                       }}
-                      placeholder={esModoAprendiz
-                        ? (etapaAprendizaje === 'productiva' ? 'Aprendiz Etapa Productiva - [Área de práctica]' : 'Aprendiz Etapa Lectiva - [Área de estudio]')
-                        : 'Ej: Agente / Analista de cartera'
-                      }
-                    />
+                      required={!modoOtroCargo}
+                    >
+                      <option value="">-- Selecciona el Cargo --</option>
+                      {form.cargo && !listaCargosFiltrados.includes(form.cargo) && !modoOtroCargo && (
+                        <option value={form.cargo}>{form.cargo} (Actual)</option>
+                      )}
+                      {listaCargosFiltrados.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="__OTRO__">✏️ + Otro cargo personalizado...</option>
+                    </select>
                   </div>
+
+                  {modoOtroCargo && (
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="emp-form-input"
+                        placeholder="Escribe el nombre del nuevo cargo..."
+                        value={form.cargo || ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          f('cargo')(e)
+                          const valNorm = normalizarTexto(val)
+                          if (valNorm.includes('productiv')) {
+                            setEtapaAprendizaje('productiva')
+                          } else if (valNorm.includes('lectiv')) {
+                            setEtapaAprendizaje('lectiva')
+                          }
+                        }}
+                        autoFocus
+                        required
+                        style={{ textTransform: 'uppercase' }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setModoOtroCargo(false)
+                          if (listaCargosFiltrados.length > 0) {
+                            setForm(prev => ({ ...prev, cargo: listaCargosFiltrados[0] }))
+                          }
+                        }}
+                        style={{ fontSize: 11.5, padding: '6px 10px', whiteSpace: 'nowrap' }}
+                      >
+                        ← Volver a la lista
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>

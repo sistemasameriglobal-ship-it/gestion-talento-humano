@@ -7,10 +7,11 @@ import { useCompany } from '../context/CompanyContext'
 import {
   Search, Mail, UserCheck, UserX, ShieldCheck, ShieldAlert, Shield,
   Users as UsersIcon, AlertCircle, CheckCircle2, UserPlus, X, Loader2,
-  Eye, EyeOff, Layers, UserCog, Building2, ArrowRight, Plus,
+  Eye, EyeOff, Layers, UserCog, Building2, ArrowRight, Plus, Briefcase,
 } from 'lucide-react'
 import ModalEditarPermisos from '../components/usuarios/ModalEditarPermisos'
 import ModalGestionDepartamentos from '../components/usuarios/ModalGestionDepartamentos'
+import ModalGestionCargos from '../components/usuarios/ModalGestionCargos'
 import ModalGestionEmpresas from '../components/usuarios/ModalGestionEmpresas'
 import ModalAuditLogs from '../components/usuarios/ModalAuditLogs'
 import PersonCell from '../components/ui/PersonCell'
@@ -257,6 +258,7 @@ export default function Usuarios() {
   const [modalCrear, setModalCrear] = useState(false)
   const [modalPermisosUser, setModalPermisosUser] = useState(null)
   const [modalDepartamentos, setModalDepartamentos] = useState(false)
+  const [modalCargos, setModalCargos] = useState(false)
   const [modalEmpresas, setModalEmpresas] = useState(false)
   const [modalAuditoria, setModalAuditoria] = useState(false)
 
@@ -330,6 +332,9 @@ export default function Usuarios() {
           <button className="btn btn-ghost" onClick={() => setModalDepartamentos(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Layers size={15} /> Gestionar Departamentos
           </button>
+          <button className="btn btn-ghost" onClick={() => setModalCargos(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Briefcase size={15} /> Gestionar Cargos
+          </button>
           <button className="btn btn-ghost" onClick={() => setModalEmpresas(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Building2 size={15} /> Gestionar Empresas
           </button>
@@ -364,6 +369,12 @@ export default function Usuarios() {
       {modalDepartamentos && (
         <ModalGestionDepartamentos
           onClose={() => setModalDepartamentos(false)}
+        />
+      )}
+
+      {modalCargos && (
+        <ModalGestionCargos
+          onClose={() => setModalCargos(false)}
         />
       )}
 
