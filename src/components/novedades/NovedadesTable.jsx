@@ -3,7 +3,7 @@ import { normalizarConcepto, CONCEPTO_COLORS } from '../../utils/parseExcel'
 import { hoyISO } from '../../utils/fecha'
 import { diasHabilesEntre, evaluarEstadoTemporalAusencia } from '../../utils/diasHabiles'
 import { PAGE_SIZE } from '../../utils/novedadesConstants'
-import { EditablePill, SortIcon, IncompleteIndicator } from './Pills'
+import { EditablePill, EditableDiagnostico, SortIcon, IncompleteIndicator } from './Pills'
 import Paginacion from '../ui/Paginacion'
 import PersonCell from '../ui/PersonCell'
 
@@ -166,9 +166,11 @@ export default function NovedadesTable({
                   </td>
                   <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.periodo || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    {row.diagnostico
-                      ? <span className="mono" style={{ fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 6px' }}>{row.diagnostico}</span>
-                      : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    <EditableDiagnostico
+                      value={row.diagnostico}
+                      rowId={row.id}
+                      onSave={quickSave}
+                    />
                   </td>
                   <td style={{ textAlign: 'center', borderLeft: '2px solid var(--border)' }}>
                     <EditablePill field="validacion_incapacidad" value={row.validacion_incapacidad} rowId={row.id} onSave={quickSave} />
