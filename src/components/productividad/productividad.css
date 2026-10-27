@@ -720,3 +720,195 @@
   color: var(--warning-text);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   MODAL DE ASIGNACIÓN DE METAS (ANUAL Y MES A MES)
+   ═══════════════════════════════════════════════════════════════════════ */
+.pr-metas-modal {
+  width: 100%;
+  padding: 24px 28px;
+  box-sizing: border-box;
+}
+
+.pr-metas-hero-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 860px) {
+  .pr-metas-hero-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pr-metas-hero-card {
+  background: var(--surface);
+  border: 1.5px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+  box-sizing: border-box;
+}
+
+.pr-metas-hero-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pr-metas-annual-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pr-metas-annual-input {
+  width: 130px;
+  padding: 7px 10px;
+  font-size: 18px;
+  font-weight: 900;
+  border-radius: 8px;
+  border: 2px solid var(--primary);
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.pr-metas-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .pr-metas-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .pr-metas-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.pr-metas-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  position: relative;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.pr-metas-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+}
+
+.pr-metas-card--active {
+  border: 2px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.pr-metas-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+}
+
+.pr-metas-month-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pr-metas-card-input-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.pr-metas-card-input-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pr-metas-card-input {
+  width: 100%;
+  min-width: 70px;
+  max-width: 100%;
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+  border-radius: 7px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  box-sizing: border-box;
+  transition: all .15s;
+}
+
+.pr-metas-card-input:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.pr-metas-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.pr-metas-summary-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  margin-top: 18px;
+  margin-bottom: 20px;
+  font-size: 12px;
+}
+

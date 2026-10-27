@@ -122,22 +122,23 @@ export default function ProductividadKPIs({
 
             <div className="pr-meta-actions">
               {/* Botón principal: Modal completo para asignar metas por mes y anuales */}
+              {/* Botón principal: Modal completo para ver y asignar metas por mes y anuales */}
               <button
                 type="button"
                 className="pr-btn pr-btn--primary"
                 style={{
-                  padding: '6px 14px',
-                  fontSize: 12,
+                  padding: '7px 16px',
+                  fontSize: 12.5,
                   borderRadius: 8,
-                  gap: 6,
-                  fontWeight: 700,
+                  gap: 7,
+                  fontWeight: 800,
                   boxShadow: '0 2px 8px color-mix(in srgb, var(--primary) 28%, transparent)'
                 }}
                 onClick={() => setModalMetasOpen(true)}
-                title="Abrir panel completo para asignar metas por mes y metas anuales"
+                title="Ver y configurar las metas mensuales de todo el año"
               >
-                <Sliders size={13} />
-                <span>Asignar Metas (Mes y Año)</span>
+                <Calendar size={14} />
+                <span>Ver Metas Mensuales</span>
               </button>
 
               {/* Botón secundario: Edición rápida inline */}

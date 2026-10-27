@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Target, X, Check, Loader2, Sparkles, Calculator, Copy, ArrowRight, TrendingUp } from 'lucide-react'
+import { Target, X, Check, Loader2, Sparkles, Calculator, Copy, Zap } from 'lucide-react'
 import AnimatedModal from '../ui/AnimatedModal'
 import { MESES, MESES_FULL } from '../../utils/productividadConstants'
 import { guardarMetasEquipo } from '../../api/productividad'
@@ -47,14 +47,19 @@ export default function ModalMetasEquipo({
     setMensuales(prev => {
       const next = [...prev]
       next[idx] = val
+      // Sincronización en vivo: al subir o bajar la meta de un mes, se suma o resta en la meta anual
+      const nuevaSuma = next.reduce((s, v) => s + (Number(v) || 0), 0)
+      setMetaAnual(nuevaSuma)
       return next
     })
   }
 
   // Distribuir meta anual equitativamente entre los 12 meses
   const handleDistribuirEquitativo = () => {
-    const cadaMes = Math.max(1, Math.round(metaAnual / 12))
-    setMensuales(Array(12).fill(cadaMes))
+    const cadaMes = Math.max(0, Math.round(metaAnual / 12))
+    const nuevos = Array(12).fill(cadaMes)
+    setMensuales(nuevos)
+    setMetaAnual(cadaMes * 12)
   }
 
   // Sumar automáticamente los 12 meses y actualizar la meta anual
@@ -65,7 +70,6 @@ export default function ModalMetasEquipo({
   // Copiar valor unificado a todos los meses
   const handleAplicarATodos = () => {
     const num = Math.max(0, parseInt(valorUnificado, 10) || 0)
-    if (num <= 0) return
     setMensuales(Array(12).fill(num))
     setMetaAnual(num * 12)
   }
@@ -96,19 +100,24 @@ export default function ModalMetasEquipo({
   }
 
   return (
-    <AnimatedModal open={open} onRequestClose={onClose}>
-      <div style={{ maxWidth: 860, width: '100%', padding: '24px 28px' }}>
-        {/* Cabecera */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+    <AnimatedModal
+      open={open}
+      onRequestClose={onClose}
+      maxWidth="1140px"
+      backdropStyle={{ alignItems: 'flex-start', paddingTop: '28px', paddingBottom: '28px', overflowY: 'auto' }}
+    >
+      <div className="pr-metas-modal">
+        {/* Cabecera compacta */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
-              width: 44, height: 44, borderRadius: 12,
+              width: 40, height: 40, borderRadius: 10,
               background: 'color-mix(in srgb, var(--primary) 15%, transparent)',
               color: 'var(--primary)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 2px 8px color-mix(in srgb, var(--primary) 20%, transparent)'
             }}>
-              <Target size={24} />
+              <Target size={22} />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -123,7 +132,7 @@ export default function ModalMetasEquipo({
                   {cfg.tabLabel} · Año {anio}
                 </span>
               </div>
-              <p style={{ margin: '3px 0 0', fontSize: 12.5, color: 'var(--text-muted)' }}>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
                 Configura los objetivos mensuales mes a mes y la meta global anual de clientes cerrados.
               </p>
             </div>
@@ -133,144 +142,136 @@ export default function ModalMetasEquipo({
             className="pr-btn pr-btn--outline"
             style={{ padding: 6, borderRadius: 8 }}
             onClick={onClose}
-            title="Cerrar"
+            title="Cerrar ventana"
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* ── SECCIÓN 1: META ANUAL ── */}
-        <div style={{
-          background: 'var(--surface)',
-          border: '1.5px solid color-mix(in srgb, var(--primary) 30%, var(--border))',
-          borderRadius: 14,
-          padding: '16px 20px',
-          marginBottom: 20,
-          boxShadow: '0 4px 14px rgba(0,0,0,0.03)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+        {/* ── SECCIÓN 1: HERO GRID (META ANUAL + HERRAMIENTAS HORIZONTALES) ── */}
+        <div className="pr-metas-hero-grid">
+          {/* Tarjeta Izquierda: Meta Anual */}
+          <div className="pr-metas-hero-card">
             <div>
-              <span style={{
-                fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
-                color: 'var(--primary)', display: 'block', marginBottom: 4
-              }}>
-                🎯 Objetivo Global del Año
+              <span className="pr-metas-hero-title">
+                <Target size={14} /> Objetivo Global Anual ({anio})
               </span>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <div className="pr-metas-annual-input-wrap">
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                  Meta Anual ({anio}):
+                  Meta Anual:
                 </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={metaAnual}
-                    onChange={e => setMetaAnual(Math.max(1, parseInt(e.target.value, 10) || 0))}
-                    style={{
-                      width: 130, padding: '6px 12px', fontSize: 16, fontWeight: 800,
-                      borderRadius: 8, border: '2px solid var(--primary)',
-                      background: 'var(--bg)', color: 'var(--text)', textAlign: 'center'
-                    }}
-                  />
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>clientes cerrados</span>
-                </div>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="pr-metas-annual-input"
+                  value={metaAnual}
+                  onChange={e => setMetaAnual(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>clientes cerrados</span>
               </div>
             </div>
 
-            {/* Accesos rápidos anuales */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="pr-btn pr-btn--outline"
-                style={{ fontSize: 11.5, padding: '6px 12px', gap: 5 }}
-                onClick={handleDistribuirEquitativo}
-                title="Divide la meta anual en 12 partes iguales y las aplica a cada mes"
-              >
-                <Sparkles size={13} color="var(--primary)" />
-                Distribuir en los 12 meses (~{Math.round(metaAnual / 12)}/mes)
-              </button>
-              <button
-                type="button"
-                className="pr-btn pr-btn--outline"
-                style={{ fontSize: 11.5, padding: '6px 12px', gap: 5 }}
-                onClick={handleSumarMeses}
-                title="Ajusta la meta anual a la suma de los valores ingresados en los 12 meses"
-              >
-                <Calculator size={13} color="#059669" />
-                Igualar a suma de meses ({sumaMeses})
-              </button>
+            {/* Barra de progreso anual actual */}
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, marginBottom: 5 }}>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  Progreso en {anio}: <strong style={{ color: 'var(--text)' }}>{totalRealAnual.toLocaleString('es-CO')}</strong> de {metaAnual.toLocaleString('es-CO')} cerrados
+                </span>
+                <span style={{ fontWeight: 800, color: pctAnual >= 100 ? '#059669' : (pctAnual >= 70 ? 'var(--primary)' : '#D97706') }}>
+                  {pctAnual}% alcanzado
+                </span>
+              </div>
+              <div style={{ height: 6, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${Math.min(pctAnual, 100)}%`,
+                  background: pctAnual >= 100 ? '#10B981' : (pctAnual >= 70 ? 'var(--primary)' : '#F59E0B'),
+                  transition: 'width .3s'
+                }} />
+              </div>
             </div>
           </div>
 
-          {/* Barra de progreso anual actual */}
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed var(--border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, marginBottom: 5 }}>
-              <span style={{ color: 'var(--text-muted)' }}>
-                Progreso real acumulado en {anio}: <b style={{ color: 'var(--text)' }}>{totalRealAnual.toLocaleString('es-CO')}</b> de {metaAnual.toLocaleString('es-CO')} cerrados
+          {/* Tarjeta Derecha: Herramientas Rápidas de Distribución */}
+          <div className="pr-metas-hero-card">
+            <div>
+              <span className="pr-metas-hero-title" style={{ color: 'var(--text)' }}>
+                <Zap size={14} color="var(--primary)" /> Herramientas de Distribución
               </span>
-              <span style={{ fontWeight: 800, color: pctAnual >= 100 ? '#059669' : (pctAnual >= 70 ? 'var(--primary)' : '#D97706') }}>
-                {pctAnual}% alcanzado en el año
-              </span>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                <button
+                  type="button"
+                  className="pr-btn pr-btn--outline"
+                  style={{ fontSize: 11.5, padding: '6px 11px', gap: 5, flex: 1 }}
+                  onClick={handleDistribuirEquitativo}
+                  title="Divide la meta anual en 12 partes iguales y las aplica a cada mes"
+                >
+                  <Sparkles size={13} color="var(--primary)" />
+                  Distribuir en 12 meses (~{Math.round(metaAnual / 12)}/mes)
+                </button>
+                <button
+                  type="button"
+                  className="pr-btn pr-btn--outline"
+                  style={{ fontSize: 11.5, padding: '6px 11px', gap: 5, flex: 1 }}
+                  onClick={handleSumarMeses}
+                  title="Ajusta la meta anual a la suma de los 12 meses"
+                >
+                  <Calculator size={13} color="#059669" />
+                  Igualar a suma ({sumaMeses.toLocaleString('es-CO')})
+                </button>
+              </div>
             </div>
-            <div style={{ height: 6, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${Math.min(pctAnual, 100)}%`,
-                background: pctAnual >= 100 ? '#10B981' : (pctAnual >= 70 ? 'var(--primary)' : '#F59E0B'),
-                transition: 'width .3s'
-              }} />
+
+            {/* Asignación rápida a todos */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+              background: 'var(--bg)', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)'
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                Copiar a todos los meses:
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={valorUnificado}
+                  onChange={e => setValorUnificado(e.target.value)}
+                  style={{
+                    width: 70, padding: '4px 6px', fontSize: 13, fontWeight: 800,
+                    borderRadius: 6, border: '1px solid var(--border)', textAlign: 'center',
+                    background: 'var(--surface)', color: 'var(--text)'
+                  }}
+                  placeholder="100"
+                />
+                <button
+                  type="button"
+                  className="pr-btn pr-btn--primary"
+                  style={{ fontSize: 11, padding: '5px 10px', gap: 4 }}
+                  onClick={handleAplicarATodos}
+                  title="Aplica este valor a los 12 meses del año"
+                >
+                  <Copy size={11} />
+                  Aplicar
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ── SECCIÓN 2: METAS POR MES ── */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-            <div>
-              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', display: 'block' }}>
-                Metas Mensuales (Mes a Mes)
-              </span>
-              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                Personaliza la meta de cada mes según estacionalidad o proyecciones del equipo.
-              </span>
-            </div>
-
-            {/* Asignación rápida unificada */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>Copiar a todos:</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={valorUnificado}
-                onChange={e => setValorUnificado(e.target.value)}
-                style={{
-                  width: 75, padding: '4px 8px', fontSize: 12, fontWeight: 700,
-                  borderRadius: 6, border: '1px solid var(--border)', textAlign: 'center',
-                  background: 'var(--bg)', color: 'var(--text)'
-                }}
-                placeholder="100"
-              />
-              <button
-                type="button"
-                className="pr-btn pr-btn--outline"
-                style={{ fontSize: 11, padding: '4px 9px', gap: 4 }}
-                onClick={handleAplicarATodos}
-                title="Aplica este valor a los 12 meses"
-              >
-                <Copy size={11} />
-                Aplicar
-              </button>
-            </div>
+        {/* ── SECCIÓN 2: GRID DE LOS 12 MESES ── */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
+              Metas Mensuales por Mes (Enero – Diciembre)
+            </span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              Suma actual: <strong style={{ color: 'var(--text)' }}>{sumaMeses.toLocaleString('es-CO')}</strong> clientes
+            </span>
           </div>
 
-          {/* Grid de los 12 meses */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
-            gap: 10
-          }}>
+          <div className="pr-metas-grid">
             {MESES.map((mesCorto, idx) => {
               const metaMes = mensuales[idx] || 0
               const realMes = monthlyTotals[idx] || 0
@@ -280,20 +281,11 @@ export default function ModalMetasEquipo({
               return (
                 <div
                   key={mesCorto}
-                  style={{
-                    background: esMesSeleccionado ? 'color-mix(in srgb, var(--primary) 6%, var(--surface))' : 'var(--surface)',
-                    border: esMesSeleccionado ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    position: 'relative'
-                  }}
+                  className={`pr-metas-card ${esMesSeleccionado ? 'pr-metas-card--active' : ''}`}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="pr-metas-card-top">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--text)' }}>
+                      <span className="pr-metas-month-name">
                         {MESES_FULL[idx]}
                       </span>
                       {esMesSeleccionado && (
@@ -307,51 +299,46 @@ export default function ModalMetasEquipo({
                     </div>
                     {realMes > 0 && (
                       <span style={{
-                        fontSize: 10, fontWeight: 700,
-                        color: pctMes >= 100 ? '#059669' : (pctMes >= 70 ? 'var(--primary)' : '#D97706')
+                        fontSize: 10.5, fontWeight: 700, padding: '1px 6px', borderRadius: 999,
+                        background: pctMes >= 100 ? 'var(--success-bg)' : (pctMes >= 70 ? 'var(--primary-light)' : 'rgba(217, 119, 6, 0.1)'),
+                        color: pctMes >= 100 ? 'var(--success-text)' : (pctMes >= 70 ? 'var(--primary)' : '#D97706')
                       }}>
                         {pctMes}%
                       </span>
                     )}
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Meta:</span>
+                  {/* Input de meta con espacio amplio para números de 3 a 6 dígitos */}
+                  <div className="pr-metas-card-input-box">
+                    <span className="pr-metas-card-input-label">Meta:</span>
                     <input
                       type="number"
                       min="0"
                       step="1"
+                      className="pr-metas-card-input"
                       value={metaMes}
                       onChange={e => handleMesChange(idx, e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: '4px 6px',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        textAlign: 'center',
-                        borderRadius: 6,
-                        border: '1px solid var(--border)',
-                        background: 'var(--bg)',
-                        color: 'var(--text)'
-                      }}
                     />
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10.5, color: 'var(--text-muted)' }}>
-                    <span>Real: <b style={{ color: 'var(--text)' }}>{realMes}</b> cerrados</span>
-                    {realMes > 0 && (
-                      <span style={{ fontSize: 9.5 }}>
-                        {realMes >= metaMes ? '✓ Cumplida' : `Faltan ${Math.max(0, metaMes - realMes)}`}
-                      </span>
-                    )}
+                  <div className="pr-metas-card-bottom">
+                    <span>Real: <strong style={{ color: 'var(--text)' }}>{realMes}</strong></span>
+                    <span>
+                      {realMes >= metaMes && metaMes > 0 ? (
+                        <strong style={{ color: '#059669' }}>✓ Cumplida</strong>
+                      ) : (
+                        `Faltan ${Math.max(0, metaMes - realMes)}`
+                      )}
+                    </span>
                   </div>
 
                   {metaMes > 0 && (
-                    <div style={{ height: 3, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
+                    <div style={{ height: 4, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
                       <div style={{
                         height: '100%',
                         width: `${Math.min(pctMes, 100)}%`,
-                        background: pctMes >= 100 ? '#10B981' : (pctMes >= 70 ? 'var(--primary)' : '#F59E0B')
+                        background: pctMes >= 100 ? '#10B981' : (pctMes >= 70 ? 'var(--primary)' : '#F59E0B'),
+                        borderRadius: 999
                       }} />
                     </div>
                   )}
@@ -362,44 +349,38 @@ export default function ModalMetasEquipo({
         </div>
 
         {/* ── RESUMEN EN VIVO Y DIFERENCIA ── */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 12,
-          padding: '12px 16px',
-          borderRadius: 10,
-          background: 'var(--bg)',
-          border: '1px solid var(--border)',
-          marginBottom: 20
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
-            <span>
-              Suma de los 12 meses: <b style={{ color: 'var(--text)', fontSize: 13 }}>{sumaMeses.toLocaleString('es-CO')}</b> clientes
-            </span>
-            <span style={{ color: 'var(--text-muted)' }}>|</span>
-            <span>
-              Meta Anual fijada: <b style={{ color: 'var(--primary)', fontSize: 13 }}>{metaAnual.toLocaleString('es-CO')}</b> clientes
-            </span>
-            {sumaMeses !== metaAnual && (
-              <span style={{
-                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
-                background: 'rgba(217, 119, 6, 0.1)', color: '#D97706'
-              }}>
-                Diferencia: {sumaMeses > metaAnual ? `+${(sumaMeses - metaAnual).toLocaleString('es-CO')}` : `${(sumaMeses - metaAnual).toLocaleString('es-CO')}`}
-              </span>
-            )}
-          </div>
+        <div className="pr-metas-summary-box">
+          {sumaMeses === metaAnual ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#059669', fontWeight: 700 }}>
+              <Check size={18} />
+              <span>Metas sincronizadas: La suma de los 12 meses coincide exactamente con la meta anual ({metaAnual.toLocaleString('es-CO')} clientes).</span>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span>Suma de 12 meses: <strong style={{ color: 'var(--text)' }}>{sumaMeses.toLocaleString('es-CO')}</strong></span>
+                <span style={{ color: 'var(--text-muted)' }}>|</span>
+                <span>Meta Anual fijada: <strong style={{ color: 'var(--primary)' }}>{metaAnual.toLocaleString('es-CO')}</strong></span>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                  background: 'rgba(217, 119, 6, 0.12)', color: '#D97706'
+                }}>
+                  Diferencia: {sumaMeses > metaAnual ? `+${(sumaMeses - metaAnual).toLocaleString('es-CO')}` : `${(sumaMeses - metaAnual).toLocaleString('es-CO')}`}
+                </span>
+              </div>
 
-          <button
-            type="button"
-            className="pr-btn pr-btn--outline"
-            style={{ fontSize: 11, padding: '4px 10px' }}
-            onClick={handleSumarMeses}
-          >
-            Alinear anual con suma ({sumaMeses})
-          </button>
+              <button
+                type="button"
+                className="pr-btn pr-btn--outline"
+                style={{ fontSize: 11.5, padding: '5px 12px', gap: 5 }}
+                onClick={handleSumarMeses}
+                title="Ajusta la meta anual a la suma de los 12 meses"
+              >
+                <Calculator size={13} color="var(--primary)" />
+                Alinear meta anual a {sumaMeses.toLocaleString('es-CO')}
+              </button>
+            </>
+          )}
         </div>
 
         {/* ── BOTONES DE ACCIÓN ── */}
@@ -415,7 +396,7 @@ export default function ModalMetasEquipo({
           <button
             type="button"
             className="pr-btn pr-btn--primary"
-            style={{ padding: '8px 20px', gap: 6, fontWeight: 700 }}
+            style={{ padding: '8px 22px', gap: 6, fontWeight: 700 }}
             onClick={handleGuardar}
             disabled={guardando}
           >

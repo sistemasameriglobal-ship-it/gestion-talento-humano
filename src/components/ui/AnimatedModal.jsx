@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react'
 import './ui.css'
 
-export default function AnimatedModal({ open, onRequestClose, maxWidth, children }) {
+export default function AnimatedModal({ open, onRequestClose, maxWidth, backdropStyle, modalStyle, children }) {
   const [mounted, setMounted] = useState(open)
   const [closing, setClosing] = useState(false)
   const [frozen, setFrozen] = useState(children)
@@ -37,12 +37,19 @@ export default function AnimatedModal({ open, onRequestClose, maxWidth, children
   return (
     <div
       className="modal-backdrop"
-      style={{ animation: `${closing ? 'uiBackdropOut' : 'uiBackdropIn'} 0.18s ease forwards` }}
+      style={{
+        animation: `${closing ? 'uiBackdropOut' : 'uiBackdropIn'} 0.18s ease forwards`,
+        ...(backdropStyle || {})
+      }}
       onClick={e => { if (e.target === e.currentTarget) onRequestClose() }}
     >
       <div
         className="modal"
-        style={{ ...(maxWidth ? { maxWidth } : {}), animation: `${closing ? 'uiModalOut' : 'uiModalIn'} 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards` }}
+        style={{
+          ...(maxWidth ? { maxWidth } : {}),
+          ...(modalStyle || {}),
+          animation: `${closing ? 'uiModalOut' : 'uiModalIn'} 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards`
+        }}
       >
         {frozen}
       </div>
