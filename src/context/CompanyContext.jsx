@@ -180,7 +180,7 @@ export function CompanyProvider({ children }) {
     return getSectionAccess(sectionId) === 'total'
   }, [getSectionAccess])
 
-  const value = {
+  const value = useMemo(() => ({
     currentCompany,
     companyConfig,
     setCompany,
@@ -195,7 +195,22 @@ export function CompanyProvider({ children }) {
     cargos,
     cargosCompletos,
     reloadCargos: cargarCargos,
-  }
+  }), [
+    currentCompany,
+    companyConfig,
+    setCompany,
+    empresasPermitidas,
+    listaEmpresas,
+    cargarEmpresas,
+    hasPermission,
+    canWrite,
+    getSectionAccess,
+    departamentos,
+    cargarDepartamentos,
+    cargos,
+    cargosCompletos,
+    cargarCargos,
+  ])
 
   return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>
 }

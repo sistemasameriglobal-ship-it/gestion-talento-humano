@@ -1,5 +1,5 @@
 import PageTitle from '../components/ui/PageTitle'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useDeferredValue } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as empleadosApi from '../api/empleados'
 import * as novedadesApi from '../api/novedades'
@@ -250,9 +250,11 @@ export default function Empleados() {
     return acc
   }, [novedades])
 
+  const deferredSearch = useDeferredValue(search)
+
   const filtered = useMemo(() => {
+    const s = deferredSearch.trim().toLowerCase()
     let res = rows.filter(r => {
-      const s = search.toLowerCase()
       const matchSearch = !s ||
         r.nombre_completo?.toLowerCase().includes(s) ||
         r.numero_documento?.toLowerCase().includes(s) ||
@@ -291,7 +293,7 @@ export default function Empleados() {
       }
     })
     return res
-  }, [rows, search, filterDep, filterEstado, filterTab, sortBy, novedadesPorEmpleado, periodosPorEmpleado])
+  }, [rows, deferredSearch, filterDep, filterEstado, filterTab, sortBy, novedadesPorEmpleado, periodosPorEmpleado])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -443,6 +445,7 @@ export default function Empleados() {
         }
       }
     } else {
+      const prevEmp = rows.find(r => r.id === form.id)
       const { error } = await empleadosApi.actualizarEmpleado(form.id, payload)
       err = error
       if (!error) {
@@ -454,7 +457,51 @@ export default function Empleados() {
           dependencia: payload.dependencia,
         })
 
-        // Sincronizar fecha de ingreso en novedades si se actualizó el perfil
+        const hoy = hoyISO()
+
+        // 1. Detectar si hubo Cambio de Área
+        if (prevEmp && prevEmp.dependencia && payload.dependencia && prevEmp.dependencia.trim() !== payload.dependencia.trim()) {
+          try {
+            await novedadesApi.crearNovedad({
+              concepto: 'Cambio de Área',
+              fecha_inicio: hoy,
+              fecha_fin: hoy,
+              total_dias: 0,
+              periodo: hoy.slice(0, 7),
+              observacion: `Cambio de área: Anterior [${prevEmp.dependencia}] → Nueva [${payload.dependencia}]`,
+              empleado_id: form.id,
+              nombre_empleado: payload.nombre_completo,
+              dependencia: payload.dependencia,
+              cargo: payload.cargo || prevEmp.cargo || null,
+              empresa: currentCompany,
+            }, currentCompany)
+          } catch (novAreaErr) {
+            console.warn('Error al registrar novedad de cambio de área:', novAreaErr)
+          }
+        }
+
+        // 2. Detectar si hubo Cambio de Cargo
+        if (prevEmp && prevEmp.cargo && payload.cargo && prevEmp.cargo.trim().toUpperCase() !== payload.cargo.trim().toUpperCase()) {
+          try {
+            await novedadesApi.crearNovedad({
+              concepto: 'Cambio de Cargo',
+              fecha_inicio: hoy,
+              fecha_fin: hoy,
+              total_dias: 0,
+              periodo: hoy.slice(0, 7),
+              observacion: `Cambio de cargo: Anterior [${prevEmp.cargo}] → Nuevo [${payload.cargo}]`,
+              empleado_id: form.id,
+              nombre_empleado: payload.nombre_completo,
+              dependencia: payload.dependencia || prevEmp.dependencia || null,
+              cargo: payload.cargo,
+              empresa: currentCompany,
+            }, currentCompany)
+          } catch (novCargoErr) {
+            console.warn('Error al registrar novedad de cambio de cargo:', novCargoErr)
+          }
+        }
+
+        // 3. Sincronizar fecha de ingreso en novedades si se actualizó el perfil
         const fIngresoUpd = payload.fecha_inicio_empresa_actual || payload.fecha_ingreso || payload.fecha_primer_ingreso
         if (fIngresoUpd) {
           try {

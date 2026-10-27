@@ -1,10 +1,12 @@
 import PageTitle from '../components/ui/PageTitle'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react'
 import { useCompany } from '../context/CompanyContext'
 import * as novedadesApi from '../api/novedades'
 import * as empleadosApi from '../api/empleados'
 import * as procesosApi from '../api/procesosDisciplinarios'
 import * as productividadApi from '../api/productividad'
+import * as vacacionesApi from '../api/vacaciones'
+import * as parqueaderoApi from '../api/parqueadero'
 import { hoyISO } from '../utils/fecha'
 import { normalizarConcepto } from '../utils/parseExcel'
 import { exportarExcel } from '../utils/exportarExcel'
@@ -12,8 +14,9 @@ import { Users, Search, X, User, Download, LayoutGrid, List, ArrowUpDown } from 
 import {
   PAGE_SIZE, labelMes, CONCEPTOS_LIST, CONCEPTOS_AUSENTISMO,
   construirProductividad, anioProductividadEfectivo, productividadPorEmpleado,
-  normalizeNombreProd, PRODUCTIVIDAD_MESES, diasCalendarioEntre, diasCalendarioDelMes,
+  normalizeNombreProd, PRODUCTIVIDAD_MESES, PRODUCTIVIDAD_DEPTS, diasCalendarioEntre, diasCalendarioDelMes,
 } from '../utils/colaboradores'
+import { calcularDiasCausadosVacaciones, getEstadoVacacionActual } from '../utils/vacacionesHelpers'
 import ColaboradorKpis from '../components/colaboradores/ColaboradorKpis'
 import ColaboradorAreaTabs from '../components/colaboradores/ColaboradorAreaTabs'
 import ColaboradorSkeleton from '../components/colaboradores/ColaboradorSkeleton'
@@ -33,7 +36,7 @@ export default function Colaboradores() {
   const [search, setSearch] = useState('')
   const [filterArea, setFilterArea] = useState('')
   const [filterConcepto, setFilterConcepto] = useState('')
-  const [filterEstado, setFilterEstado] = useState('') // '' | 'con_novedades' | 'sin_novedades' | 'reincidente' | 'con_pd'
+  const [filterEstado, setFilterEstado] = useState('') // '' | 'con_novedades' | 'sin_novedades' | 'reincidente' | 'con_pd' | 'con_vacaciones' | 'con_parqueadero'
   const [filterMes, setFilterMes] = useState('') // '' | 'YYYY-MM'
   const [sortBy, setSortBy] = useState('dias_desc')
   const [vista, setVista] = useState('tarjetas')
@@ -41,30 +44,39 @@ export default function Colaboradores() {
   const [selected, setSelected] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
   const [msg, setMsg] = useState(null)
-  const [procesosPorEmpleado, setProcesosPorEmpleado] = useState({})
+  const [procesosTodos, setProcesosTodos] = useState([])
+  const [vacacionesTodas, setVacacionesTodas] = useState([])
+  const [parqueaderoTodos, setParqueaderoTodos] = useState([])
   const [productividadData, setProductividadData] = useState({})
 
   const load = useCallback(() => {
     setLoading(true)
     Promise.all([
       novedadesApi.listarNovedadesCompleto(currentCompany),
-      empleadosApi.listarEmpleadosParaColaboradores(currentCompany),
-      procesosApi.listarNombresProcesosDisciplinarios(currentCompany),
-      // Mismas tablas que usa la página Productividad: "productividad" cubre
-      // Ventas y UW-BS (una fila por persona/mes/año), "cierre_meses" cubre Cierre.
-      productividadApi.listarProductividadParaColaboradores(['Producción', 'Clientes Resueltos'], currentCompany),
+      empleadosApi.listarEmpleados(currentCompany),
+      procesosApi.listarProcesosDisciplinarios(currentCompany),
+      vacacionesApi.listarVacaciones(currentCompany),
+      parqueaderoApi.listarRegistrosParqueadero(currentCompany),
+      productividadApi.listarProductividadParaColaboradores(['Producción', 'Clientes Resueltos', 'Clientes en Frío'], currentCompany),
       productividadApi.listarCierreMesesParaColaboradores(currentCompany),
-    ]).then(([{ data }, { data: empData }, { data: pdData }, { data: prodData }, { data: cierreData }]) => {
-      setRows(data || [])
+    ]).then(([
+      { data: novData },
+      { data: empData },
+      { data: pdData },
+      { data: vacData },
+      { data: parkData },
+      { data: prodData },
+      { data: cierreData }
+    ]) => {
+      setRows(novData || [])
       setEmpleadosTodos(empData || [])
-      // Conteo de procesos disciplinarios por nombre de empleado
-      const pdAcc = {}
-      ;(pdData || []).forEach(p => {
-        const k = p.nombre_empleado
-        pdAcc[k] = (pdAcc[k] || 0) + 1
-      })
-      setProcesosPorEmpleado(pdAcc)
+      setProcesosTodos(pdData || [])
+      setVacacionesTodas(vacData || [])
+      setParqueaderoTodos(parkData || [])
       setProductividadData(construirProductividad(prodData, cierreData, { usaClientes: currentCompany !== 'global_link' }))
+      setLoading(false)
+    }).catch(err => {
+      console.error('Error cargando colaboradores:', err)
       setLoading(false)
     })
   }, [currentCompany])
@@ -86,24 +98,43 @@ export default function Colaboradores() {
   }
 
   // ── Agrupar por colaborador ───────────────────────────────────────────────
-  // Si hay un mes seleccionado, solo se agrupan las novedades cuya fecha de inicio
-  // cae dentro de ese mes — así todos los conteos, KPIs, tarjetas, tabla y el
-  // detalle del colaborador quedan filtrados por ese período.
   const rowsDelPeriodo = useMemo(() => {
     if (!filterMes) return rows
     return rows.filter(r => r.fecha_inicio && r.fecha_inicio.slice(0, 7) === filterMes)
   }, [rows, filterMes])
 
   const colaboradores = useMemo(() => {
+    const norm = s => (s || '').trim().toLowerCase()
     const acc = {}
     const empMap = new Map()
     ;(empleadosTodos || []).forEach(e => {
-      if (e.nombre_completo) empMap.set(e.nombre_completo.trim().toLowerCase(), e)
+      if (e.nombre_completo) empMap.set(norm(e.nombre_completo), e)
+    })
+
+    const pdMap = new Map()
+    ;(procesosTodos || []).forEach(p => {
+      const k = norm(p.nombre_empleado)
+      if (!pdMap.has(k)) pdMap.set(k, [])
+      pdMap.get(k).push(p)
+    })
+
+    const vacMap = new Map()
+    ;(vacacionesTodas || []).forEach(v => {
+      const k = norm(v.nombre_empleado)
+      if (!vacMap.has(k)) vacMap.set(k, [])
+      vacMap.get(k).push(v)
+    })
+
+    const parkMap = new Map()
+    ;(parqueaderoTodos || []).forEach(p => {
+      const k = norm(p.nombre_empleado)
+      if (!parkMap.has(k)) parkMap.set(k, [])
+      parkMap.get(k).push(p)
     })
 
     rowsDelPeriodo.forEach(r => {
       const k = r.nombre_empleado
-      const emp = empMap.get((k || '').trim().toLowerCase())
+      const emp = empMap.get(norm(k))
       const areaOficial = emp?.dependencia || r.dependencia || '—'
       if (!acc[k]) acc[k] = { nombre: k, area: areaOficial, novedades: [], diasInc: 0, episodiosInc: 0, porConcepto: {} }
       acc[k].novedades.push(r)
@@ -117,9 +148,7 @@ export default function Colaboradores() {
       acc[k].porConcepto[tipo].dias += parseFloat(r.total_dias) || 0
       if (areaOficial && areaOficial !== '—') acc[k].area = areaOficial
     })
-    // Con un mes seleccionado no tiene sentido listar a todos los colaboradores
-    // "sin novedades" (serían prácticamente todos); solo se muestran cuando
-    // se está viendo el histórico completo.
+
     if (!filterMes) {
       empleadosTodos.forEach(e => {
         if (e.activo !== false && !acc[e.nombre_completo]) {
@@ -127,21 +156,7 @@ export default function Colaboradores() {
         }
       })
     }
-    // ── Días ausentes totales y tasa de ausentismo por colaborador ──────────
-    // "Días ausente" (diasAusenteTotal) es informativo: suma los días CALENDARIO
-    // de los conceptos que cuentan como ausentismo (Incapacidad, LNR, LR,
-    // Maternidad, Paternidad, Calamidad/Luto, Día Familia, Hospitalización,
-    // Otro) — Vacaciones y Embargo quedan fuera (no son ausencias).
-    //
-    // Para la TASA se usan días calendario en ambos lados (numerador y
-    // denominador): una incapacidad corre todos los días, caiga donde caiga,
-    // así que no tiene sentido convertirla a días hábiles. El numerador es
-    // directamente diasAusenteTotal (ya en días calendario).
-    //
-    // El período de referencia es fijo e igual para TODOS los colaboradores,
-    // para que las tasas sean comparables entre sí:
-    //  - si hay un mes filtrado → ese mes completo
-    //  - si no → desde la novedad con fecha más antigua de todo el sistema, hasta hoy
+
     const hoy = hoyISO()
     let periodoInicioGlobal, periodoFinGlobal, diasPeriodoGlobal
     if (filterMes) {
@@ -158,26 +173,77 @@ export default function Colaboradores() {
       periodoFinGlobal = hoy
       diasPeriodoGlobal = diasCalendarioEntre(periodoInicioGlobal, periodoFinGlobal)
     }
-    const empleadosMap = {}
-    empleadosTodos.forEach(e => { empleadosMap[e.nombre_completo] = e })
+
     const anioProd = anioProductividadEfectivo(productividadData, filterMes)
     const mesProdNombre = filterMes ? PRODUCTIVIDAD_MESES[parseInt(filterMes.slice(5, 7), 10) - 1] : null
     const productividadMap = productividadPorEmpleado(productividadData, anioProd, mesProdNombre)
+
     Object.values(acc).forEach(c => {
+      const normKey = norm(c.nombre)
+      const emp = empMap.get(normKey) || null
+      c.empleado = emp
+
       c.diasAusenteTotal = CONCEPTOS_AUSENTISMO.reduce((sum, tipo) => sum + (c.porConcepto[tipo]?.dias || 0), 0)
       c.diasPeriodo = diasPeriodoGlobal
       c.tasaAusentismo = diasPeriodoGlobal > 0 ? (c.diasAusenteTotal / diasPeriodoGlobal) * 100 : 0
       c.periodoInicio = periodoInicioGlobal
       c.periodoFin = periodoFinGlobal
-      c.tieneVehiculo = !!empleadosMap[c.nombre]?.tiene_vehiculo
-      c.procesosDisciplinarios = procesosPorEmpleado[c.nombre] || 0
+
+      // Procesos disciplinarios
+      c.procesosDisciplinariosList = pdMap.get(normKey) || []
+      c.procesosDisciplinarios = c.procesosDisciplinariosList.length
+
+      // Vacaciones
+      c.vacacionesList = vacMap.get(normKey) || []
+      c.vacacionesCount = c.vacacionesList.length
+      const fIngreso = emp?.fecha_ingreso || emp?.fecha_inicio_empresa_actual
+      const diasCausados = fIngreso ? calcularDiasCausadosVacaciones(fIngreso) : 0
+      const diasTomados = c.vacacionesList
+        .filter(v => v.estado !== 'Rechazada')
+        .reduce((sum, v) => sum + (Number(v.dias_habiles) || Number(v.total_dias) || 0), 0) + (Number(emp?.dias_vacaciones_tomados_manual) || 0)
+      const diasPendientes = Math.max(0, Math.round((diasCausados - diasTomados) * 10) / 10)
+      const vacActiva = getEstadoVacacionActual(emp, c.vacacionesList, c.novedades)
+      c.vacacionesResumen = { diasCausados, diasTomados, diasPendientes, vacActiva }
+      c.vacacionActiva = vacActiva
+
+      // Parqueadero & Vehículo
+      c.parqueaderoList = parkMap.get(normKey) || []
+      c.parqueadero = c.parqueaderoList[0] || null
+      c.tieneVehiculo = Boolean(emp?.tiene_vehiculo || c.parqueaderoList.length > 0)
+
+      // Productividad
       const prod = productividadMap[normalizeNombreProd(c.nombre)]
       c.productividad = prod ? prod.total : null
       c.productividadCfg = prod ? prod.cfg : null
       c.productividadPeriodo = mesProdNombre ? `${mesProdNombre} ${anioProd}` : anioProd
+
+      // Desglose mensual de productividad
+      let mesesValoresEncontrados = {}
+      let cfgEncontrada = null
+      let deptEncontrado = null
+      for (const cfg of Object.values(PRODUCTIVIDAD_DEPTS)) {
+        const dData = productividadData?.[anioProd]?.[cfg.departamento] || {}
+        if (dData[normKey]) {
+          deptEncontrado = cfg.departamento
+          mesesValoresEncontrados = dData[normKey]
+          cfgEncontrada = cfg
+          break
+        }
+      }
+      const mesesBreakdown = PRODUCTIVIDAD_MESES.map(m => ({
+        mes: m,
+        valor: Number(mesesValoresEncontrados[m]) || 0
+      }))
+      c.productividadDetalle = {
+        anio: anioProd,
+        departamento: deptEncontrado || c.area,
+        cfg: cfgEncontrada || c.productividadCfg,
+        meses: mesesBreakdown,
+        total: mesesBreakdown.reduce((sum, item) => sum + item.valor, 0),
+      }
     })
     return Object.values(acc)
-  }, [rows, rowsDelPeriodo, empleadosTodos, filterMes, procesosPorEmpleado, productividadData])
+  }, [rows, rowsDelPeriodo, empleadosTodos, procesosTodos, vacacionesTodas, parqueaderoTodos, filterMes, productividadData])
 
   // ── KPIs globales ─────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -191,7 +257,12 @@ export default function Colaboradores() {
       : 0
     const conProcesosDisciplinarios = colaboradores.filter(c => c.procesosDisciplinarios > 0).length
     const totalProcesosDisciplinarios = colaboradores.reduce((acc, c) => acc + (c.procesosDisciplinarios || 0), 0)
-    return { total, conNovedades, reincidentes, totalDiasInc, tasaAusentismoProm, conProcesosDisciplinarios, totalProcesosDisciplinarios }
+    const conVacaciones = colaboradores.filter(c => c.vacacionActiva?.enVacaciones || c.vacacionesCount > 0).length
+    const conParqueadero = colaboradores.filter(c => c.parqueadero || c.tieneVehiculo).length
+    return {
+      total, conNovedades, reincidentes, totalDiasInc, tasaAusentismoProm,
+      conProcesosDisciplinarios, totalProcesosDisciplinarios, conVacaciones, conParqueadero
+    }
   }, [colaboradores])
 
   const areasDisponibles = [...new Set(colaboradores.map(c => c.area).filter(a => a && a !== '—'))].sort()
@@ -203,16 +274,26 @@ export default function Colaboradores() {
     return [...set].sort().reverse()
   }, [rows])
 
+  const deferredSearch = useDeferredValue(search)
+
   const filtered = useMemo(() => {
+    const s = deferredSearch.trim().toLowerCase()
     let res = colaboradores.filter(c => {
-      const s = search.toLowerCase()
-      if (s && !c.nombre.toLowerCase().includes(s) && !c.area.toLowerCase().includes(s)) return false
+      if (s) {
+        const matchesNombre = c.nombre?.toLowerCase().includes(s)
+        const matchesArea = c.area?.toLowerCase().includes(s)
+        const matchesCargo = c.empleado?.cargo?.toLowerCase().includes(s)
+        const matchesPlaca = c.parqueadero?.placa?.toLowerCase().includes(s)
+        if (!matchesNombre && !matchesArea && !matchesCargo && !matchesPlaca) return false
+      }
       if (filterArea && c.area !== filterArea) return false
       if (filterConcepto && !c.porConcepto[filterConcepto]) return false
       if (filterEstado === 'con_novedades' && c.novedades.length === 0) return false
       if (filterEstado === 'sin_novedades' && c.novedades.length > 0) return false
       if (filterEstado === 'reincidente' && c.episodiosInc < 2) return false
       if (filterEstado === 'con_pd' && !(c.procesosDisciplinarios > 0)) return false
+      if (filterEstado === 'con_vacaciones' && !c.vacacionActiva?.enVacaciones && c.vacacionesCount === 0) return false
+      if (filterEstado === 'con_parqueadero' && !c.parqueadero && !c.tieneVehiculo) return false
       return true
     })
     res = [...res].sort((a, b) => {
@@ -225,7 +306,7 @@ export default function Colaboradores() {
       }
     })
     return res
-  }, [colaboradores, search, filterArea, filterConcepto, filterEstado, sortBy])
+  }, [colaboradores, deferredSearch, filterArea, filterConcepto, filterEstado, sortBy])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -239,25 +320,41 @@ export default function Colaboradores() {
     filterMes     && { label: labelMes(filterMes), clear: () => { setFilterMes(''); setPage(1) } },
     filterArea    && { label: filterArea,          clear: () => { setFilterArea(''); setPage(1) } },
     filterConcepto && { label: filterConcepto,     clear: () => { setFilterConcepto(''); setPage(1) } },
-    filterEstado  && { label: { con_novedades: 'Con novedades', sin_novedades: 'Sin novedades', reincidente: 'Reincidentes', con_pd: 'Con procesos disciplinarios' }[filterEstado],
-                       clear: () => { setFilterEstado(''); setPage(1) } },
+    filterEstado  && { label: {
+      con_novedades: 'Con novedades',
+      sin_novedades: 'Sin novedades',
+      reincidente: 'Reincidentes',
+      con_pd: 'Con procesos disciplinarios',
+      con_vacaciones: 'Con vacaciones',
+      con_parqueadero: 'Con parqueadero/vehículo',
+    }[filterEstado] || filterEstado,
+    clear: () => { setFilterEstado(''); setPage(1) } },
   ].filter(Boolean)
 
   const exportExcel = () => {
     exportarExcel(filtered.map(c => ({
-      'Colaborador': c.nombre, 'Área': c.area,
-      'Incapacidades': c.episodiosInc, 'Días Incapacidad': c.diasInc.toFixed(0),
+      'Colaborador': c.nombre,
+      'Cargo': c.empleado?.cargo || '—',
+      'Área': c.area,
+      'Incapacidades': c.episodiosInc,
+      'Días Incapacidad': c.diasInc.toFixed(0),
       'Días Ausente Total': c.diasAusenteTotal.toFixed(0),
       'Tasa Ausentismo (%)': c.tasaAusentismo.toFixed(1),
-      'Total Novedades': c.novedades.length, 'Reincidente': c.episodiosInc >= 2 ? 'Sí' : 'No',
-      'Tiene Vehículo': c.tieneVehiculo ? 'Sí' : 'No',
+      'Total Novedades': c.novedades.length,
+      'Reincidente': c.episodiosInc >= 2 ? 'Sí' : 'No',
       'Procesos Disciplinarios': c.procesosDisciplinarios || 0,
+      'Vacaciones Pendientes (Días)': c.vacacionesResumen?.diasPendientes?.toFixed(1) || '0',
+      'En Vacaciones Actualmente': c.vacacionActiva?.enVacaciones ? 'Sí' : 'No',
       'Productividad': c.productividad != null ? c.productividad : '—',
       'Periodo Productividad': c.productividadPeriodo || '—',
+      'Tiene Vehículo': c.tieneVehiculo ? 'Sí' : 'No',
+      'Placa Parqueadero': c.parqueadero?.placa || '—',
+      'Tipo Vehículo': c.parqueadero?.tipo || (c.tieneVehiculo ? 'Vehículo' : '—'),
+      'Estado Parqueadero': c.parqueadero ? (c.parqueadero.retirado ? 'Retirado' : 'Activo') : '—',
     })), {
       nombreHoja: 'Colaboradores',
       nombreArchivo: `Colaboradores_${currentCompany || 'empresa'}_${hoyISO()}.xlsx`,
-      anchosColumnas: [32, 20, 14, 16, 16, 16, 16, 12, 14, 18, 16],
+      anchosColumnas: [30, 22, 18, 14, 16, 16, 16, 14, 12, 18, 16, 16, 14, 18, 14, 16, 16, 16],
     })
   }
 

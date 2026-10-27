@@ -47,6 +47,11 @@ export default function ColaboradorCard({ col, idx, maxDias, onSelect }) {
             <div style={{ fontWeight: 700, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {col.nombre}
             </div>
+            {col.empleado?.cargo && (
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                💼 {col.empleado.cargo}
+              </div>
+            )}
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               📍 {col.area}
             </div>
@@ -58,33 +63,47 @@ export default function ColaboradorCard({ col, idx, maxDias, onSelect }) {
           )}
         </div>
 
-        {/* Vehículo, procesos disciplinarios y productividad */}
-        {(col.tieneVehiculo || col.procesosDisciplinarios > 0 || col.productividad != null) && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, marginTop: -4 }}>
-            {col.tieneVehiculo && (
-              <span title="Tiene vehículo" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--info-bg)', color: 'var(--info-text)', fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 20 }}>
-                🏍️ Vehículo
-              </span>
-            )}
-            {col.procesosDisciplinarios > 0 && (
-              <span title={`${col.procesosDisciplinarios} proceso(s) disciplinario(s)`} style={{
-                display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                background: col.procesosDisciplinarios >= UMBRAL_ALERTA_PD ? 'var(--danger-bg)' : 'var(--warning-bg)',
-                color: col.procesosDisciplinarios >= UMBRAL_ALERTA_PD ? 'var(--danger-text)' : 'var(--warning-text)',
-              }}>
-                📋 {col.procesosDisciplinarios} proceso{col.procesosDisciplinarios !== 1 ? 's' : ''} disc.
-              </span>
-            )}
-            {col.productividad != null && (
-              <span title={`${col.productividadCfg?.label || 'Productividad'} · ${col.productividadPeriodo}`} style={{
-                display: 'flex', alignItems: 'center', gap: 4, background: 'var(--success-bg)', color: 'var(--success-text)',
-                fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-              }}>
-                📈 {formatProductividad(col.productividad, col.productividadCfg)}
-              </span>
-            )}
-          </div>
-        )}
+        {/* Badges de Parqueadero, Procesos Disciplinarios, Vacaciones y Productividad */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, marginTop: -4 }}>
+          {col.parqueadero ? (
+            <span title={`Parqueadero: ${col.parqueadero.placa} (${col.parqueadero.tipo})`} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(99, 102, 241, 0.1)', color: '#4F46E5', border: '1px solid rgba(99, 102, 241, 0.25)', fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
+              {col.parqueadero.tipo === 'CARRO' ? '🚗' : col.parqueadero.tipo === 'BICICLETA' ? '🚲' : '🏍️'} {col.parqueadero.placa}
+            </span>
+          ) : col.tieneVehiculo ? (
+            <span title="Tiene vehículo reportado" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--info-bg)', color: 'var(--info-text)', fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 20 }}>
+              🏍️ Vehículo
+            </span>
+          ) : null}
+
+          {col.procesosDisciplinarios > 0 && (
+            <span title={`${col.procesosDisciplinarios} proceso(s) disciplinario(s)`} style={{
+              display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+              background: col.procesosDisciplinarios >= UMBRAL_ALERTA_PD ? 'var(--danger-bg)' : 'var(--warning-bg)',
+              color: col.procesosDisciplinarios >= UMBRAL_ALERTA_PD ? 'var(--danger-text)' : 'var(--warning-text)',
+            }}>
+              📋 {col.procesosDisciplinarios} proc. disc.
+            </span>
+          )}
+
+          {col.vacacionActiva?.enVacaciones ? (
+            <span title="Actualmente en vacaciones" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#E0F2FE', color: '#0369A1', fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
+              🏖️ En vacaciones
+            </span>
+          ) : col.vacacionesResumen?.diasPendientes > 0 ? (
+            <span title={`${col.vacacionesResumen.diasPendientes.toFixed(1)} días de vacaciones pendientes`} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(13, 148, 136, 0.1)', color: '#0D9488', border: '1px solid rgba(13, 148, 136, 0.2)', fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
+              🏖️ {col.vacacionesResumen.diasPendientes.toFixed(0)}d vac.
+            </span>
+          ) : null}
+
+          {col.productividad != null && (
+            <span title={`${col.productividadCfg?.label || 'Productividad'} · ${col.productividadPeriodo}`} style={{
+              display: 'flex', alignItems: 'center', gap: 4, background: 'var(--success-bg)', color: 'var(--success-text)',
+              fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+            }}>
+              📈 {formatProductividad(col.productividad, col.productividadCfg)}
+            </span>
+          )}
+        </div>
 
         {col.sinNovedades ? (
           <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-muted)', fontSize: 12, background: 'var(--bg)', borderRadius: 8 }}>

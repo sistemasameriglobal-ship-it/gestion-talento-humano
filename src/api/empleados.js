@@ -122,7 +122,12 @@ function normalizarPayloadEmpleado(payload = {}) {
   const numFields = ['salario', 'auxilio_transporte', 'dias_vacaciones_tomados_manual']
   for (const k of numFields) {
     if (k in out) {
-      out[k] = (out[k] !== '' && out[k] != null) ? (Number(out[k]) || 0) : 0
+      if (typeof out[k] === 'string') {
+        const clean = out[k].replace(/[^0-9.-]+/g, '')
+        out[k] = clean !== '' ? (Number(clean) || 0) : 0
+      } else {
+        out[k] = (out[k] !== '' && out[k] != null) ? (Number(out[k]) || 0) : 0
+      }
     }
   }
 
