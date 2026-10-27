@@ -11,6 +11,7 @@ const Novedades = lazyWithReload(() => import('../pages/Novedades'))
 const ProcesosDisciplinarios = lazyWithReload(() => import('../pages/ProcesosDisciplinarios'))
 const Colaboradores = lazyWithReload(() => import('../pages/Colaboradores'))
 const Empleados = lazyWithReload(() => import('../pages/Empleados'))
+const Contratos = lazyWithReload(() => import('../pages/Contratos'))
 const Parqueadero = lazyWithReload(() => import('../pages/Parqueadero'))
 const Vacaciones = lazyWithReload(() => import('../pages/Vacaciones'))
 const Usuarios = lazyWithReload(() => import('../pages/Usuarios'))
@@ -28,6 +29,7 @@ const PAGE_COMPONENTS = {
   disciplinarios: ProcesosDisciplinarios,
   colaboradores: Colaboradores,
   empleados: Empleados,
+  contratos: Contratos,
   parqueadero: Parqueadero,
   vacaciones: Vacaciones,
   productividad: Productividad,

@@ -1,0 +1,220 @@
+/* =============================================================
+   src/components/contratos/contratos.css
+   Estilos para el módulo de Contratos y Visor de Documentos
+   ============================================================= */
+
+.contratos-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.contratos-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.contratos-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  flex: 1;
+  min-width: 240px;
+  max-width: 400px;
+}
+
+.contratos-search-box input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  font-size: 13.5px;
+  color: var(--text);
+  outline: none;
+}
+
+.contratos-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.contratos-filters select {
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-nuevo-contrato {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #2563EB;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.btn-nuevo-contrato:hover {
+  background: #1D4ED8;
+  transform: translateY(-1px);
+}
+
+/* Badge estilos */
+.contrato-badge-tipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.badge-termino-fijo {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+.badge-aprendizaje {
+  background: #ECFDF5;
+  color: #047857;
+  border: 1px solid #A7F3D0;
+}
+
+.contrato-badge-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.estado-vigente {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.estado-por-vencer {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.estado-vencido {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.badge-confidencialidad-si {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #F3E8FF;
+  color: #6B21A8;
+  border: 1px solid #E9D5FF;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Visor de Contrato */
+.contrato-preview-sheet {
+  background: #ffffff;
+  color: #0F172A;
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 36px 44px;
+  max-width: 900px;
+  margin: 0 auto;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.6;
+}
+
+.contrato-tabs-bar {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.tab-contrato-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-contrato-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.tab-contrato-btn.active {
+  background: #EFF6FF;
+  color: #2563EB;
+  border-color: #BFDBFE;
+}
+
+/* Banner de auto-completado */
+.banner-autocompletado {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  color: #1E40AF;
+  font-size: 12.5px;
+}
+
+.seccion-form-header {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #475569;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin: 18px 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -488,11 +488,17 @@ export default function NovedadFormModal({
                       min={minFechaForm} max={maxFechaForm} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block', whiteSpace: 'nowrap' }}>
-                      Días {form.fecha_inicio && form.fecha_fin && !sinFechas && <span style={{ color: 'var(--primary)' }}>●</span>}
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', whiteSpace: 'nowrap' }}>
+                      <span>Días {form.fecha_inicio && form.fecha_fin && !sinFechas && <span style={{ color: 'var(--primary)' }}>●</span>}</span>
+                      {(form.jornada === 'Medio día' || Number(form.total_dias) === 0.5) && (
+                        <span style={{ fontSize: 10.5, background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', padding: '1px 6px', borderRadius: 4, fontWeight: 800 }}>
+                          ½ día
+                        </span>
+                      )}
                     </label>
-                    <input className="form-control" type="number" value={form.total_dias || ''} onChange={f('total_dias')}
+                    <input className="form-control" type="number" step="0.5" min="0" value={form.total_dias ?? ''} onChange={f('total_dias')}
                       disabled={sinFechas}
+                      placeholder={form.jornada === 'Medio día' ? '0.5' : '1'}
                       style={form.fecha_inicio && form.fecha_fin && !sinFechas ? { background: 'var(--bg)', color: 'var(--primary)', fontWeight: 800, textAlign: 'center' } : { textAlign: 'center' }} />
                   </div>
                 </div>
@@ -502,18 +508,50 @@ export default function NovedadFormModal({
                   </div>
                 )}
 
-                {(form.concepto === 'LNR' || form.concepto === 'LR') && (
+                {(form.concepto === 'LNR' || form.concepto === 'LR' || form.concepto === '1/2 LR y 1/2 LNR' || form.concepto === 'Calamidad/Luto' || form.concepto === 'Otros') && (
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed var(--border)' }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Jornada</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', margin: 0, display: 'block' }}>Jornada</label>
+                      {form.jornada === 'Medio día' && (
+                        <span style={{ fontSize: 11, color: '#B45309', fontWeight: 600 }}>
+                          (Medio día = 0.5 días en nómina y reportes)
+                        </span>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {[
                         { v: '', label: 'Día completo' },
-                        { v: 'Medio día', label: 'Medio día' },
+                        { v: 'Medio día', label: 'Medio día (½ día)' },
                       ].map(op => {
                         const sel = (form.jornada || '') === op.v
                         return (
                           <button key={op.v || 'completo'} type="button"
-                            onClick={() => { setForm(p => ({ ...p, jornada: op.v })); setFormDirty(true) }}
+                            onClick={() => {
+                              const esMedio = op.v === 'Medio día'
+                              setForm(p => {
+                                let nuevosDias = p.total_dias
+                                if (esMedio) {
+                                  nuevosDias = 0.5
+                                } else if (Number(p.total_dias) === 0.5) {
+                                  // Recalcular a día completo
+                                  if (p.fecha_inicio && p.fecha_fin) {
+                                    const ini = new Date(p.fecha_inicio)
+                                    const fin = new Date(p.fecha_fin)
+                                    nuevosDias = !isNaN(ini) && !isNaN(fin) && fin >= ini
+                                      ? Math.round((fin - ini) / (1000 * 60 * 60 * 24)) + 1
+                                      : 1
+                                  } else {
+                                    nuevosDias = 1
+                                  }
+                                }
+                                return {
+                                  ...p,
+                                  jornada: op.v,
+                                  total_dias: nuevosDias,
+                                }
+                              })
+                              setFormDirty(true)
+                            }}
                             style={{
                               padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                               border: sel ? '2px solid var(--primary)' : '1.5px solid var(--border)',

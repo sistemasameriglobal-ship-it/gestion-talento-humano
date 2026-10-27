@@ -350,15 +350,22 @@ export default function Novedades() {
       const ini = new Date(form.fecha_inicio)
       const fin = new Date(form.fecha_fin)
       if (!isNaN(ini) && !isNaN(fin) && fin >= ini) {
-        const dias = form.concepto === 'Vacaciones'
+        let dias = form.concepto === 'Vacaciones'
           ? diasHabilesEntre(form.fecha_inicio, form.fecha_fin)
           : Math.round((fin - ini) / (1000 * 60 * 60 * 24)) + 1
+
+        // Si es jornada de medio día y las fechas corresponden al mismo día, son 0.5 días (½ día)
+        if (form.jornada === 'Medio día' && form.fecha_inicio === form.fecha_fin) {
+          dias = 0.5
+        }
+
         Promise.resolve().then(() => setForm(p => {
-          const next = { ...p, total_dias: dias }
+          const diasFinal = (p.jornada === 'Medio día' && p.fecha_inicio === p.fecha_fin) ? 0.5 : dias
+          const next = { ...p, total_dias: diasFinal }
           if (normalizarConcepto(next.concepto) === 'Incapacidad') {
-            if (dias < 3 && !next.radicacion_incapacidad) {
+            if (diasFinal < 3 && !next.radicacion_incapacidad) {
               next.radicacion_incapacidad = 'N/A'
-            } else if (dias >= 3 && next.radicacion_incapacidad === 'N/A') {
+            } else if (diasFinal >= 3 && next.radicacion_incapacidad === 'N/A') {
               next.radicacion_incapacidad = ''
             }
           }
@@ -366,7 +373,7 @@ export default function Novedades() {
         }))
       }
     }
-  }, [form.fecha_inicio, form.fecha_fin, form.concepto])
+  }, [form.fecha_inicio, form.fecha_fin, form.concepto, form.jornada])
 
   const empleadosActivos = useMemo(() => {
     return (listaEmpleados || [])
@@ -582,9 +589,23 @@ export default function Novedades() {
     if (k === 'concepto' && CONCEPTOS_SIN_FECHAS.includes(val)) {
       setForm(p => ({ ...p, concepto: val, fecha_inicio: '', fecha_fin: '', total_dias: '' }))
     } else if (k === 'total_dias') {
-      const diasNum = parseFloat(val) || 0
+      let diasVal = val
+      if (typeof val === 'string') {
+        const clean = val.trim().replace(',', '.')
+        if (clean === '1/2' || clean === '½') {
+          diasVal = 0.5
+        } else {
+          diasVal = clean
+        }
+      }
+      const diasNum = parseFloat(diasVal) || 0
       setForm(p => {
-        const next = { ...p, total_dias: val }
+        const esMedio = diasNum === 0.5 || diasVal === 0.5 || diasVal === '0.5' || val === '1/2' || val === '½'
+        const next = {
+          ...p,
+          total_dias: diasVal,
+          jornada: esMedio ? 'Medio día' : (diasNum >= 1 && p.jornada === 'Medio día' ? '' : p.jornada),
+        }
         if (normalizarConcepto(p.concepto) === 'Incapacidad') {
           if (diasNum > 0 && diasNum < 3 && !next.radicacion_incapacidad) {
             next.radicacion_incapacidad = 'N/A'

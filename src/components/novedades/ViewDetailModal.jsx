@@ -55,7 +55,7 @@ export default function ViewDetailModal({ viewRow, fichasEmpleados, onClose, onE
                 <Field label="Periodo" value={viewRow.periodo} />
                 <Field label="Fecha inicio" value={viewRow.fecha_inicio} />
                 <Field label="Fecha fin" value={viewRow.fecha_fin} />
-                <Field label="Total días" value={viewRow.total_dias != null ? String(viewRow.total_dias) : null} />
+                <Field label="Total días" value={Number(viewRow.total_dias) === 0.5 || viewRow.jornada === 'Medio día' ? '0.5 (½ día)' : (viewRow.total_dias != null ? String(viewRow.total_dias) : null)} />
                 {viewRow.dias_en_dinero != null && Number(viewRow.dias_en_dinero) > 0 && (() => {
                   const dDisfrute = viewRow.dias_disfrutados != null && viewRow.dias_disfrutados !== ''
                     ? Number(viewRow.dias_disfrutados)

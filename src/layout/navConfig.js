@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, FileText, Users, UserCog,
+  LayoutDashboard, FileText, Users, UserCog, FileSignature,
   ParkingCircle, Sun, ShieldCheck, ShieldAlert, TrendingUp, Activity,
 } from 'lucide-react'
 
@@ -17,8 +17,9 @@ export const NAV_SECTIONS = [
   {
     label: 'Recursos',
     items: [
-      { id: 'empleados',     label: 'Empleados',     icon: UserCog, emoji: '👥' },
-      { id: 'colaboradores', label: 'Colaboradores', icon: Users,   emoji: '🤝' },
+      { id: 'empleados',     label: 'Empleados',     icon: UserCog,       emoji: '👥' },
+      { id: 'colaboradores', label: 'Colaboradores', icon: Users,         emoji: '🤝' },
+      { id: 'contratos',     label: 'Contratos',     icon: FileSignature, emoji: '📝' },
     ],
   },
   {
