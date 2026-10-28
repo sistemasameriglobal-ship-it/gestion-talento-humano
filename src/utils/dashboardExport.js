@@ -8,12 +8,14 @@ export async function exportarDashboardExcel({ data, stats, hasFilter, filterAni
   // Hoja 1: Datos completos filtrados
   await crearHoja(wb, 'Novedades', data.map(r => ({
     'Empleado': r.nombre_empleado, 'Concepto': r.concepto, 'Periodo': r.periodo,
-    'Fecha Inicio': r.fecha_inicio, 'Fecha Fin': r.fecha_fin, 'Total Días': r.total_dias,
+    'Fecha Inicio': r.fecha_inicio, 'Fecha Fin': r.fecha_fin,
+    'Días en Período': r.dias_en_periodo != null ? r.dias_en_periodo : (r.total_dias ?? ''),
+    'Total Días': r.total_dias ?? '',
     'Dependencia': r.dependencia, 'Válid. Incapacidad': r.validacion_incapacidad,
     'Prórroga': r.prorroga, 'Rad. Incapacidades': r.radicacion_incapacidad,
     'Obs. Contabilidad': r.observacion_contabilidad, 'Nómina Electrónica': r.nomina_electronica,
     'Seguridad Social': r.seguridad_social, 'Observación': r.observacion,
-  })), { anchosColumnas: [30, 18, 12, 14, 14, 10, 22, 18, 10, 18, 18, 18, 16, 30], titulo: 'Novedades' })
+  })), { anchosColumnas: [30, 18, 12, 14, 14, 14, 12, 22, 18, 10, 18, 18, 18, 16, 30], titulo: 'Novedades' })
 
   // Hoja 2: Resumen por concepto
   await crearHoja(wb, 'Por Concepto',

@@ -159,7 +159,15 @@ export function generarBloqueFirmasDosColumnas(c, {
           </p>
 
           <div style="height: 60px; margin-bottom: 4px;">
-            <!-- Espacio reservado para firma manuscrita del colaborador -->
+            ${c.firma_trabajador ? `
+              <img
+                src="${c.firma_trabajador}"
+                alt="Firma ${nombreTrabajador}"
+                width="170"
+                height="55"
+                style="display: block; width: 170px; height: 55px; object-fit: contain; border: none;"
+              />
+            ` : `<!-- Espacio reservado para firma manuscrita del colaborador -->`}
           </div>
 
           <div style="border-top: 1.5pt solid #000000; width: 90%; margin-bottom: 6px;"></div>
@@ -170,6 +178,11 @@ export function generarBloqueFirmasDosColumnas(c, {
           <p style="margin: 2px 0; font-size: 9pt; color: #333333; font-family: Arial, Helvetica, sans-serif;">
             ${tipoDoc}. ${numDoc}
           </p>
+          ${c.fecha_firma_trabajador ? `
+            <p style="margin: 2px 0; font-size: 8pt; color: #166534; font-family: Arial, Helvetica, sans-serif; font-weight: 600;">
+              ✓ Firmado digitalmente el ${c.fecha_firma_trabajador}
+            </p>
+          ` : ''}
           ${rolCargoParte2 ? `
             <p style="margin: 2px 0; font-size: 8.5pt; color: #555555; font-family: Arial, Helvetica, sans-serif;">
               ${rolCargoParte2}

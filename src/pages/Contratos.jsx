@@ -19,6 +19,7 @@ import ContratosKpis from '../components/contratos/ContratosKpis'
 import ContratosTable from '../components/contratos/ContratosTable'
 import ModalContratoForm from '../components/contratos/ModalContratoForm'
 import ModalContratoViewer from '../components/contratos/ModalContratoViewer'
+import ModalCompartirFirma from '../components/contratos/ModalCompartirFirma'
 import ModalFinalizarContrato from '../components/contratos/ModalFinalizarContrato'
 import ModalRegistrarEmpleado from '../components/contratos/ModalRegistrarEmpleado'
 import ModalDesistirContrato from '../components/contratos/ModalDesistirContrato'
@@ -44,6 +45,7 @@ export default function Contratos() {
   const [formOpen, setFormOpen] = useState(false)
   const [contratoParaEditar, setContratoParaEditar] = useState(null)
   const [contratoParaVer, setContratoParaVer] = useState(null)
+  const [contratoParaCompartir, setContratoParaCompartir] = useState(null)
   const [contratoParaFinalizar, setContratoParaFinalizar] = useState(null)
   const [contratoParaEliminar, setContratoParaEliminar] = useState(null)
   const [contratoParaRegistrar, setContratoParaRegistrar] = useState(null)
@@ -88,10 +90,12 @@ export default function Contratos() {
         // Crear
         const { data, error } = await contratosApi.crearContrato(formData, currentCompany)
         if (error) throw error
-        setMsg({ type: 'success', text: 'Contrato generado con renovación automática cada 3 meses y confidencialidad vinculada.' })
+        setMsg({ type: 'success', text: 'Contrato generado exitosamente. Puedes compartir el enlace para la firma digital.' })
         setFormOpen(false)
         await cargarDatos()
-        if (verInmediato && data?.[0]) {
+        if (data?.[0]) {
+          setContratoParaCompartir(data[0])
+        } else if (verInmediato && data?.[0]) {
           setContratoParaVer(data[0])
         }
       }
@@ -371,6 +375,7 @@ export default function Contratos() {
         onEliminarContrato={c => setContratoParaEliminar(c)}
         onRegistrarEmpleado={c => setContratoParaRegistrar(c)}
         onDesistirContrato={c => setContratoParaDesistir(c)}
+        onCompartirFirma={c => setContratoParaCompartir(c)}
       />
 
       {/* MODAL FORMULARIO */}
@@ -390,12 +395,24 @@ export default function Contratos() {
         <ModalContratoViewer
           contrato={contratoParaVer}
           onClose={() => setContratoParaVer(null)}
+          onCompartirFirma={c => {
+            setContratoParaVer(null)
+            setContratoParaCompartir(c)
+          }}
           puedeEditar={puedeEditar}
           onEdit={puedeEditar ? (c => {
             setContratoParaVer(null)
             setContratoParaEditar(c)
             setFormOpen(true)
           }) : undefined}
+        />
+      )}
+
+      {/* MODAL COMPARTIR ENLACE DE FIRMA */}
+      {contratoParaCompartir && (
+        <ModalCompartirFirma
+          contrato={contratoParaCompartir}
+          onClose={() => setContratoParaCompartir(null)}
         />
       )}
 

@@ -122,31 +122,27 @@ export default function Dashboard({ onNavigate }) {
     })
   }, [allData, empleados])
 
-  // Datos filtrados
+  const hasFilter = filterAnio || filterMeses.length > 0 || filterPeriodo || filterDependencia || (filterConcepto && filterConcepto !== 'Incapacidad')
+
+  // Días calendario REALES del período que está filtrado (respeta meses de
+  // 28/29/30/31 días y años bisiestos) — define las fechas de corte periodoIni y periodoFin
+  const { diasPeriodoBase, diasPeriodoLabel, periodoIni, periodoFin } = useMemo(
+    () => calcularDiasPeriodo({ rangoMes, filterAnio, filterMeses, filterPeriodo, dataBase: allDataEnriched }),
+    [rangoMes, filterAnio, filterMeses, filterPeriodo, allDataEnriched]
+  )
+
+  // Datos filtrados (incluye novedades solapadas con el período)
   const data = useMemo(() => filtrarNovedades(allDataEnriched, {
-    filterPeriodo, filterConcepto, filterDependencia, filterAnio, filterMeses, rangoMes,
-  }), [allDataEnriched, filterAnio, filterMeses, filterPeriodo, filterConcepto, filterDependencia, rangoMes])
+    filterPeriodo, filterConcepto, filterDependencia, filterAnio, filterMeses, rangoMes, periodoIni, periodoFin,
+  }), [allDataEnriched, filterAnio, filterMeses, filterPeriodo, filterConcepto, filterDependencia, rangoMes, periodoIni, periodoFin])
 
   // Datos con los mismos filtros EXCEPTO el de concepto — se usan como base
   // para el denominador de "tasa de ausentismo", que siempre debe representar
   // el total de colaboradores del periodo/área, sin importar qué concepto
-  // esté seleccionado. Si se usara `data` (ya filtrada por concepto) el
-  // denominador cambiaría según el filtro y la tasa dejaría de ser comparable
-  // entre Incapacidad, LNR, etc.
+  // esté seleccionado.
   const dataBase = useMemo(() => filtrarNovedades(allDataEnriched, {
-    filterPeriodo, filterDependencia, filterAnio, filterMeses, rangoMes, incluirConcepto: false,
-  }), [allDataEnriched, filterAnio, filterMeses, filterPeriodo, filterDependencia, rangoMes])
-
-  const hasFilter = filterAnio || filterMeses.length > 0 || filterPeriodo || filterDependencia || (filterConcepto && filterConcepto !== 'Incapacidad')
-
-  // Días calendario REALES del período que está filtrado (respeta meses de
-  // 28/29/30/31 días y años bisiestos) — reemplaza el supuesto fijo de "30
-  // días por persona" que antes se usaba en la tasa de ausentismo. La lógica
-  // vive en utils/dashboardStats.js (calcularDiasPeriodo).
-  const { diasPeriodoBase, diasPeriodoLabel, periodoIni, periodoFin } = useMemo(
-    () => calcularDiasPeriodo({ rangoMes, filterAnio, filterMeses, filterPeriodo, dataBase }),
-    [rangoMes, filterAnio, filterMeses, filterPeriodo, dataBase]
-  )
+    filterPeriodo, filterDependencia, filterAnio, filterMeses, rangoMes, periodoIni, periodoFin, incluirConcepto: false,
+  }), [allDataEnriched, filterAnio, filterMeses, filterPeriodo, filterDependencia, rangoMes, periodoIni, periodoFin])
 
   // ── Colaboradores realmente activos durante el período filtrado ────────────
   // Antes el denominador de la tasa de ausentismo salía de "nombres únicos con
@@ -246,8 +242,8 @@ export default function Dashboard({ onNavigate }) {
   // ── Estadísticas derivadas ──────────────────────────────────────────────────
   // La lógica completa vive en utils/dashboardStats.js (calcularStats).
   const stats = useMemo(
-    () => calcularStats(data, allDataEnriched, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo),
-    [data, allDataEnriched, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo]
+    () => calcularStats(data, allDataEnriched, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo, { periodoIni, periodoFin }),
+    [data, allDataEnriched, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo, periodoIni, periodoFin]
   )
 
   // ── Export Excel ────────────────────────────────────────────────────────────

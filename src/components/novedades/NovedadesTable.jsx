@@ -124,7 +124,14 @@ export default function NovedadesTable({
                   <td style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.fecha_fin || '—'}</td>
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>
-                      {Number(row.total_dias) === 0.5 || row.jornada === 'Medio día' ? '0.5 (½)' : (row.total_dias ?? '—')}
+                      {row.dias_en_periodo != null && row.total_dias != null && Number(row.dias_en_periodo) !== Number(row.total_dias) ? (
+                        <div title={`Novedad de ${row.total_dias} días totales. ${row.dias_en_periodo} días corresponden al mes filtrado.`}>
+                          <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{row.dias_en_periodo}</span>
+                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 3 }}>/ {row.total_dias}d</span>
+                        </div>
+                      ) : (
+                        Number(row.total_dias) === 0.5 || row.jornada === 'Medio día' ? '0.5 (½)' : (row.total_dias ?? '—')
+                      )}
                     </div>
                     {row.dias_en_dinero != null && Number(row.dias_en_dinero) > 0 && (() => {
                       const dDisfrute = row.dias_disfrutados != null && row.dias_disfrutados !== ''

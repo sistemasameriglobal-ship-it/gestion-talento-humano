@@ -33,7 +33,11 @@ export default function ParqueaderoTabla({
                 borderLeft: row.retirado ? '4px solid #DC2626' : '4px solid transparent',
               }}>
                 <td style={{ maxWidth: 230 }}>
-                  <PersonCell nombre={row.nombre_empleado} color={row.retirado ? '#DC2626' : undefined} />
+                  <PersonCell
+                    nombre={row.nombre_empleado}
+                    sub={!row.empleado_id ? 'Persona externa' : undefined}
+                    color={row.retirado ? '#DC2626' : undefined}
+                  />
                 </td>
                 <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{[row.mes, row.anio].filter(Boolean).join(' ') || '—'}</td>
                 <td style={{ fontFamily: row.tipo === 'BICICLETA' ? 'inherit' : 'monospace', fontWeight: 700, letterSpacing: row.tipo === 'BICICLETA' ? 'normal' : '0.05em' }}>{row.placa || '—'}</td>

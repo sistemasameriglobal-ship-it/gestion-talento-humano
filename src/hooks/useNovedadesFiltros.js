@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { hoyISO } from '../utils/fecha'
 import { normalizarConcepto } from '../utils/parseExcel'
 import { evaluarEstadoTemporalAusencia } from '../utils/diasHabiles'
+import { calcularDiasEnPeriodo } from '../utils/dashboardStats'
 import { PAGE_SIZE } from '../utils/novedadesConstants'
 
 // Agrupa todo el cálculo derivado de la tabla de Novedades: opciones de
@@ -94,22 +95,46 @@ export function useNovedadesFiltros({
         if (!r.fecha_inicio) {
           matchFecha = false
         } else {
-          matchFecha = r.fecha_inicio >= rangoMes.ini && r.fecha_inicio <= rangoMes.fin
+          let fFin = r.fecha_fin
+          const totalDias = parseFloat(r.total_dias) || 0
+          if (!fFin && totalDias > 1) {
+            const dIni = new Date(r.fecha_inicio + 'T12:00:00')
+            dIni.setDate(dIni.getDate() + (Math.round(totalDias) - 1))
+            const y = dIni.getFullYear()
+            const m = String(dIni.getMonth() + 1).padStart(2, '0')
+            const d = String(dIni.getDate()).padStart(2, '0')
+            fFin = `${y}-${m}-${d}`
+          } else if (!fFin) {
+            fFin = r.fecha_inicio
+          }
+          // Solapa con el mes si fFin >= inicio del mes y fecha_inicio <= fin del mes
+          matchFecha = fFin >= rangoMes.ini && r.fecha_inicio <= rangoMes.fin
         }
       } else if (filterAnio && !filterMes) {
         const enFecha = r.fecha_inicio?.startsWith(filterAnio)
         const enPeriodo = r.periodo?.startsWith(filterAnio)
-        matchFecha = !!(enFecha || enPeriodo)
+        const fFin = r.fecha_fin || r.fecha_inicio
+        const solapaAnio = r.fecha_inicio ? (fFin >= `${filterAnio}-01-01` && r.fecha_inicio <= `${filterAnio}-12-31`) : false
+        matchFecha = !!(enFecha || enPeriodo || solapaAnio)
       }
 
       return matchSearch && matchConcepto && matchPeriodo && matchDep && matchDiagnostico && matchFecha && matchActiva && matchEmpleado
     })
 
+    // Si hay un rango de mes seleccionado, calcular los días que corresponden a ese mes
+    result = result.map(r => ({
+      ...r,
+      dias_en_periodo: rangoMes ? calcularDiasEnPeriodo(r, rangoMes.ini, rangoMes.fin) : null,
+    }))
+
     // Ordenar
     result = [...result].sort((a, b) => {
       let va = a[sortField] ?? ''
       let vb = b[sortField] ?? ''
-      if (sortField === 'total_dias') { va = parseFloat(va) || 0; vb = parseFloat(vb) || 0 }
+      if (sortField === 'total_dias') {
+        va = parseFloat(a.dias_en_periodo != null ? a.dias_en_periodo : va) || 0
+        vb = parseFloat(b.dias_en_periodo != null ? b.dias_en_periodo : vb) || 0
+      }
       if (va < vb) return sortDir === 'asc' ? -1 : 1
       if (va > vb) return sortDir === 'asc' ? 1 : -1
       return 0

@@ -56,8 +56,17 @@ export default function PersonaDetalleModal({ personaDetalle, onCerrar }) {
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {r.total_dias != null && r.total_dias !== '' && (
-                        <span style={{ fontSize: 12, fontWeight: 700, color: personaDetalle.color }}>{r.total_dias} días</span>
+                      {r.dias_en_periodo != null && r.total_dias != null && Number(r.dias_en_periodo) !== Number(r.total_dias) ? (
+                        <span
+                          style={{ fontSize: 12, fontWeight: 700, color: personaDetalle.color }}
+                          title={`Esta novedad es de ${r.total_dias} días totales, pero ${r.dias_en_periodo} días corresponden a este período filtrado`}
+                        >
+                          {r.dias_en_periodo} de {r.total_dias} días
+                        </span>
+                      ) : (
+                        r.total_dias != null && r.total_dias !== '' && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: personaDetalle.color }}>{r.total_dias} días</span>
+                        )
                       )}
                       {estadoTemp && estadoTemp.chipTexto !== '—' && (
                         <span className={chipClass} style={{ fontSize: 10, padding: '1px 7px' }}>

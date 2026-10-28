@@ -1,25 +1,115 @@
 import { hoyISO, sumarDiasISO, mesActualISO, mesRelativoISO } from './fecha'
-import { obtenerFechaRegresoLaboral, evaluarEstadoTemporalAusencia } from './diasHabiles'
+import { obtenerFechaRegresoLaboral, evaluarEstadoTemporalAusencia, diasHabilesEntre } from './diasHabiles'
 import { normalizarConcepto, CONCEPTO_COLORS } from './parseExcel'
 import { MESES_DASHBOARD as MESES } from './dashboardConstants'
 
-// Filtra las novedades con los mismos criterios del Dashboard. `incluirConcepto`
-// controla si el filtro de concepto participa o no (la "base" de la tasa de
-// ausentismo debe ignorarlo para que el denominador sea comparable).
+// Calcula los días de una novedad que caen ESTRICTAMENTE dentro del período filtrado
+// (prorratea incapacidades, vacaciones y ausencias que cruzan de un mes a otro).
+export function calcularDiasEnPeriodo(r, periodoIni, periodoFin) {
+  const diasOriginales = parseFloat(r?.total_dias) || 0
+  if (diasOriginales === 0) return 0
+  if (Number(r?.total_dias) === 0.5 || r?.jornada === 'Medio día') {
+    if (!periodoIni || !periodoFin) return 0.5
+    const fIni = r?.fecha_inicio
+    return (fIni && fIni >= periodoIni && fIni <= periodoFin) ? 0.5 : 0
+  }
+  if (!periodoIni || !periodoFin || !r?.fecha_inicio) return diasOriginales
+
+  const fIni = r.fecha_inicio
+  let fFin = r.fecha_fin
+  if (!fFin && diasOriginales > 1) {
+    const dIni = new Date(fIni + 'T12:00:00')
+    dIni.setDate(dIni.getDate() + (Math.round(diasOriginales) - 1))
+    const y = dIni.getFullYear()
+    const m = String(dIni.getMonth() + 1).padStart(2, '0')
+    const d = String(dIni.getDate()).padStart(2, '0')
+    fFin = `${y}-${m}-${d}`
+  } else if (!fFin) {
+    fFin = fIni
+  }
+
+  // Si no hay solapamiento con el período filtrado
+  if (fFin < periodoIni || fIni > periodoFin) return 0
+
+  // Fechas de inicio y fin recortadas a los límites del período
+  const overlapIni = fIni < periodoIni ? periodoIni : fIni
+  const overlapFin = fFin > periodoFin ? periodoFin : fFin
+
+  const conceptoNorm = normalizarConcepto(r?.concepto)
+  if (conceptoNorm === 'Vacaciones') {
+    const habiles = diasHabilesEntre(overlapIni, overlapFin)
+    const dias = typeof habiles === 'number' ? habiles : (Math.round((new Date(overlapFin + 'T12:00:00').getTime() - new Date(overlapIni + 'T12:00:00').getTime()) / 86400000) + 1)
+    return Math.min(Math.max(1, dias), diasOriginales)
+  }
+
+  const diffMs = new Date(overlapFin + 'T12:00:00').getTime() - new Date(overlapIni + 'T12:00:00').getTime()
+  const diasCalculados = Math.max(1, Math.round(diffMs / 86400000) + 1)
+  return Math.min(diasCalculados, diasOriginales)
+}
+
+// Filtra las novedades con los mismos criterios del Dashboard.
+// Permite que novedades que iniciaron en un mes previo pero cruzan al mes filtrado
+// sean incluidas correctamente, considerando el solapamiento de fechas.
 export function filtrarNovedades(allData, {
   filterPeriodo, filterConcepto, filterDependencia, filterAnio, filterMeses, rangoMes,
+  periodoIni, periodoFin,
   incluirConcepto = true,
 }) {
   return allData.filter(r => {
     if (incluirConcepto && filterConcepto && normalizarConcepto(r.concepto) !== filterConcepto) return false
-    if (filterPeriodo && r.periodo !== filterPeriodo) return false
     if (filterDependencia && (r.dependencia || 'Sin área') !== filterDependencia) return false
-    if (rangoMes) {
-      return r.fecha_inicio >= rangoMes.ini && r.fecha_inicio <= rangoMes.fin
+
+    // Si tenemos rango exacto de fechas (por mes(es) seleccionados)
+    if (rangoMes || (periodoIni && periodoFin)) {
+      const ini = rangoMes?.ini || periodoIni
+      const fin = rangoMes?.fin || periodoFin
+      if (r.fecha_inicio) {
+        let fFin = r.fecha_fin
+        const totalDias = parseFloat(r.total_dias) || 0
+        if (!fFin && totalDias > 1) {
+          const dIni = new Date(r.fecha_inicio + 'T12:00:00')
+          dIni.setDate(dIni.getDate() + (Math.round(totalDias) - 1))
+          const y = dIni.getFullYear()
+          const m = String(dIni.getMonth() + 1).padStart(2, '0')
+          const d = String(dIni.getDate()).padStart(2, '0')
+          fFin = `${y}-${m}-${d}`
+        } else if (!fFin) {
+          fFin = r.fecha_inicio
+        }
+        // Solapamiento: fin de la novedad >= inicio del periodo Y inicio de la novedad <= fin del periodo
+        return fFin >= ini && r.fecha_inicio <= fin
+      }
+      // Si no tiene fecha_inicio, fallback por periodo texto
+      if (r.periodo) {
+        return r.periodo >= ini.substring(0, 7) && r.periodo <= fin.substring(0, 7)
+      }
+      return false
     }
-    if (filterAnio && filterMeses.length === 0) {
-      return r.fecha_inicio?.startsWith(filterAnio) || r.periodo?.startsWith(filterAnio)
+
+    if (filterPeriodo) {
+      if (r.periodo === filterPeriodo) return true
+      const match = filterPeriodo.match(/^(\d{4})-(\d{1,2})$/)
+      if (match && r.fecha_inicio) {
+        const y = parseInt(match[1]), mo = parseInt(match[2])
+        const lastDay = new Date(y, mo, 0).getDate()
+        const ini = `${y}-${String(mo).padStart(2, '0')}-01`
+        const fin = `${y}-${String(mo).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        const fFin = r.fecha_fin || r.fecha_inicio
+        return fFin >= ini && r.fecha_inicio <= fin
+      }
+      return false
     }
+
+    if (filterAnio && filterMeses?.length === 0) {
+      const ini = `${filterAnio}-01-01`
+      const fin = `${filterAnio}-12-31`
+      if (r.fecha_inicio) {
+        const fFin = r.fecha_fin || r.fecha_inicio
+        return fFin >= ini && r.fecha_inicio <= fin
+      }
+      return r.periodo?.startsWith(filterAnio)
+    }
+
     return true
   })
 }
@@ -67,7 +157,8 @@ export function calcularDiasPeriodo({ rangoMes, filterAnio, filterMeses, filterP
 }
 
 // ── Estadísticas derivadas del Dashboard ─────────────────────────────────────
-export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo) {
+export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, empleadosActivosPeriodo, rangoPeriodo = {}) {
+  const { periodoIni, periodoFin } = rangoPeriodo
   const total = data.length
   const empleadosUnicos = new Set(data.map(r => (r.nombre_empleado || '').trim()).filter(Boolean)).size
   // Denominador de la tasa de ausentismo: colaboradores realmente activos en
@@ -93,11 +184,13 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
   const enriquecerRegistro = (r) => {
     const cNorm = normalizarConcepto(r.concepto) || (r.concepto || '').trim() || 'Sin concepto'
     const finEfectiva = r.fecha_fin || r.fecha_inicio || null
+    const diasEnPeriodo = calcularDiasEnPeriodo(r, periodoIni, periodoFin)
     return {
       ...r,
       conceptoNorm: cNorm,
       color: CONCEPTO_COLORS[cNorm] || '#6366F1',
       fecha_regreso: finEfectiva ? obtenerFechaRegresoLaboral(finEfectiva) : null,
+      dias_en_periodo: diasEnPeriodo,
     }
   }
 
@@ -128,7 +221,7 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
     const filas = data
       .filter(r => (normalizarConcepto(r.concepto) || (r.concepto || '').trim() || 'Sin concepto') === concepto)
       .map(enriquecerRegistro)
-    const totalDias = filas.reduce((s, r) => s + (parseFloat(r.total_dias) || 0), 0)
+    const totalDias = filas.reduce((s, r) => s + (parseFloat(r.dias_en_periodo != null ? r.dias_en_periodo : r.total_dias) || 0), 0)
     const empUnicos = new Set(filas.map(r => (r.nombre_empleado || '').trim()).filter(Boolean)).size || (filas.length > 0 ? 1 : 0)
 
     // Reincidentes del concepto (2+ registros mismo empleado)
@@ -147,7 +240,7 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
       const k = r.nombre_empleado || '—'
       if (!empMap[k]) empMap[k] = { nombre: k, area: r.dependencia || '—', episodios: 0, dias: 0, prorroga: 0, registros: [] }
       empMap[k].episodios++
-      empMap[k].dias += parseFloat(r.total_dias) || 0
+      empMap[k].dias += parseFloat(r.dias_en_periodo != null ? r.dias_en_periodo : r.total_dias) || 0
       if (r.dependencia) empMap[k].area = r.dependencia
       const v = (r.prorroga || '').toLowerCase().trim()
       if (v === 'sí' || v === 'si') empMap[k].prorroga++
@@ -296,8 +389,8 @@ export function calcularStats(data, allData, diasPeriodoBase, diasPeriodoLabel, 
   const varAnioAnterior = cntMismoMesAnio > 0 ? Math.round(((cntMesActual - cntMismoMesAnio) / cntMismoMesAnio) * 100) : null
 
   // ── Tasa de ausentismo global (todos los conceptos de ausencia real) ────
-  const filasAusentismo = data.filter(r => CONCEPTOS_AUSENTISMO.includes(normalizarConcepto(r.concepto)))
-  const diasAusentismoTotal = filasAusentismo.reduce((s, r) => s + (parseFloat(r.total_dias) || 0), 0)
+  const filasAusentismo = data.filter(r => CONCEPTOS_AUSENTISMO.includes(normalizarConcepto(r.concepto))).map(enriquecerRegistro)
+  const diasAusentismoTotal = filasAusentismo.reduce((s, r) => s + (parseFloat(r.dias_en_periodo != null ? r.dias_en_periodo : r.total_dias) || 0), 0)
   const tasaAusentismoGlobal = empleadosUnicosBase > 0 ? (diasAusentismoTotal / (empleadosUnicosBase * diasPeriodoBase) * 100) : 0
 
   return {

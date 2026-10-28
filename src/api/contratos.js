@@ -94,6 +94,11 @@ function enriquecerContrato(item) {
         if (!res.dependencia && meta.dependencia) res.dependencia = meta.dependencia
         if (!res.telefono_trabajador && meta.telefono_trabajador) res.telefono_trabajador = meta.telefono_trabajador
         if (!res.email_trabajador && meta.email_trabajador) res.email_trabajador = meta.email_trabajador
+        if (!res.firma_trabajador && meta.firma_trabajador) res.firma_trabajador = meta.firma_trabajador
+        if (!res.fecha_firma_trabajador && meta.fecha_firma_trabajador) res.fecha_firma_trabajador = meta.fecha_firma_trabajador
+        if (!res.token_firma && meta.token_firma) res.token_firma = meta.token_firma
+        if (!res.ip_firma && meta.ip_firma) res.ip_firma = meta.ip_firma
+        if (meta.firmado_por_trabajador !== undefined) res.firmado_por_trabajador = Boolean(meta.firmado_por_trabajador)
       } catch {
         // Ignorar error de parseo de metadatos
       }
@@ -129,6 +134,11 @@ function normalizarPayloadContrato(payload = {}, empresa = 'ameriglobal') {
     dependencia: out.dependencia || '',
     telefono_trabajador: out.telefono_trabajador || '',
     email_trabajador: out.email_trabajador || '',
+    firma_trabajador: out.firma_trabajador || '',
+    fecha_firma_trabajador: out.fecha_firma_trabajador || '',
+    token_firma: out.token_firma || '',
+    ip_firma: out.ip_firma || '',
+    firmado_por_trabajador: Boolean(out.firma_trabajador || out.firmado_por_trabajador),
   }
   const metaRegex = /<!--METADATA_CONTRATO:(.*?)-->/
   const obsLimpia = (out.observaciones || '').replace(metaRegex, '').trim()
@@ -138,16 +148,14 @@ function normalizarPayloadContrato(payload = {}, empresa = 'ameriglobal') {
 }
 
 /**
- * Prepara el objeto para Supabase asegurando solo columnas compatibles.
+ * Prepara el objeto para Supabase asegurando únicamente columnas que existen en la base de datos.
+ * Todos los metadatos extendidos (firmas, fechas de firma, tokens) se empaquetan en 'observaciones'.
  */
 function prepararObjetoSupabase(clean) {
   const dbPayload = {}
   Object.keys(clean).forEach(k => {
-    // Excluir claves que no pertenecen al schema conocido si no han sido añadidas
-    if (k !== 'dependencia' && k !== 'telefono_trabajador' && k !== 'email_trabajador') {
-      if (clean[k] !== undefined) {
-        dbPayload[k] = clean[k]
-      }
+    if (COLUMNAS_TABLA_CONTRATOS.has(k) && clean[k] !== undefined) {
+      dbPayload[k] = clean[k]
     }
   })
   return dbPayload
@@ -214,10 +222,13 @@ export async function listarContratos(empresa = 'ameriglobal') {
 }
 
 /**
- * Obtiene un contrato por su ID.
+ * Obtiene un contrato por su ID (busca en Supabase o en local de cualquier empresa).
  */
-export async function obtenerContrato(id, empresa = 'ameriglobal') {
+export async function obtenerContrato(id, empresa = null) {
   try {
+    if (!id) return { data: null, error: new Error('ID no proporcionado') }
+
+    // 1. Si no es un id temporal local, buscar en Supabase
     if (!String(id).startsWith('loc_')) {
       const { data, error } = await supabase
         .from(TABLA)
@@ -225,16 +236,68 @@ export async function obtenerContrato(id, empresa = 'ameriglobal') {
         .eq('id', id)
         .maybeSingle()
 
-      if (!error && data) return { data: enriquecerContrato(data), error: null }
+      if (!error && data) {
+        return { data: enriquecerContrato(data), error: null }
+      }
     }
 
-    // Fallback local
-    const local = leerCacheLocal(empresa).map(enriquecerContrato)
-    const found = local.find(c => c.id === id)
-    return { data: found || null, error: null }
+    // 2. Fallback local en ameriglobal o global_link
+    const empresasABuscar = empresa ? [empresa] : ['ameriglobal', 'global_link']
+    for (const emp of empresasABuscar) {
+      const local = leerCacheLocal(emp).map(enriquecerContrato)
+      const found = local.find(c => c.id === id)
+      if (found) {
+        // Si tiene id temporal loc_, intentar subirlo a Supabase de una vez
+        if (String(found.id).startsWith('loc_')) {
+          try {
+            const dbPayload = prepararObjetoSupabase(found)
+            delete dbPayload.id
+            const { data: synced } = await supabase.from(TABLA).insert([dbPayload]).select()
+            if (synced && synced[0]) {
+              const syncedContract = enriquecerContrato(synced[0])
+              const updatedLocal = local.filter(c => c.id !== found.id).concat(syncedContract)
+              guardarCacheLocal(emp, updatedLocal)
+              return { data: syncedContract, error: null }
+            }
+          } catch (syncErr) {
+            console.warn('No se pudo subir contrato temporal a Supabase:', syncErr)
+          }
+        }
+        return { data: found, error: null }
+      }
+    }
+    return { data: null, error: null }
   } catch (err) {
+    console.error('Error en obtenerContrato:', err)
     return { data: null, error: err }
   }
+}
+
+/**
+ * Registra la firma digital del empleado en ambos contratos (laboral y confidencialidad).
+ */
+export async function firmarContratoEmpleado(id, datosFirma = {}, empresa = null) {
+  const { data: contratoExistente } = await obtenerContrato(id, empresa)
+  if (!contratoExistente) {
+    throw new Error('Contrato no encontrado en el sistema.')
+  }
+
+  const empresaDestino = contratoExistente.empresa || empresa || 'ameriglobal'
+  const fechaFirma = datosFirma.fecha_firma_trabajador || new Date().toLocaleString('es-CO', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  })
+
+  const payloadActualizado = {
+    ...contratoExistente,
+    firma_trabajador: datosFirma.firma_trabajador || '',
+    fecha_firma_trabajador: fechaFirma,
+    ip_firma: datosFirma.ip_firma || '',
+    firmado_por_trabajador: true,
+  }
+
+  const { data, error } = await actualizarContrato(id, payloadActualizado, empresaDestino)
+  if (error) throw error
+  return data?.[0] || payloadActualizado
 }
 
 /**

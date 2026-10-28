@@ -30,8 +30,15 @@ export default function VehicleCard({ row, idx, onView, onEdit, onDelete, onHist
               <div style={{ fontWeight: 700, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {row.nombre_empleado}
               </div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: isCarro ? 'var(--info-text)' : isBici ? '#047857' : 'var(--warning-text)', letterSpacing: isBici ? 'normal' : '0.06em', fontFamily: isBici ? 'inherit' : 'monospace', marginTop: 1 }}>
-                {row.placa || '—'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: isCarro ? 'var(--info-text)' : isBici ? '#047857' : 'var(--warning-text)', letterSpacing: isBici ? 'normal' : '0.06em', fontFamily: isBici ? 'inherit' : 'monospace' }}>
+                  {row.placa || '—'}
+                </span>
+                {!row.empleado_id && (
+                  <span style={{ fontSize: 9.5, fontWeight: 700, color: '#D97706', background: 'rgba(217,119,6,0.12)', padding: '1px 6px', borderRadius: 20 }}>
+                    Externo
+                  </span>
+                )}
               </div>
             </div>
           </div>

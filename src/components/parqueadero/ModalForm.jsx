@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import { MESES } from '../../utils/parqueaderoConstants'
 import SearchableSelect from '../ui/SearchableSelect'
@@ -7,6 +8,19 @@ export default function ModalForm({
   empleados, listaEmpleados = [], aniosDisponibles, mesActual, anioActual,
   onClose,
 }) {
+  const catalogo = (listaEmpleados && listaEmpleados.length > 0)
+    ? listaEmpleados
+    : (empleados?.lista || [])
+
+  const [esExterno, setEsExterno] = useState(() => {
+    if (!form.nombre_empleado) return false
+    const matchEmp = catalogo.some(e =>
+      (form.empleado_id && e.id === form.empleado_id) ||
+      (e.nombre_completo && e.nombre_completo.trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
+    )
+    return !matchEmp
+  })
+
   const handleEmpleadoChange = (val) => {
     if (!val) {
       setForm(p => ({
@@ -16,10 +30,6 @@ export default function ModalForm({
       }))
       return
     }
-
-    const catalogo = (listaEmpleados && listaEmpleados.length > 0)
-      ? listaEmpleados
-      : (empleados?.lista || [])
 
     const emp = catalogo.find(e =>
       e.id === val ||
@@ -140,35 +150,105 @@ export default function ModalForm({
             </div>
           )}
 
-          {/* ── Sección 1: Empleado ── */}
+          {/* ── Sección 1: Persona (Empleado o Externa) ── */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>👤</div>
-              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#374151' }}>Datos del empleado</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Nombre completo *</label>
-                <SearchableSelect
-                  value={form.nombre_empleado}
-                  onChange={handleEmpleadoChange}
-                  activos={empleados.activos} inactivos={empleados.inactivos}
-                  placeholder="— Seleccionar empleado —"
-                />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 24, height: 24, borderRadius: 6, background: esExterno ? 'rgba(217,119,6,0.14)' : 'var(--info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
+                  {esExterno ? '👤' : '🏢'}
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text)' }}>
+                  {esExterno ? 'Datos de la persona externa' : 'Datos del empleado'}
+                </span>
               </div>
+            </div>
+
+            {/* Selector de tipo de persona: Nómina vs Solo Parqueadero */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 4, background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--border)', marginBottom: 14 }}>
+              <button
+                type="button"
+                onClick={() => setEsExterno(false)}
+                style={{
+                  padding: '7px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: !esExterno ? 700 : 500,
+                  background: !esExterno ? 'var(--surface)' : 'transparent',
+                  color: !esExterno ? 'var(--primary)' : 'var(--text-muted)',
+                  boxShadow: !esExterno ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <span>🏢</span> Empleado de empresa
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEsExterno(true)
+                  setForm(p => ({ ...p, empleado_id: null }))
+                }}
+                style={{
+                  padding: '7px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: esExterno ? 700 : 500,
+                  background: esExterno ? 'var(--surface)' : 'transparent',
+                  color: esExterno ? '#D97706' : 'var(--text-muted)',
+                  boxShadow: esExterno ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <span>👤</span> Persona externa / Solo Parqueadero
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {!esExterno ? (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Nombre del empleado *</label>
+                  <SearchableSelect
+                    value={form.nombre_empleado}
+                    onChange={handleEmpleadoChange}
+                    activos={empleados.activos} inactivos={empleados.inactivos}
+                    placeholder="— Seleccionar empleado —"
+                    onCustomSelect={(nombre) => {
+                      setEsExterno(true)
+                      setForm(p => ({ ...p, nombre_empleado: nombre, empleado_id: null }))
+                    }}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', margin: 0 }}>Nombre completo *</label>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#D97706', background: 'rgba(217,119,6,0.12)', padding: '2px 8px', borderRadius: 20 }}>
+                      Solo Parqueadero
+                    </span>
+                  </div>
+                  <input
+                    className="form-control"
+                    value={form.nombre_empleado || ''}
+                    onChange={f('nombre_empleado')}
+                    placeholder="Nombre completo (ej. Contratista, Proveedor, Visitante)"
+                    autoFocus
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    💡 Esta persona se registrará únicamente en Parqueadero (no se agregará a la nómina de empleados).
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Cédula</label>
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, pointerEvents: 'none' }}>🪪</span>
-                    <input className="form-control" value={form.cedula} onChange={f('cedula')} placeholder="N° de cédula" style={{ paddingLeft: 30 }} />
+                    <input className="form-control" value={form.cedula || ''} onChange={f('cedula')} placeholder="N° de cédula" style={{ paddingLeft: 30 }} />
                   </div>
                 </div>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>Teléfono</label>
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, pointerEvents: 'none' }}>📱</span>
-                    <input className="form-control" value={form.telefono} onChange={f('telefono')} placeholder="N° de contacto" style={{ paddingLeft: 30 }} />
+                    <input className="form-control" value={form.telefono || ''} onChange={f('telefono')} placeholder="N° de contacto" style={{ paddingLeft: 30 }} />
                   </div>
                 </div>
               </div>

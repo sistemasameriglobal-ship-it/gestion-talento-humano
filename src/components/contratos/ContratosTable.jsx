@@ -21,6 +21,8 @@ import {
   Sparkles,
   UserPlus,
   XCircle,
+  Link2,
+  FileCheck2,
 } from 'lucide-react'
 
 export default function ContratosTable({
@@ -32,6 +34,7 @@ export default function ContratosTable({
   onEliminarContrato,
   onRegistrarEmpleado,
   onDesistirContrato,
+  onCompartirFirma,
   puedeEditar = true,
 }) {
   if (loading) {
@@ -264,13 +267,38 @@ export default function ContratosTable({
                     </div>
                   </td>
 
-                  {/* Confidencialidad */}
+                  {/* Confidencialidad & Firma */}
                   <td style={{ padding: '12px 14px' }}>
-                    <span className="badge-confidencialidad-si" title="Contrato de confidencialidad vinculado para ambas partes">
-                      🔒 Vinculado
-                    </span>
-                    <div style={{ fontSize: 10.5, color: '#6B21A8', marginTop: 2 }}>
-                      Pena: {c.multa_confidencialidad_smmlv || 500} SMMLV
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="badge-confidencialidad-si" title="Contrato de confidencialidad vinculado para ambas partes">
+                        🔒 Vinculado
+                      </span>
+                      {c.firmado_por_trabajador || c.firma_trabajador ? (
+                        <span
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            background: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC',
+                            padding: '2px 6px', borderRadius: 5, fontSize: 10.5, fontWeight: 700,
+                            width: 'fit-content'
+                          }}
+                          title={c.fecha_firma_trabajador ? `Firmado digitalmente el ${c.fecha_firma_trabajador}` : 'Firmado digitalmente por el colaborador'}
+                        >
+                          <FileCheck2 size={12} />
+                          <span>Firmado</span>
+                        </span>
+                      ) : !esFinalizado && !esDesistido ? (
+                        <span
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A',
+                            padding: '2px 6px', borderRadius: 5, fontSize: 10.5, fontWeight: 700,
+                            width: 'fit-content'
+                          }}
+                          title="Pendiente de firma digital del colaborador"
+                        >
+                          <span>🟡 Sin firmar</span>
+                        </span>
+                      ) : null}
                     </div>
                   </td>
 
@@ -309,6 +337,23 @@ export default function ContratosTable({
                         >
                           <XCircle size={13} />
                           <span>Desistió</span>
+                        </button>
+                      )}
+
+                      {/* BOTÓN COMPARTIR ENLACE DE FIRMA */}
+                      {onCompartirFirma && !esFinalizado && !esDesistido && (
+                        <button
+                          type="button"
+                          onClick={() => onCompartirFirma(c)}
+                          title="Copiar o compartir enlace para que el empleado firme ambos contratos"
+                          style={{
+                            padding: '6px 9px', borderRadius: 7, border: '1px solid #C7D2FE',
+                            background: '#EEF2FF', color: '#4338CA', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600,
+                          }}
+                        >
+                          <Link2 size={13} />
+                          <span>Link Firma</span>
                         </button>
                       )}
 

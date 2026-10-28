@@ -29,9 +29,10 @@ import {
   PenTool,
   FileUp,
   RotateCcw,
+  Link2,
 } from 'lucide-react'
 
-export default function ModalContratoViewer({ contrato, onClose, onEdit, puedeEditar = true }) {
+export default function ModalContratoViewer({ contrato, onClose, onEdit, onCompartirFirma, puedeEditar = true }) {
   const [tab, setTab] = useState('completo') // 'completo' | 'principal' | 'confidencialidad' | 'linea_tiempo'
   const [copiado, setCopiado] = useState(false)
   const [firmaVersion, setFirmaVersion] = useState(0)
@@ -296,6 +297,24 @@ export default function ModalContratoViewer({ contrato, onClose, onEdit, puedeEd
                 </div>
               )}
             </div>
+          )}
+
+          {onCompartirFirma && (
+            <button
+              type="button"
+              className="btn-viewer-action"
+              onClick={() => onCompartirFirma(contrato)}
+              title="Compartir enlace para que el empleado firme ambos contratos digitalmente"
+              style={{
+                background: '#EFF6FF',
+                borderColor: '#BFDBFE',
+                color: '#1D4ED8',
+                fontWeight: 600,
+              }}
+            >
+              <Link2 size={15} />
+              <span>Enlace de Firma</span>
+            </button>
           )}
 
           <button

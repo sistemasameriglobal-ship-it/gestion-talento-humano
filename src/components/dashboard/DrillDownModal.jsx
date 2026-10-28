@@ -196,10 +196,19 @@ export default function DrillDownModal({ drillDown, onCerrar, onVerExpediente, o
                         {r.fecha_fin && r.fecha_fin !== r.fecha_inicio ? ` → ${formatDDMMYYYY(r.fecha_fin)}` : ''}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
-                        {r.total_dias != null && r.total_dias !== '' && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: colorBorde }}>
-                            {r.total_dias} día{r.total_dias !== 1 ? 's' : ''}
+                        {r.dias_en_periodo != null && r.total_dias != null && Number(r.dias_en_periodo) !== Number(r.total_dias) ? (
+                          <span
+                            style={{ fontSize: 11, fontWeight: 700, color: colorBorde }}
+                            title={`Esta novedad es de ${r.total_dias} días totales, pero ${r.dias_en_periodo} días corresponden a este período filtrado`}
+                          >
+                            {r.dias_en_periodo} de {r.total_dias} días
                           </span>
+                        ) : (
+                          r.total_dias != null && r.total_dias !== '' && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: colorBorde }}>
+                              {r.total_dias} día{r.total_dias !== 1 ? 's' : ''}
+                            </span>
+                          )
                         )}
                         {estadoTemp && estadoTemp.chipTexto !== '—' && (
                           <span className={chipClass} style={{ fontSize: 10, padding: '1px 7px' }}>

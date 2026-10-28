@@ -8,7 +8,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, ChevronDown } from 'lucide-react'
 
-export default function SearchableSelect({ value, onChange, activos = [], inactivos = [], placeholder = '— Seleccionar —' }) {
+export default function SearchableSelect({ value, onChange, activos = [], inactivos = [], placeholder = '— Seleccionar —', onCustomSelect }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef(null)
@@ -94,8 +94,28 @@ export default function SearchableSelect({ value, onChange, activos = [], inacti
             </div>
 
             {totalResultados === 0 && (
-              <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
-                Sin resultados
+              <div style={{ padding: '12px 14px', fontSize: 13, textAlign: 'center' }}>
+                <div style={{ color: 'var(--text-muted)', marginBottom: onCustomSelect && query.trim() ? 8 : 0 }}>
+                  Sin resultados
+                </div>
+                {onCustomSelect && query.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCustomSelect(query.trim())
+                      setOpen(false)
+                      setQuery('')
+                    }}
+                    style={{
+                      background: 'var(--primary-light)', color: 'var(--primary)',
+                      border: '1px solid var(--border)', borderRadius: 6, padding: '5px 10px',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex',
+                      alignItems: 'center', gap: 4
+                    }}
+                  >
+                    <span>➕</span> Usar "{query.trim()}" (persona externa)
+                  </button>
+                )}
               </div>
             )}
 
