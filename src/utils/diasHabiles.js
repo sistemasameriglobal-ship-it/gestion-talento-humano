@@ -35,13 +35,21 @@ export function getFestivosColDetalle(year) {
   }
 
   const map = {}
+  const setFestivo = (iso, nombre) => {
+    if (map[iso]) {
+      map[iso] = `${map[iso]} y ${nombre}`
+    } else {
+      map[iso] = nombre
+    }
+  }
+
   // 1. Fijos (Ley 51 de 1983)
-  map[`${year}-01-01`] = 'Año Nuevo'
-  map[`${year}-05-01`] = 'Día del Trabajo'
-  map[`${year}-07-20`] = 'Día de la Independencia'
-  map[`${year}-08-07`] = 'Batalla de Boyacá'
-  map[`${year}-12-08`] = 'Inmaculada Concepción'
-  map[`${year}-12-25`] = 'Navidad'
+  setFestivo(`${year}-01-01`, 'Año Nuevo')
+  setFestivo(`${year}-05-01`, 'Día del Trabajo')
+  setFestivo(`${year}-07-20`, 'Día de la Independencia')
+  setFestivo(`${year}-08-07`, 'Batalla de Boyacá')
+  setFestivo(`${year}-12-08`, 'Inmaculada Concepción')
+  setFestivo(`${year}-12-25`, 'Navidad')
 
   // 2. Emiliani (trasladados al siguiente lunes)
   const emiliani = [
@@ -55,18 +63,18 @@ export function getFestivosColDetalle(year) {
   ]
   emiliani.forEach(([m, d, nom]) => {
     const fecha = new Date(year, m - 1, d, 12, 0, 0)
-    map[toISO(nextMonday(fecha))] = nom
+    setFestivo(toISO(nextMonday(fecha)), nom)
   })
 
   // 3. Basados en Pascua
   const p = pascua(year)
   const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, 12, 0, 0)
 
-  map[toISO(addDays(p, -3))] = 'Jueves Santo'
-  map[toISO(addDays(p, -2))] = 'Viernes Santo'
-  map[toISO(nextMonday(addDays(p, 43)))] = 'Ascensión del Señor'
-  map[toISO(nextMonday(addDays(p, 64)))] = 'Corpus Christi'
-  map[toISO(nextMonday(addDays(p, 71)))] = 'Sagrado Corazón'
+  setFestivo(toISO(addDays(p, -3)), 'Jueves Santo')
+  setFestivo(toISO(addDays(p, -2)), 'Viernes Santo')
+  setFestivo(toISO(nextMonday(addDays(p, 43))), 'Ascensión del Señor')
+  setFestivo(toISO(nextMonday(addDays(p, 64))), 'Corpus Christi')
+  setFestivo(toISO(nextMonday(addDays(p, 71))), 'Sagrado Corazón')
 
   return map
 }
