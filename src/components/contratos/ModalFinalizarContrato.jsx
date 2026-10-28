@@ -115,7 +115,7 @@ export default function ModalFinalizarContrato({
           }}
         >
           <option value="no_supero_prueba">
-            🛡️ No superó el período de prueba (primeros 3 meses)
+            🛡️ No superó el período de prueba (primeros 2 meses)
           </option>
           <option value="no_renovacion_trimestre">
             ⏱️ No renovación al término del trimestre (decisión de la empresa)

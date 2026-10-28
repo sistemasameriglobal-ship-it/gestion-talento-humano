@@ -20,6 +20,8 @@ import ContratosTable from '../components/contratos/ContratosTable'
 import ModalContratoForm from '../components/contratos/ModalContratoForm'
 import ModalContratoViewer from '../components/contratos/ModalContratoViewer'
 import ModalFinalizarContrato from '../components/contratos/ModalFinalizarContrato'
+import ModalRegistrarEmpleado from '../components/contratos/ModalRegistrarEmpleado'
+import ModalDesistirContrato from '../components/contratos/ModalDesistirContrato'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
 import * as contratosApi from '../api/contratos'
 import * as empleadosApi from '../api/empleados'
@@ -36,7 +38,7 @@ export default function Contratos() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState('') // '' | 'en_prueba' | 'prorroga_trimestral' | 'contrato_anual' | 'por_vencer' | 'finalizado'
+  const [filtroEstado, setFiltroEstado] = useState('') // '' | 'pendiente_empleado' | 'en_prueba' | 'prorroga_trimestral' | 'contrato_anual' | 'por_vencer' | 'desistido' | 'finalizado'
 
   // Modales
   const [formOpen, setFormOpen] = useState(false)
@@ -44,6 +46,8 @@ export default function Contratos() {
   const [contratoParaVer, setContratoParaVer] = useState(null)
   const [contratoParaFinalizar, setContratoParaFinalizar] = useState(null)
   const [contratoParaEliminar, setContratoParaEliminar] = useState(null)
+  const [contratoParaRegistrar, setContratoParaRegistrar] = useState(null)
+  const [contratoParaDesistir, setContratoParaDesistir] = useState(null)
   const [msg, setMsg] = useState(null)
 
   const cargarDatos = useCallback(async () => {
@@ -114,10 +118,11 @@ export default function Contratos() {
   }
 
   // Eliminar
-  const handleConfirmarEliminar = async () => {
-    if (!contratoParaEliminar) return
+  const handleConfirmarEliminar = async (idToDelete) => {
+    const id = idToDelete || contratoParaEliminar?.id
+    if (!id) return
     try {
-      const { error } = await contratosApi.eliminarContrato(contratoParaEliminar.id, currentCompany)
+      const { error } = await contratosApi.eliminarContrato(id, currentCompany)
       if (error) throw error
       setMsg({ type: 'success', text: 'Contrato eliminado correctamente.' })
       setContratoParaEliminar(null)
@@ -127,6 +132,73 @@ export default function Contratos() {
       console.error(err)
       setMsg({ type: 'error', text: 'Error al eliminar el contrato.' })
       setTimeout(() => setMsg(null), 4000)
+    }
+  }
+
+  // Registrar Candidato en Empleados
+  const handleConfirmarRegistroEmpleado = async (contrato, datosEmpleado) => {
+    try {
+      // 1. Crear el empleado en la base de datos de nómina
+      const { data: empCreado, error: empErr } = await empleadosApi.crearEmpleado(datosEmpleado, currentCompany)
+      if (empErr) throw empErr
+
+      const nuevoEmpleadoId = empCreado?.id || (Array.isArray(empCreado) && empCreado[0]?.id)
+
+      // 2. Actualizar el contrato vinculando el empleado_id y cambiando el estado a 'vigente'
+      const { error: contErr } = await contratosApi.actualizarContrato(
+        contrato.id,
+        {
+          empleado_id: nuevoEmpleadoId || null,
+          estado: 'vigente',
+          nombre_trabajador: datosEmpleado.nombre_completo || contrato.nombre_trabajador,
+          numero_documento: datosEmpleado.numero_documento || contrato.numero_documento,
+          cargo: datosEmpleado.cargo || contrato.cargo,
+          dependencia: datosEmpleado.dependencia || contrato.dependencia,
+          direccion_trabajador: datosEmpleado.direccion || contrato.direccion_trabajador,
+          telefono_trabajador: datosEmpleado.celular || contrato.telefono_trabajador,
+          fecha_ingreso: datosEmpleado.fecha_ingreso || contrato.fecha_ingreso,
+          salario_monto: datosEmpleado.salario ? Number(datosEmpleado.salario) : contrato.salario_monto,
+        },
+        currentCompany
+      )
+      if (contErr) throw contErr
+
+      setMsg({
+        type: 'success',
+        text: `¡${datosEmpleado.nombre_completo} ha sido registrado(a) exitosamente en Empleados y su contrato ahora está activo y vigente!`
+      })
+      setContratoParaRegistrar(null)
+      await cargarDatos()
+      setTimeout(() => setMsg(null), 5000)
+    } catch (err) {
+      console.error(err)
+      throw err
+    }
+  }
+
+  // Desistir Contrato (Candidato no se presentó / declinó la vacante)
+  const handleConfirmarDesistir = async (contratoId, motivo) => {
+    try {
+      const { error } = await contratosApi.actualizarContrato(
+        contratoId,
+        {
+          estado: 'desistido',
+          motivo_finalizacion: motivo || 'Candidato desistió / No se presentó a trabajar',
+        },
+        currentCompany
+      )
+      if (error) throw error
+
+      setMsg({
+        type: 'success',
+        text: 'El contrato fue archivado como "Desistió del proceso". No se crearon registros innecesarios en la lista de empleados.'
+      })
+      setContratoParaDesistir(null)
+      await cargarDatos()
+      setTimeout(() => setMsg(null), 5000)
+    } catch (err) {
+      console.error(err)
+      throw err
     }
   }
 
@@ -150,10 +222,20 @@ export default function Contratos() {
 
       // Filtro estado / ciclo
       if (filtroEstado) {
+        if (filtroEstado === 'pendiente_empleado') {
+          return c.estado === 'pendiente_empleado'
+        }
+        if (filtroEstado === 'desistido') {
+          return c.estado === 'desistido'
+        }
         if (filtroEstado === 'finalizado') {
           return c.estado === 'finalizado'
         }
-        if (c.estado === 'finalizado') return false
+
+        // Si es un filtro de ciclo regular activo, descartamos finalizados, desistidos y pendientes
+        if (c.estado === 'finalizado' || c.estado === 'desistido' || c.estado === 'pendiente_empleado') {
+          return false
+        }
 
         const info = calcularCiclosYProrroga(c)
         if (!info) return true
@@ -198,7 +280,7 @@ export default function Contratos() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <PageTitle
           title="Gestión de Contratos"
-          subtitle="Renovación automática cada 3 meses (Prueba inicial), transición a Contrato Anual (1 año) y Acuerdos de Confidencialidad vinculados."
+          subtitle="Contratos de 3 meses con 2 meses de prueba inicial, renovación automática trimestral, transición a Contrato Anual (1 año) y Acuerdos de Confidencialidad."
         />
 
         {puedeEditar && (
@@ -254,10 +336,12 @@ export default function Contratos() {
             onChange={e => setFiltroEstado(e.target.value)}
           >
             <option value="">Todos los Ciclos y Estados</option>
-            <option value="en_prueba">🛡️ En Período de Prueba (Primeros 3 meses)</option>
-            <option value="prorroga_trimestral">🔄 En Prórrogas Trimestrales (Meses 4 a 12)</option>
+            <option value="pendiente_empleado">🟡 Pendientes por Registrar en Empleados</option>
+            <option value="en_prueba">🛡️ En Período de Prueba (Primeros 2 meses)</option>
+            <option value="prorroga_trimestral">🔄 En Prórrogas Trimestrales</option>
             <option value="contrato_anual">⭐ Contrato Anual (Mayor a 1 año)</option>
             <option value="por_vencer">⚠️ Fin de Período en ≤ 30 Días (Preaviso)</option>
+            <option value="desistido">⚪ Desistieron del Proceso / No Ingresaron</option>
             <option value="finalizado">🔴 Finalizados / No Renovados</option>
           </select>
 
@@ -285,6 +369,8 @@ export default function Contratos() {
         onEditarContrato={c => { setContratoParaEditar(c); setFormOpen(true) }}
         onFinalizarContrato={c => setContratoParaFinalizar(c)}
         onEliminarContrato={c => setContratoParaEliminar(c)}
+        onRegistrarEmpleado={c => setContratoParaRegistrar(c)}
+        onDesistirContrato={c => setContratoParaDesistir(c)}
       />
 
       {/* MODAL FORMULARIO */}
@@ -304,11 +390,12 @@ export default function Contratos() {
         <ModalContratoViewer
           contrato={contratoParaVer}
           onClose={() => setContratoParaVer(null)}
-          onEdit={c => {
+          puedeEditar={puedeEditar}
+          onEdit={puedeEditar ? (c => {
             setContratoParaVer(null)
             setContratoParaEditar(c)
             setFormOpen(true)
-          }}
+          }) : undefined}
         />
       )}
 
@@ -321,14 +408,32 @@ export default function Contratos() {
         />
       )}
 
+      {/* MODAL REGISTRAR EN EMPLEADOS */}
+      {contratoParaRegistrar && (
+        <ModalRegistrarEmpleado
+          open={Boolean(contratoParaRegistrar)}
+          contrato={contratoParaRegistrar}
+          onClose={() => setContratoParaRegistrar(null)}
+          onConfirm={handleConfirmarRegistroEmpleado}
+        />
+      )}
+
+      {/* MODAL DESISTIR PROCESO */}
+      {contratoParaDesistir && (
+        <ModalDesistirContrato
+          contrato={contratoParaDesistir}
+          onClose={() => setContratoParaDesistir(null)}
+          onConfirm={handleConfirmarDesistir}
+        />
+      )}
+
       {/* MODAL CONFIRMAR ELIMINACIÓN */}
       {contratoParaEliminar && (
         <DeleteConfirmModal
-          isOpen={Boolean(contratoParaEliminar)}
-          title="Eliminar Contrato"
-          message={`¿Estás seguro de que deseas eliminar el contrato de "${contratoParaEliminar.nombre_trabajador}"? Esta acción removerá el registro del contrato y su confidencialidad vinculada.`}
+          deleteId={contratoParaEliminar?.id}
+          onClose={() => setContratoParaEliminar(null)}
           onConfirm={handleConfirmarEliminar}
-          onCancel={() => setContratoParaEliminar(null)}
+          message={`¿Estás seguro de que deseas eliminar el contrato de "${contratoParaEliminar.nombre_trabajador}"? Esta acción removerá el registro del contrato y su confidencialidad vinculada.`}
         />
       )}
     </div>

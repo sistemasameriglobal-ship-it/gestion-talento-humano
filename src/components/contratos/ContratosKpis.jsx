@@ -4,7 +4,7 @@
 import { useMemo } from 'react'
 import KpiCard, { KpiGrid } from '../ui/KpiCard'
 import { calcularCiclosYProrroga } from '../../utils/contratosTemplates'
-import { FileSignature, ShieldCheck, Clock, Award, AlertTriangle, GraduationCap } from 'lucide-react'
+import { FileSignature, ShieldCheck, Clock, Award, AlertTriangle, GraduationCap, UserPlus } from 'lucide-react'
 
 export default function ContratosKpis({
   contratos = [],
@@ -15,6 +15,7 @@ export default function ContratosKpis({
 }) {
   const stats = useMemo(() => {
     let total = 0
+    let pendientesIngreso = 0
     let enPrueba = 0
     let prorrogasTrimestrales = 0
     let contratosAnuales = 0
@@ -22,7 +23,13 @@ export default function ContratosKpis({
     let aprendices = 0
 
     contratos.forEach(c => {
-      if (c.estado === 'finalizado') return
+      if (c.estado === 'desistido' || c.estado === 'finalizado') return
+
+      if (c.estado === 'pendiente_empleado') {
+        pendientesIngreso++
+        return
+      }
+
       total++
 
       if (c.tipo_contrato === 'aprendizaje') {
@@ -47,11 +54,11 @@ export default function ContratosKpis({
       }
     })
 
-    return { total, enPrueba, prorrogasTrimestrales, contratosAnuales, porVencerOPreaviso, aprendices }
+    return { total, pendientesIngreso, enPrueba, prorrogasTrimestrales, contratosAnuales, porVencerOPreaviso, aprendices }
   }, [contratos])
 
   return (
-    <KpiGrid min={175}>
+    <KpiGrid min={165}>
       <KpiCard
         label="Total Activos"
         value={stats.total}
@@ -62,9 +69,18 @@ export default function ContratosKpis({
         active={!filtroTipo && !filtroEstado}
       />
       <KpiCard
+        label="Pendientes Ingreso"
+        value={stats.pendientesIngreso}
+        sub="Candidatos por registrar"
+        icon={UserPlus}
+        tone="warning"
+        onClick={() => { setFiltroEstado(filtroEstado === 'pendiente_empleado' ? '' : 'pendiente_empleado'); setFiltroTipo('') }}
+        active={filtroEstado === 'pendiente_empleado'}
+      />
+      <KpiCard
         label="En Período de Prueba"
         value={stats.enPrueba}
-        sub="Primeros 3 meses (Evaluación)"
+        sub="Primeros 2 meses (Evaluación)"
         icon={ShieldCheck}
         tone="warning"
         onClick={() => { setFiltroEstado(filtroEstado === 'en_prueba' ? '' : 'en_prueba'); setFiltroTipo('') }}

@@ -3,36 +3,7 @@
 // Vacaciones como en Novedades (concepto "Vacaciones") para que el conteo
 // de días sea siempre el mismo en los dos módulos.
 
-export function getFestivosCol(year) {
-  // Fijos
-  const fijos = [
-    `${year}-01-01`, // Año Nuevo
-    `${year}-05-01`, // Día del Trabajo
-    `${year}-07-20`, // Independencia
-    `${year}-08-07`, // Batalla de Boyacá
-    `${year}-12-08`, // Inmaculada Concepción
-    `${year}-12-25`, // Navidad
-  ]
-
-  // Emiliani (se trasladan al siguiente lunes)
-  const emiliani = [
-    [1, 6],   // Reyes Magos
-    [3, 19],  // San José
-    [6, 29],  // San Pedro y San Pablo
-    [8, 15],  // Asunción
-    [10, 12], // Día de la Raza
-    [11, 1],  // Todos los Santos
-    [11, 11], // Independencia de Cartagena
-  ]
-
-  function nextMonday(d) {
-    const r = new Date(d)
-    const dow = r.getDay()
-    if (dow === 1) return r
-    r.setDate(r.getDate() + ((8 - dow) % 7))
-    return r
-  }
-
+export function getFestivosColDetalle(year) {
   const toISO = d => {
     const y = d.getFullYear()
     const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -40,10 +11,13 @@ export function getFestivosCol(year) {
     return `${y}-${m}-${day}`
   }
 
-  const emilianiDates = emiliani.map(([m, d]) => {
-    const fecha = new Date(year, m - 1, d)
-    return toISO(nextMonday(fecha))
-  })
+  function nextMonday(d) {
+    const r = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
+    const dow = r.getDay()
+    if (dow === 1) return r
+    r.setDate(r.getDate() + ((8 - dow) % 7))
+    return r
+  }
 
   // Pascua (algoritmo de Butcher)
   function pascua(y) {
@@ -57,31 +31,69 @@ export function getFestivosCol(year) {
     const m2 = Math.floor((a + 11 * h + 22 * l) / 451)
     const mes = Math.floor((h + l - 7 * m2 + 114) / 31)
     const dia = ((h + l - 7 * m2 + 114) % 31) + 1
-    return new Date(y, mes - 1, dia)
+    return new Date(y, mes - 1, dia, 12, 0, 0)
   }
 
-  const p = pascua(year)
-  const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+  const map = {}
+  // 1. Fijos (Ley 51 de 1983)
+  map[`${year}-01-01`] = 'Año Nuevo'
+  map[`${year}-05-01`] = 'Día del Trabajo'
+  map[`${year}-07-20`] = 'Día de la Independencia'
+  map[`${year}-08-07`] = 'Batalla de Boyacá'
+  map[`${year}-12-08`] = 'Inmaculada Concepción'
+  map[`${year}-12-25`] = 'Navidad'
 
-  // Basados en Pascua
-  const pascuaDates = [
-    toISO(addDays(p, -7)),  // Domingo de Ramos
-    toISO(addDays(p, -3)),  // Jueves Santo
-    toISO(addDays(p, -2)),  // Viernes Santo
-    toISO(p),               // Domingo de Pascua
-    toISO(nextMonday(addDays(p, 43))),  // Ascensión (Emiliani)
-    toISO(nextMonday(addDays(p, 64))),  // Corpus Christi (Emiliani)
-    toISO(nextMonday(addDays(p, 71))),  // Sagrado Corazón (Emiliani)
+  // 2. Emiliani (trasladados al siguiente lunes)
+  const emiliani = [
+    [1, 6, 'Reyes Magos'],
+    [3, 19, 'San José'],
+    [6, 29, 'San Pedro y San Pablo'],
+    [8, 15, 'Asunción de la Virgen'],
+    [10, 12, 'Día de la Raza'],
+    [11, 1, 'Todos los Santos'],
+    [11, 11, 'Independencia de Cartagena'],
   ]
+  emiliani.forEach(([m, d, nom]) => {
+    const fecha = new Date(year, m - 1, d, 12, 0, 0)
+    map[toISO(nextMonday(fecha))] = nom
+  })
 
-  return new Set([...fijos, ...emilianiDates, ...pascuaDates])
+  // 3. Basados en Pascua
+  const p = pascua(year)
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, 12, 0, 0)
+
+  map[toISO(addDays(p, -3))] = 'Jueves Santo'
+  map[toISO(addDays(p, -2))] = 'Viernes Santo'
+  map[toISO(nextMonday(addDays(p, 43)))] = 'Ascensión del Señor'
+  map[toISO(nextMonday(addDays(p, 64)))] = 'Corpus Christi'
+  map[toISO(nextMonday(addDays(p, 71)))] = 'Sagrado Corazón'
+
+  return map
 }
 
+export function getFestivosCol(year) {
+  const map = getFestivosColDetalle(year)
+  return new Set(Object.keys(map))
+}
+
+/**
+ * Calcula la cantidad de días hábiles entre dos fechas (lunes a sábado),
+ * excluyendo domingos y festivos oficiales de Colombia (Art. 177 y 186 CST).
+ */
 export function diasHabilesEntre(inicio, fin) {
   if (!inicio || !fin) return ''
+  const cleanInicio = String(inicio).trim().slice(0, 10)
+  const cleanFin = String(fin).trim().slice(0, 10)
+  const partsIni = cleanInicio.split('-').map(Number)
+  const partsFin = cleanFin.split('-').map(Number)
+  if (partsIni.length !== 3 || partsFin.length !== 3 || partsIni.some(isNaN) || partsFin.some(isNaN)) return ''
+
+  // Usar mediodía (12:00:00) para evitar desfaces horarios o UTC
+  const cur = new Date(partsIni[0], partsIni[1] - 1, partsIni[2], 12, 0, 0)
+  const end = new Date(partsFin[0], partsFin[1] - 1, partsFin[2], 12, 0, 0)
+  if (end < cur) return ''
+
   let count = 0
-  const cur = new Date(inicio + 'T00:00:00')
-  const end = new Date(fin + 'T00:00:00')
   const yearsSeen = new Set()
   const festivosCache = {}
 
@@ -95,6 +107,92 @@ export function diasHabilesEntre(inicio, fin) {
     cur.setDate(cur.getDate() + 1)
   }
   return count
+}
+
+/**
+ * Obtiene la lista de festivos colombianos (lunes a sábado) que caen dentro de un rango de fechas.
+ * Útil para mostrar al usuario exactamente qué festivos fueron descontados de las vacaciones.
+ */
+export function obtenerFestivosEnRango(inicio, fin) {
+  if (!inicio || !fin) return []
+  const cleanInicio = String(inicio).trim().slice(0, 10)
+  const cleanFin = String(fin).trim().slice(0, 10)
+  const partsIni = cleanInicio.split('-').map(Number)
+  const partsFin = cleanFin.split('-').map(Number)
+  if (partsIni.length !== 3 || partsFin.length !== 3 || partsIni.some(isNaN) || partsFin.some(isNaN)) return []
+
+  const cur = new Date(partsIni[0], partsIni[1] - 1, partsIni[2], 12, 0, 0)
+  const end = new Date(partsFin[0], partsFin[1] - 1, partsFin[2], 12, 0, 0)
+  if (end < cur) return []
+
+  const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+  const resultado = []
+  const yearsSeen = new Set()
+  const detalleCache = {}
+
+  while (cur <= end) {
+    const y = cur.getFullYear()
+    if (!yearsSeen.has(y)) {
+      detalleCache[y] = getFestivosColDetalle(y)
+      yearsSeen.add(y)
+    }
+    const dow = cur.getDay()
+    const iso = `${y}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
+
+    // Excluir domingos ya que domingo de por sí no es hábil
+    if (dow !== 0 && detalleCache[y][iso]) {
+      resultado.push({
+        fecha: iso,
+        nombre: detalleCache[y][iso],
+        diaSemana: diasSemanaNombres[dow],
+      })
+    }
+    cur.setDate(cur.getDate() + 1)
+  }
+  return resultado
+}
+
+/**
+ * Dada una fecha de inicio y una cantidad de días hábiles de vacaciones (lunes a sábado excluyendo festivos),
+ * calcula la fecha de fin (último día de vacaciones del trabajador).
+ */
+export function calcularFechaFinVacaciones(fechaInicio, diasHabiles) {
+  const d = parseFloat(diasHabiles)
+  if (!fechaInicio || isNaN(d) || d <= 0) return ''
+  const clean = String(fechaInicio).trim().slice(0, 10)
+  const parts = clean.split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return ''
+
+  const cur = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0)
+  const festivosCache = {}
+  let contados = 0
+  let ultimaFechaValida = clean
+
+  const fmtISO = (dt) => {
+    const y = dt.getFullYear()
+    const m = String(dt.getMonth() + 1).padStart(2, '0')
+    const day = String(dt.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
+  const meta = Math.ceil(d)
+
+  while (contados < meta) {
+    const y = cur.getFullYear()
+    if (!festivosCache[y]) festivosCache[y] = getFestivosCol(y)
+    const dow = cur.getDay() // 0 = Domingo
+    const iso = fmtISO(cur)
+
+    if (dow !== 0 && !festivosCache[y].has(iso)) {
+      contados++
+      ultimaFechaValida = iso
+    }
+    if (contados < meta) {
+      cur.setDate(cur.getDate() + 1)
+    }
+  }
+
+  return ultimaFechaValida
 }
 
 /**

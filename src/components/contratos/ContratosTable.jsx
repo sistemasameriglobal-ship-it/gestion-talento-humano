@@ -19,6 +19,8 @@ import {
   ShieldCheck,
   UserX,
   Sparkles,
+  UserPlus,
+  XCircle,
 } from 'lucide-react'
 
 export default function ContratosTable({
@@ -28,6 +30,8 @@ export default function ContratosTable({
   onEditarContrato,
   onFinalizarContrato,
   onEliminarContrato,
+  onRegistrarEmpleado,
+  onDesistirContrato,
   puedeEditar = true,
 }) {
   if (loading) {
@@ -70,6 +74,8 @@ export default function ContratosTable({
           <tbody>
             {contratos.map(c => {
               const esAprendiz = c.tipo_contrato === 'aprendizaje'
+              const esPendienteEmpleado = c.estado === 'pendiente_empleado'
+              const esDesistido = c.estado === 'desistido'
               const esFinalizado = c.estado === 'finalizado'
               const infoProrroga = calcularCiclosYProrroga(c)
               const cicloActual = infoProrroga?.cicloActual || {}
@@ -79,7 +85,34 @@ export default function ContratosTable({
               let badgeCiclo = null
               let badgeVigencia = null
 
-              if (esFinalizado) {
+              if (esPendienteEmpleado) {
+                badgeCiclo = (
+                  <span style={{ background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                    🟡 Pendiente Registrar Empleado
+                  </span>
+                )
+                badgeVigencia = (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>
+                      Candidato por ingresar
+                    </div>
+                    <div style={{ fontSize: 11, color: '#B45309', marginTop: 2 }}>
+                      Ingreso: {formatearFechaLarga(c.fecha_ingreso)}
+                    </div>
+                  </div>
+                )
+              } else if (esDesistido) {
+                badgeCiclo = (
+                  <span style={{ background: '#F3F4F6', color: '#4B5563', border: '1px solid #E5E7EB', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                    ⚪ Desistió del Proceso
+                  </span>
+                )
+                badgeVigencia = (
+                  <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>
+                    {c.motivo_finalizacion || 'No se presentó / Desistió'}
+                  </span>
+                )
+              } else if (esFinalizado) {
                 badgeCiclo = (
                   <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
                     🔴 Finalizado
@@ -108,12 +141,20 @@ export default function ContratosTable({
                 )
               } else {
                 // Contrato a término fijo con prórrogas automáticas
-                if (cicloActual.esPrueba) {
-                  badgeCiclo = (
-                    <span style={{ background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
-                      🛡️ Periodo de Prueba (3 meses)
-                    </span>
-                  )
+                if (cicloActual.numero === 1) {
+                  if (infoProrroga?.esPeriodoPrueba) {
+                    badgeCiclo = (
+                      <span style={{ background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                        🛡️ Periodo de Prueba (2 meses)
+                      </span>
+                    )
+                  } else {
+                    badgeCiclo = (
+                      <span style={{ background: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                        ✅ Prueba Superada (Mes 3)
+                      </span>
+                    )
+                  }
                 } else if (cicloActual.esAnual) {
                   badgeCiclo = (
                     <span style={{ background: '#EDE9FE', color: '#6D28D9', border: '1px solid #DDD6FE', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
@@ -163,8 +204,18 @@ export default function ContratosTable({
                 >
                   {/* Colaborador */}
                   <td style={{ padding: '12px 16px' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--text)' }}>
-                      {c.nombre_trabajador}
+                    <div style={{ fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>{c.nombre_trabajador}</span>
+                      {esPendienteEmpleado && (
+                        <span style={{ background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 800 }}>
+                          🟡 CANDIDATO
+                        </span>
+                      )}
+                      {esDesistido && (
+                        <span style={{ background: '#F3F4F6', color: '#6B7280', border: '1px solid #E5E7EB', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 800 }}>
+                          ⚪ DESISTIÓ
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
                       {c.tipo_documento} {c.numero_documento}
@@ -177,7 +228,7 @@ export default function ContratosTable({
                   {/* Régimen & Ciclo */}
                   <td style={{ padding: '12px 14px' }}>
                     {badgeCiclo}
-                    {!esAprendiz && !esFinalizado && (
+                    {!esAprendiz && !esFinalizado && !esPendienteEmpleado && !esDesistido && (
                       <div style={{ fontSize: 10.5, color: '#475569', marginTop: 4 }}>
                         {cicloActual.esAnual ? 'Renovable anualmente' : 'Renovación automática cada 3 meses'}
                       </div>
@@ -225,7 +276,42 @@ export default function ContratosTable({
 
                   {/* Acciones */}
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {/* BOTÓN REGISTRAR EN EMPLEADOS (Si es candidato pendiente) */}
+                      {puedeEditar && esPendienteEmpleado && onRegistrarEmpleado && (
+                        <button
+                          type="button"
+                          onClick={() => onRegistrarEmpleado(c)}
+                          title="Crear ficha en empleados y marcar contrato como vigente"
+                          style={{
+                            padding: '6px 11px', borderRadius: 7, border: '1px solid #86EFAC',
+                            background: '#DCFCE7', color: '#15803D', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800,
+                            boxShadow: '0 1px 2px rgba(22, 101, 52, 0.15)',
+                          }}
+                        >
+                          <UserPlus size={14} />
+                          <span>Registrar Empleado</span>
+                        </button>
+                      )}
+
+                      {/* BOTÓN DESISTIÓ (Si es candidato pendiente) */}
+                      {puedeEditar && esPendienteEmpleado && onDesistirContrato && (
+                        <button
+                          type="button"
+                          onClick={() => onDesistirContrato(c)}
+                          title="Marcar como desistido (la persona no asistió o declinó el empleo)"
+                          style={{
+                            padding: '6px 9px', borderRadius: 7, border: '1px solid #E5E7EB',
+                            background: '#F9FAFB', color: '#6B7280', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600,
+                          }}
+                        >
+                          <XCircle size={13} />
+                          <span>Desistió</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => onVerContrato(c)}
@@ -252,7 +338,7 @@ export default function ContratosTable({
                         <Download size={14} />
                       </button>
 
-                      {puedeEditar && !esFinalizado && (
+                      {puedeEditar && !esFinalizado && !esPendienteEmpleado && !esDesistido && (
                         <button
                           type="button"
                           onClick={() => onFinalizarContrato(c)}

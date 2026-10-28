@@ -5,7 +5,9 @@ import {
   calcAntiguedad, calcularDiasHabiles, calcularAniosCumplidos,
   obtenerFechaIngresoContinua, aFechaInputDate,
   obtenerPeriodosVacacionesEmpleado, normalizarPeriodoVacaciones,
-  formatoDias, formatoDiasTexto
+  formatoDias, formatoDiasTexto,
+  calcularFechaFinVacaciones, obtenerFestivosEnRango,
+  obtenerFechaRegresoVacaciones, formatFecha
 } from '../../utils/vacacionesHelpers'
 import { ESTADOS, ESTADO_STYLES, DEPENDENCIAS } from '../../utils/vacacionesConstants'
 import SearchableSelect from '../ui/SearchableSelect'
@@ -213,12 +215,24 @@ export default function ModalForm({
   const onFechaInicioChange = (e) => {
     const fIni = e.target.value
     const fFin = form.fecha_fin
-    const dias = (fIni && fFin) ? calcularDiasHabiles(fIni, fFin) : form.total_dias
-    setForm(p => ({
-      ...p,
-      fecha_inicio: fIni,
-      total_dias: (fIni && fFin && dias !== '') ? String(dias) : p.total_dias,
-    }))
+    if (fIni && fFin) {
+      const dias = calcularDiasHabiles(fIni, fFin)
+      setForm(p => ({
+        ...p,
+        fecha_inicio: fIni,
+        total_dias: (dias !== '' && dias != null) ? String(dias) : p.total_dias,
+      }))
+    } else if (fIni && form.total_dias) {
+      const diasNum = parseFloat(form.total_dias)
+      const fFinCalc = (!isNaN(diasNum) && diasNum > 0) ? calcularFechaFinVacaciones(fIni, diasNum) : ''
+      setForm(p => ({
+        ...p,
+        fecha_inicio: fIni,
+        fecha_fin: fFinCalc || p.fecha_fin,
+      }))
+    } else {
+      setForm(p => ({ ...p, fecha_inicio: fIni }))
+    }
   }
 
   const onFechaFinChange = (e) => {
@@ -231,6 +245,44 @@ export default function ModalForm({
       total_dias: (fIni && fFin && dias !== '') ? String(dias) : p.total_dias,
     }))
   }
+
+  const onTotalDiasChange = (e) => {
+    const val = e.target.value
+    const fIni = form.fecha_inicio
+    const diasNum = parseFloat(val)
+    if (fIni && !isNaN(diasNum) && diasNum > 0) {
+      const fFinCalc = calcularFechaFinVacaciones(fIni, diasNum)
+      setForm(p => ({
+        ...p,
+        total_dias: val,
+        fecha_fin: fFinCalc || p.fecha_fin,
+      }))
+    } else {
+      setForm(p => ({
+        ...p,
+        total_dias: val,
+      }))
+    }
+  }
+
+  const festivosEnRango = useMemo(() => {
+    if (!form.fecha_inicio || !form.fecha_fin) return []
+    return obtenerFestivosEnRango(form.fecha_inicio, form.fecha_fin)
+  }, [form.fecha_inicio, form.fecha_fin])
+
+  const fechaRegreso = useMemo(() => {
+    if (!form.fecha_fin) return ''
+    return obtenerFechaRegresoVacaciones(form.fecha_fin)
+  }, [form.fecha_fin])
+
+  const diaRegresoTexto = useMemo(() => {
+    if (!fechaRegreso) return ''
+    const parts = fechaRegreso.split('-').map(Number)
+    if (parts.length !== 3 || parts.some(isNaN)) return formatFecha(fechaRegreso)
+    const dt = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0)
+    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+    return `${dias[dt.getDay()]} ${parts[2]}/${String(parts[1]).padStart(2, '0')}/${parts[0]}`
+  }, [fechaRegreso])
 
   return (
     <div className="modal-backdrop" tabIndex={-1}
@@ -510,10 +562,52 @@ export default function ModalForm({
                     Días {form.fecha_inicio && form.fecha_fin && <span style={{ color: 'var(--primary)' }}>●</span>}
                   </label>
                   <input className="form-control" type="number" min="0" step="0.5"
-                    value={form.total_dias || ''} onChange={f('total_dias')}
+                    value={form.total_dias || ''} onChange={onTotalDiasChange}
                     placeholder="Auto"
                     style={form.fecha_inicio && form.fecha_fin ? { background: 'var(--bg)', color: 'var(--primary)', fontWeight: 800, textAlign: 'center' } : { textAlign: 'center' }} />
                 </div>
+              </div>
+            )}
+
+            {/* Aviso informativo de festivos oficiales colombianos excluidos del conteo de vacaciones */}
+            {(form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero' && festivosEnRango.length > 0 && (
+              <div style={{
+                marginTop: 10,
+                background: 'color-mix(in srgb, var(--info-bg, #EFF6FF) 90%, white)',
+                border: '1px solid color-mix(in srgb, var(--info-text, #2563EB) 30%, transparent)',
+                borderRadius: 8,
+                padding: '8px 12px',
+                fontSize: 12,
+                color: 'var(--info-text, #1E40AF)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+              }}>
+                <span style={{ fontSize: 15 }}>🇨🇴</span>
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                    {festivosEnRango.length === 1 ? '1 día festivo oficial de Colombia (no hábil) omitido:' : `${festivosEnRango.length} días festivos oficiales de Colombia (no hábiles) omitidos:`}
+                  </div>
+                  <div style={{ fontSize: 11.5, opacity: 0.9 }}>
+                    {festivosEnRango.map(f => `${f.diaSemana} ${f.fecha.slice(8, 10)}/${f.fecha.slice(5, 7)} (${f.nombre})`).join(' • ')}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Fecha de reincorporación laboral tras vacaciones */}
+            {(form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero' && form.fecha_fin && diaRegresoTexto && (
+              <div style={{
+                marginTop: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                color: 'var(--text-muted)',
+                fontWeight: 600,
+              }}>
+                <span style={{ color: 'var(--success-text, #059669)' }}>💼 Regreso a laborar:</span>
+                <strong style={{ color: 'var(--text)' }}>{diaRegresoTexto}</strong>
               </div>
             )}
 

@@ -7,10 +7,72 @@
 // 3. Contrato de Confidencialidad vinculado para ambas partes
 // =============================================================
 
+import { LOGO_CONTRATO_BASE64 } from './contratoLogo'
+import { obtenerFirmaEmpleador } from './contratoFirma'
+
 const MESES_ES = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
 ]
+
+/**
+ * Genera el encabezado oficial institucional de calidad para contratos (Norma interna):
+ * Formato cuadrícula de 3 columnas:
+ * - Columna Izquierda (20%): Logo oficial Ameriglobal Sas (imagen base64)
+ * - Columna Central (56%): Título del documento en mayúsculas y negrita
+ * - Columna Derecha (24%): Versión, Edición y Página
+ */
+export function generarHtmlEncabezadoOficial({
+  titulo = 'CONTRATO INDIVIDUAL DE TRABAJO A TÉRMINO FIJO INFERIOR A UN AÑO',
+  version = '01',
+  edicion = '07/02/2020',
+  pagina = '1 De 6',
+  esWord = false,
+} = {}) {
+  const campoPagina = esWord
+    ? `<span style='mso-field-code:" PAGE "'>1</span> De <span style='mso-field-code:" NUMPAGES "'>6</span>`
+    : pagina
+
+  // Dimensiones compactas para evitar que ocupe demasiado espacio en Word y PDF
+  const logoWidth = esWord ? '65' : '65'
+  const logoHeight = esWord ? '50' : '50'
+  const fontSizeTitulo = esWord ? '9.5pt' : '10pt'
+  const fontSizeMeta = esWord ? '8pt' : '8.5pt'
+
+  return `
+    <table class="tabla-encabezado-oficial" border="1" cellpadding="0" cellspacing="0" style="width: 100% !important; border-collapse: collapse !important; border: 1.5pt solid #000000 !important; margin-bottom: 12px !important; font-family: Arial, Helvetica, sans-serif !important; background: #ffffff !important;">
+      <tbody>
+        <tr style="height: 18px;">
+          <td rowspan="3" style="width: 18% !important; border: 1pt solid #000000 !important; padding: 3px 6px !important; text-align: center !important; vertical-align: middle !important; background: #ffffff !important;">
+            <img
+              src="${LOGO_CONTRATO_BASE64}"
+              alt="Ameriglobal Sas"
+              width="${logoWidth}"
+              height="${logoHeight}"
+              style="width: ${logoWidth}px; height: ${logoHeight}px; max-width: ${logoWidth}px; max-height: ${logoHeight}px; object-fit: contain; display: block; margin: 0 auto; border: 0;"
+            />
+          </td>
+          <td rowspan="3" style="width: 58% !important; border: 1pt solid #000000 !important; padding: 4px 8px !important; text-align: center !important; vertical-align: middle !important; font-size: ${fontSizeTitulo} !important; font-weight: 800 !important; text-transform: uppercase !important; color: #000000 !important; line-height: 1.2 !important; letter-spacing: 0.2px !important;">
+            ${titulo}
+          </td>
+          <td style="width: 24% !important; border: 1pt solid #000000 !important; padding: 2px 6px !important; font-size: ${fontSizeMeta} !important; font-weight: 800 !important; color: #000000 !important; vertical-align: middle !important; line-height: 1.15 !important;">
+            Versión: <span style="font-weight: 500; margin-left: 2px;">${version}</span>
+          </td>
+        </tr>
+        <tr style="height: 18px;">
+          <td style="border: 1pt solid #000000 !important; padding: 2px 6px !important; font-size: ${fontSizeMeta} !important; font-weight: 800 !important; color: #000000 !important; vertical-align: middle !important; line-height: 1.15 !important;">
+            Edición: <span style="font-weight: 500; margin-left: 2px;">${edicion}</span>
+          </td>
+        </tr>
+        <tr style="height: 18px;">
+          <td style="border: 1pt solid #000000 !important; padding: 2px 6px !important; font-size: ${fontSizeMeta} !important; font-weight: 800 !important; color: #000000 !important; vertical-align: middle !important; line-height: 1.15 !important;">
+            Página: <span style="font-weight: 500; margin-left: 2px;" class="campo-pagina-numero">${campoPagina}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  `
+}
 
 /**
  * Convierte '2026-08-24' en '24 de agosto de 2026'
@@ -38,6 +100,93 @@ export function getPartesFecha(fechaStr) {
 }
 
 /**
+ * Genera la cuadrícula de 2 columnas de firmas compatible 100% con Microsoft Word y Navegadores.
+ * Empleador a la izquierda con su firma digital por defecto, y Trabajador/Aprendiz a la derecha.
+ */
+export function generarBloqueFirmasDosColumnas(c, {
+  rolParte1 = 'El Empleador',
+  rolParte2 = 'El Trabajador',
+  rolCargoParte2 = '',
+  rolFirmaParte2 = '',
+  esWord = false,
+} = {}) {
+  const repLegal = c.representante_legal || 'CARLOS ALBERTO HERRERA'
+  const razonSocial = c.razon_social || 'AMERIGLOBAL S.A.S'
+  const nit = c.nit || '901272369-7'
+  const nombreTrabajador = c.nombre_trabajador || '—'
+  const tipoDoc = c.tipo_documento || 'CC'
+  const numDoc = c.numero_documento || '—'
+
+  const firmaEmpleadorImg = obtenerFirmaEmpleador(c)
+
+  return `
+    <table class="tabla-firmas-contrato" border="0" cellpadding="0" cellspacing="0" width="100%" style="width: 100% !important; border: none !important; border-collapse: collapse !important; margin-top: 40pt; margin-bottom: 20pt; page-break-inside: avoid !important;">
+      <tr>
+        <td width="50%" valign="top" style="width: 50% !important; vertical-align: top !important; border: none !important; padding: 0 25px 0 0 !important; text-align: left !important;">
+          <p style="margin: 0 0 10px 0; font-weight: 700; font-size: 11pt; color: #000000; font-family: Arial, Helvetica, sans-serif;">
+            ${rolParte1}
+          </p>
+
+          <div style="height: 60px; margin-bottom: 4px;">
+            <img
+              src="${firmaEmpleadorImg}"
+              alt="Firma ${repLegal}"
+              width="170"
+              height="55"
+              style="display: block; width: 170px; height: 55px; object-fit: contain; border: none;"
+            />
+          </div>
+
+          <div style="border-top: 1.5pt solid #000000; width: 90%; margin-bottom: 6px;"></div>
+
+          <p style="margin: 0; font-weight: 800; font-size: 10pt; text-transform: uppercase; color: #000000; font-family: Arial, Helvetica, sans-serif;">
+            ${repLegal}
+          </p>
+          <p style="margin: 2px 0; font-size: 9pt; color: #333333; font-family: Arial, Helvetica, sans-serif;">
+            Representante Legal
+          </p>
+          <p style="margin: 2px 0; font-weight: 700; font-size: 9pt; color: #000000; font-family: Arial, Helvetica, sans-serif;">
+            ${razonSocial}
+          </p>
+          <p style="margin: 2px 0; font-size: 8.5pt; color: #555555; font-family: Arial, Helvetica, sans-serif;">
+            NIT ${nit}
+          </p>
+        </td>
+
+        <td width="50%" valign="top" style="width: 50% !important; vertical-align: top !important; border: none !important; padding: 0 0 0 25px !important; text-align: left !important;">
+          <p style="margin: 0 0 10px 0; font-weight: 700; font-size: 11pt; color: #000000; font-family: Arial, Helvetica, sans-serif;">
+            ${rolParte2}
+          </p>
+
+          <div style="height: 60px; margin-bottom: 4px;">
+            <!-- Espacio reservado para firma manuscrita del colaborador -->
+          </div>
+
+          <div style="border-top: 1.5pt solid #000000; width: 90%; margin-bottom: 6px;"></div>
+
+          <p style="margin: 0; font-weight: 800; font-size: 10pt; text-transform: uppercase; color: #000000; font-family: Arial, Helvetica, sans-serif;">
+            ${nombreTrabajador}
+          </p>
+          <p style="margin: 2px 0; font-size: 9pt; color: #333333; font-family: Arial, Helvetica, sans-serif;">
+            ${tipoDoc}. ${numDoc}
+          </p>
+          ${rolCargoParte2 ? `
+            <p style="margin: 2px 0; font-size: 8.5pt; color: #555555; font-family: Arial, Helvetica, sans-serif;">
+              ${rolCargoParte2}
+            </p>
+          ` : ''}
+          ${rolFirmaParte2 ? `
+            <p style="margin: 3px 0 0 0; font-weight: 700; font-size: 8.5pt; color: #1E40AF; font-family: Arial, Helvetica, sans-serif;">
+              ${rolFirmaParte2}
+            </p>
+          ` : ''}
+        </td>
+      </tr>
+    </table>
+  `
+}
+
+/**
  * Convierte un número de meses en texto ("tres (3) meses")
  */
 export function numeroAMesesTexto(meses) {
@@ -61,11 +210,11 @@ export function numeroAMesesTexto(meses) {
 
 /**
  * Calcula la fecha de finalización y el periodo de prueba según fecha de inicio y duración en meses.
- * En Colombia, para contrato a término fijo inferior a 1 año, el período de prueba no puede
- * exceder la quinta parte (1/5) del término inicialmente pactado, ni de dos (2) meses (o 3 meses para periodo inicial).
+ * En Colombia, para contrato a término fijo de 3 meses, el período de prueba es de
+ * dos (2) meses (60 días calendario), según el artículo 78 del Código Sustantivo del Trabajo.
  */
 export function calcularFinYPrueba(fechaInicioISO, duracionMeses = 3) {
-  if (!fechaInicioISO) return { fechaFin: '', diasPrueba: 90 }
+  if (!fechaInicioISO) return { fechaFin: '', diasPrueba: 60 }
   const [anio, mes, dia] = fechaInicioISO.split('-').map(Number)
   
   // Sumar meses
@@ -78,18 +227,19 @@ export function calcularFinYPrueba(fechaInicioISO, duracionMeses = 3) {
   const dd = String(fecha.getDate()).padStart(2, '0')
   const fechaFin = `${yyyy}-${mm}-${dd}`
 
-  // Los primeros 3 meses operan como prueba inicial
-  const diasPrueba = Math.min(90, duracionMeses * 30)
+  // Dos (2) meses de prueba (60 días calendario máximo según Art 78 CST)
+  const diasPrueba = Math.min(60, duracionMeses * 30)
 
   return { fechaFin, diasPrueba }
 }
 
 /**
  * MOTOR DE PRÓRROGAS AUTOMÁTICAS:
- * 1. Los primeros 3 meses son de prueba e iniciales.
- * 2. Si pasa los 3 meses, se renueva AUTOMÁTICAMENTE cada 3 meses (hasta completar 1 año).
- * 3. Si la empresa decide finalizar al término de cualquier trimestre, lo puede hacer con preaviso.
- * 4. Al superar el primer año (después de 4 trimestres = 1 año), el contrato pasa AUTOMÁTICAMENTE
+ * 1. El contrato es de 3 meses de duración.
+ * 2. Los primeros dos (2) meses son de período de prueba.
+ * 3. Si pasa la prueba, el contrato se renueva AUTOMÁTICAMENTE cada 3 meses (hasta completar 1 año).
+ * 4. Si la empresa decide finalizar al término de cualquier trimestre, lo puede hacer con preaviso de 30 días.
+ * 5. Al superar el primer año (después de 4 trimestres = 1 año), el contrato pasa AUTOMÁTICAMENTE
  *    a ser un contrato de un (1) año completo (contrato anual), renovable anualmente.
  */
 export function calcularCiclosYProrroga(contrato, fechaReferenciaISO = new Date().toISOString().slice(0, 10)) {
@@ -139,6 +289,17 @@ export function calcularCiclosYProrroga(contrato, fechaReferenciaISO = new Date(
   let [yInit, mInit, dInit] = fechaIngreso.split('-').map(Number)
   let fechaCursor = new Date(yInit, mInit - 1, dInit)
 
+  // Período de prueba legal: Son los primeros dos (2) meses (60 días) desde la fecha de ingreso
+  const dInicioGlobal = new Date(yInit, mInit - 1, dInit)
+  const finPruebaCursor = new Date(yInit, mInit - 1 + 2, dInit)
+  finPruebaCursor.setDate(finPruebaCursor.getDate() - 1)
+  const yPrueba = finPruebaCursor.getFullYear()
+  const mPrueba = String(finPruebaCursor.getMonth() + 1).padStart(2, '0')
+  const dPrueba = String(finPruebaCursor.getDate()).padStart(2, '0')
+  const fechaFinPrueba = `${yPrueba}-${mPrueba}-${dPrueba}`
+  const diasParaFinPrueba = Math.round((finPruebaCursor - refDate) / 86400000)
+  const esPeriodoPruebaActivo = refDate >= dInicioGlobal && refDate <= finPruebaCursor
+
   // 4 trimestres del primer año
   for (let i = 1; i <= 4; i++) {
     const yStart = fechaCursor.getFullYear()
@@ -163,7 +324,7 @@ export function calcularCiclosYProrroga(contrato, fechaReferenciaISO = new Date(
     const preavisoStr = `${yPre}-${mPre}-${dPre}`
 
     let nombre = ''
-    if (i === 1) nombre = 'Periodo Inicial (Prueba 3 meses)'
+    if (i === 1) nombre = '1er Período (3 meses / 2 meses de prueba)'
     else if (i === 2) nombre = '1ª Prórroga Automática (Trimestre 2)'
     else if (i === 3) nombre = '2ª Prórroga Automática (Trimestre 3)'
     else nombre = '3ª Prórroga Automática (Trimestre 4 - Fin del Año 1)'
@@ -171,12 +332,14 @@ export function calcularCiclosYProrroga(contrato, fechaReferenciaISO = new Date(
     ciclos.push({
       numero: i,
       nombre,
-      tipo: i === 1 ? 'prueba' : 'prorroga_trimestral',
+      tipo: i === 1 ? 'periodo_inicial' : 'prorroga_trimestral',
       inicio: inicioStr,
       fin: finStr,
       fechaLimitePreaviso: preavisoStr,
       duracionMeses: 3,
-      esPrueba: i === 1,
+      esPrueba: i === 1 && esPeriodoPruebaActivo,
+      fechaFinPrueba: i === 1 ? fechaFinPrueba : null,
+      diasParaFinPrueba: i === 1 ? diasParaFinPrueba : null,
       esAnual: false,
     })
 
@@ -286,7 +449,9 @@ export function calcularCiclosYProrroga(contrato, fechaReferenciaISO = new Date(
     diasParaVencer,
     fechaLimitePreaviso: cicloActual.fechaLimitePreaviso,
     diasParaPreaviso,
-    esPeriodoPrueba: cicloActual.esPrueba,
+    esPeriodoPrueba: cicloActual.numero === 1 && esPeriodoPruebaActivo,
+    fechaFinPrueba,
+    diasParaFinPrueba,
     esContratoAnual: cicloActual.esAnual,
     totalProrrogasTrimestrales: 3,
   }
@@ -362,7 +527,7 @@ export function extraerDatosContratoDesdeEmpleado(emp, companyConfig = {}) {
 /**
  * 1. Genera el HTML del Contrato de Trabajo a Término Fijo Inferior a 1 Año
  */
-export function generarHtmlContratoLaboral(c) {
+export function generarHtmlContratoLaboral(c, { esWord = false } = {}) {
   const { dia, mes, anio } = getPartesFecha(c.fecha_ingreso)
   const duracionTexto = numeroAMesesTexto(c.duracion_meses || 3)
   const fechaIngresoTexto = formatearFechaLarga(c.fecha_ingreso)
@@ -374,18 +539,28 @@ export function generarHtmlContratoLaboral(c) {
   const tipoDoc = c.tipo_documento || 'CC'
   const numDoc = c.numero_documento || '—'
 
+  const encabezadoOficial = generarHtmlEncabezadoOficial({
+    titulo: 'CONTRATO INDIVIDUAL DE TRABAJO A TÉRMINO FIJO INFERIOR A UN AÑO',
+    version: '01',
+    edicion: '07/02/2020',
+    pagina: '1 De 6',
+    esWord,
+  })
+
   return `
     <div class="contrato-documento contrato-laboral">
-      <div class="doc-header-centro">
-        <h2 style="margin: 0 0 4px 0; font-size: 15pt; font-weight: 800; text-align: center; text-transform: uppercase; color: #0F172A;">
-          CONTRATO DE TRABAJO A TÉRMINO FIJO INFERIOR A UN AÑO
-        </h2>
-        <p style="text-align: center; font-size: 10pt; color: #475569; margin: 0 0 16px 0;">
-          ${razonSocial} &nbsp;|&nbsp; NIT ${nit}
-        </p>
-      </div>
-
-      <table class="tabla-datos-contrato" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9.5pt;">
+      <table class="documento-impresion-paginado" style="width: 100%; border-collapse: collapse; border: none;">
+        <thead>
+          <tr>
+            <td style="border: none; padding: 0 0 12px 0;">
+              ${encabezadoOficial}
+            </td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border: none; padding: 0;">
+              <table class="tabla-datos-contrato" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9.5pt;">
         <tbody>
           <tr>
             <td style="width: 32%; font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Nombre del Empleador:</td>
@@ -495,7 +670,7 @@ export function generarHtmlContratoLaboral(c) {
       </div>
 
       <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>QUINTA: PERÍODO DE PRUEBA.</strong> Los primeros tres (3) meses de ejecución del contrato operarán como período de evaluación y prueba, durante el cual EL EMPLEADOR evaluará las aptitudes profesionales, técnicas, disciplinarias y de adaptación del trabajador, y este a su vez las condiciones del cargo. Si el trabajador no supera satisfactoriamente dicho período inicial de prueba, cualquiera de las partes podrá dar por terminado el contrato de trabajo de manera unilateral e inmediata en cualquier momento dentro de dicho lapso, sin que ello genere obligación de preaviso ni pago de indemnización alguna. Una vez superado este período inicial de tres meses, el contrato continuará en pleno vigor con sus respectivas renovaciones automáticas trimestrales y anuales conforme a la Cláusula Tercera.</p>
+        <p><strong>QUINTA: PERÍODO DE PRUEBA.</strong> Los primeros dos (2) meses de ejecución del presente contrato (equivalentes a sesenta (60) días calendario) operarán como período de evaluación y prueba de conformidad con lo prescrito por el artículo 78 del Código Sustantivo del Trabajo, durante el cual EL EMPLEADOR evaluará las aptitudes profesionales, técnicas, disciplinarias y de adaptación del trabajador, y este a su vez las condiciones del cargo encomendado. Si el trabajador no supera satisfactoriamente dicho período inicial de prueba de dos (2) meses, cualquiera de las partes podrá dar por terminado el contrato de trabajo de manera unilateral e inmediata en cualquier momento dentro de dicho lapso de dos meses, sin que ello genere obligación de preaviso ni pago de indemnización alguna. Una vez superado dicho período de prueba de dos meses, el contrato continuará en vigor hasta el vencimiento del término pactado de tres (3) meses y sus sucesivas renovaciones automáticas trimestrales y anuales conforme a la Cláusula Tercera, salvo manifestación escrita de no renovación remitida con la antelación legal mínima de treinta (30) días calendario.</p>
       </div>
 
       <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
@@ -570,24 +745,17 @@ export function generarHtmlContratoLaboral(c) {
         Para constancia se firma en dos ejemplares del mismo tenor tanto para EL EMPLEADOR como para EL EMPLEADO en la ciudad de ${c.ciudad_contrato || 'Medellín'} a los ${dia} días del mes de ${mes} de ${anio}.
       </p>
 
-      <div class="firmas-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; padding-top: 20px;">
-        <div class="bloque-firma" style="text-align: left;">
-          <div style="border-top: 1.5px solid #0F172A; width: 85%; margin-bottom: 8px;"></div>
-          <p style="margin: 0; font-weight: 800; font-size: 10.5pt; text-transform: uppercase;">${repLegal}</p>
-          <p style="margin: 2px 0; font-size: 9.5pt; color: #475569;">REPRESENTANTE LEGAL</p>
-          <p style="margin: 2px 0; font-weight: 700; font-size: 9.5pt;">${razonSocial}</p>
-          <p style="margin: 2px 0; font-size: 9pt; color: #64748B;">NIT ${nit}</p>
-          <p style="margin: 4px 0 0 0; font-weight: 700; font-size: 9pt; color: #1E40AF;">EL EMPLEADOR</p>
-        </div>
-
-        <div class="bloque-firma" style="text-align: left;">
-          <div style="border-top: 1.5px solid #0F172A; width: 85%; margin-bottom: 8px;"></div>
-          <p style="margin: 0; font-weight: 800; font-size: 10.5pt; text-transform: uppercase;">${nombreTrabajador}</p>
-          <p style="margin: 2px 0; font-size: 9.5pt; color: #475569;">${tipoDoc}. ${numDoc}</p>
-          <p style="margin: 2px 0; font-size: 9pt; color: #64748B;">${c.cargo || 'Trabajador'}</p>
-          <p style="margin: 4px 0 0 0; font-weight: 700; font-size: 9pt; color: #1E40AF;">EL TRABAJADOR</p>
-        </div>
-      </div>
+      ${generarBloqueFirmasDosColumnas(c, {
+        rolParte1: 'El Empleador',
+        rolParte2: 'El Trabajador',
+        rolCargoParte2: c.cargo || 'Trabajador',
+        rolFirmaParte2: 'TRABAJADOR',
+        esWord,
+      })}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   `
 }
@@ -596,7 +764,7 @@ export function generarHtmlContratoLaboral(c) {
  * 2. Genera el HTML del Contrato de Confidencialidad
  * (Adapta automáticamente si es Trabajador/Receptor o Aprendiz)
  */
-export function generarHtmlConfidencialidad(c) {
+export function generarHtmlConfidencialidad(c, { esWord = false } = {}) {
   const esAprendiz = c.tipo_contrato === 'aprendizaje'
   const fechaUso = c.fecha_confidencialidad || c.fecha_ingreso
   const { dia, mes, anio } = getPartesFecha(fechaUso)
@@ -615,22 +783,35 @@ export function generarHtmlConfidencialidad(c) {
   const multaSMMLV = c.multa_confidencialidad_smmlv || 500
   const aniosVigencia = c.anios_vigencia_post_terminacion || 10
 
+  const tituloConfidencialidad = esAprendiz ? 'CONTRATO DE CONFIDENCIALIDAD APRENDIZ' : 'CONTRATO DE CONFIDENCIALIDAD'
+  const encabezadoOficial = generarHtmlEncabezadoOficial({
+    titulo: tituloConfidencialidad,
+    version: '01',
+    edicion: '07/02/2020',
+    pagina: '1 De 4',
+    esWord,
+  })
+
   return `
-    <div class="contrato-documento contrato-confidencialidad" style="page-break-before: always; margin-top: 30px; padding-top: 20px;">
-      <div class="doc-header-fecha" style="font-size: 10.5pt; font-weight: 700; margin-bottom: 16px; color: #334155;">
-        ${fechaEncabezado}
-      </div>
+    <div class="contrato-documento contrato-confidencialidad" style="page-break-before: always; margin-top: 30px; padding-top: 10px;">
+      <table class="documento-impresion-paginado" style="width: 100%; border-collapse: collapse; border: none;">
+        <thead>
+          <tr>
+            <td style="border: none; padding: 0 0 12px 0;">
+              ${encabezadoOficial}
+            </td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border: none; padding: 0;">
+              <div class="doc-header-fecha" style="font-size: 10.5pt; font-weight: 700; margin-bottom: 16px; color: #334155;">
+                ${fechaEncabezado}
+              </div>
 
-      <div class="doc-header-centro" style="text-align: center; margin-bottom: 24px;">
-        <h2 style="margin: 0 0 6px 0; font-size: 15pt; font-weight: 900; text-transform: uppercase; color: #0F172A; letter-spacing: 0.5px;">
-          CONTRATO DE CONFIDENCIALIDAD
-        </h2>
-        <div style="width: 80px; height: 3px; background: #2563EB; margin: 0 auto;"></div>
-      </div>
-
-      <p class="parrafo-comparecencia" style="text-align: justify; line-height: 1.65; margin-bottom: 16px;">
-        Reunidos de una parte, <strong>${razonSocial}</strong>, sociedad identificada con NIT <strong>${nit}</strong> con domicilio en ${c.ciudad_contrato || 'Medellín'} representada legalmente por el señor <strong>${repLegal}</strong> identificado con cédula N° ${ccRepLegal} con domicilio en ${domRepLegal} quien en adelante se denominará <strong>${razonSocial}</strong> y de otra parte <strong>${nombreParte2}</strong>, identificado con ${tipoDocParte2} N° <strong>${numDocParte2}</strong>, con Domicilio en ${domParte2}, quien en adelante se denominará <strong>${rolParte2}</strong>, acuerdan celebrar el presente contrato de confidencialidad de conformidad con las siguientes:
-      </p>
+              <p class="parrafo-comparecencia" style="text-align: justify; line-height: 1.65; margin-bottom: 16px;">
+                Reunidos de una parte, <strong>${razonSocial}</strong>, sociedad identificada con NIT <strong>${nit}</strong> con domicilio en ${c.ciudad_contrato || 'Medellín'} representada legalmente por el señor <strong>${repLegal}</strong> identificado con cédula N° ${ccRepLegal} con domicilio en ${domRepLegal} quien en adelante se denominará <strong>${razonSocial}</strong> y de otra parte <strong>${nombreParte2}</strong>, identificado con ${tipoDocParte2} N° <strong>${numDocParte2}</strong>, con Domicilio en ${domParte2}, quien en adelante se denominará <strong>${rolParte2}</strong>, acuerdan celebrar el presente contrato de confidencialidad de conformidad con las siguientes:
+              </p>
 
       <div class="seccion-consideraciones" style="margin-bottom: 16px;">
         <h4 style="margin: 0 0 8px 0; font-size: 11pt; font-weight: 800; color: #1E293B; text-transform: uppercase;">
@@ -695,22 +876,17 @@ export function generarHtmlConfidencialidad(c) {
         En señal de acuerdo y conformidad, firman las partes el día <strong>${dia} de ${mes.toUpperCase()} del ${anio}</strong>.
       </p>
 
-      <div class="firmas-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; padding-top: 20px;">
-        <div class="bloque-firma" style="text-align: left;">
-          <div style="border-top: 1.5px solid #0F172A; width: 85%; margin-bottom: 8px;"></div>
-          <p style="margin: 0; font-weight: 800; font-size: 10.5pt; text-transform: uppercase;">${repLegal}</p>
-          <p style="margin: 2px 0; font-size: 9.5pt; color: #475569;">REPRESENTANTE LEGAL</p>
-          <p style="margin: 2px 0; font-weight: 700; font-size: 9.5pt;">${razonSocial}</p>
-          <p style="margin: 2px 0; font-size: 9pt; color: #64748B;">NIT ${nit}</p>
-        </div>
-
-        <div class="bloque-firma" style="text-align: left;">
-          <div style="border-top: 1.5px solid #0F172A; width: 85%; margin-bottom: 8px;"></div>
-          <p style="margin: 0; font-weight: 800; font-size: 10.5pt; text-transform: uppercase;">${nombreParte2}</p>
-          <p style="margin: 2px 0; font-size: 9.5pt; color: #475569;">${tipoDocParte2}. ${numDocParte2}</p>
-          <p style="margin: 4px 0 0 0; font-weight: 700; font-size: 9pt; color: #1E40AF;">${rolFirma}</p>
-        </div>
-      </div>
+      ${generarBloqueFirmasDosColumnas(c, {
+        rolParte1: 'El Empleador',
+        rolParte2: esAprendiz ? 'EL Aprendiz' : 'El Trabajador',
+        rolCargoParte2: `${tipoDocParte2}. ${numDocParte2}`,
+        rolFirmaParte2: rolFirma,
+        esWord,
+      })}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   `
 }
@@ -718,7 +894,7 @@ export function generarHtmlConfidencialidad(c) {
 /**
  * 3. Genera el HTML del Contrato de Aprendizaje (Ley 789 de 2002)
  */
-export function generarHtmlContratoAprendizaje(c) {
+export function generarHtmlContratoAprendizaje(c, { esWord = false } = {}) {
   const { dia, mes, anio } = getPartesFecha(c.fecha_ingreso)
   const fechaIngresoTexto = formatearFechaLarga(c.fecha_ingreso)
   const fechaFinTexto = formatearFechaLarga(c.fecha_fin)
@@ -733,18 +909,28 @@ export function generarHtmlContratoAprendizaje(c) {
   const etapa = c.etapa_aprendizaje || 'Productiva'
   const apoyo = c.apoyo_sostenimiento || '100% SMMLV + Afiliación a EPS y ARL'
 
+  const encabezadoOficial = generarHtmlEncabezadoOficial({
+    titulo: 'CONTRATO DE APRENDIZAJE',
+    version: '01',
+    edicion: '07/02/2020',
+    pagina: '1 De 6',
+    esWord,
+  })
+
   return `
     <div class="contrato-documento contrato-aprendizaje">
-      <div class="doc-header-centro">
-        <h2 style="margin: 0 0 4px 0; font-size: 15pt; font-weight: 800; text-align: center; text-transform: uppercase; color: #0F172A;">
-          CONTRATO DE APRENDIZAJE
-        </h2>
-        <p style="text-align: center; font-size: 10pt; color: #475569; margin: 0 0 16px 0;">
-          Regulado por la Ley 789 de 2002 &nbsp;|&nbsp; ${razonSocial}
-        </p>
-      </div>
-
-      <table class="tabla-datos-contrato" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9.5pt;">
+      <table class="documento-impresion-paginado" style="width: 100%; border-collapse: collapse; border: none;">
+        <thead>
+          <tr>
+            <td style="border: none; padding: 0 0 12px 0;">
+              ${encabezadoOficial}
+            </td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border: none; padding: 0;">
+              <table class="tabla-datos-contrato" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9.5pt;">
         <tbody>
           <tr>
             <td style="width: 32%; font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Empresa Patrocinadora:</td>
@@ -833,24 +1019,17 @@ export function generarHtmlContratoAprendizaje(c) {
         Para constancia se firma en dos ejemplares del mismo tenor por las partes en la ciudad de ${c.ciudad_contrato || 'Medellín'} a los ${dia} días del mes de ${mes} de ${anio}.
       </p>
 
-      <div class="firmas-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; padding-top: 20px;">
-        <div class="bloque-firma" style="text-align: left;">
-          <div style="border-top: 1.5px solid #0F172A; width: 85%; margin-bottom: 8px;"></div>
-          <p style="margin: 0; font-weight: 800; font-size: 10.5pt; text-transform: uppercase;">${repLegal}</p>
-          <p style="margin: 2px 0; font-size: 9.5pt; color: #475569;">REPRESENTANTE LEGAL</p>
-          <p style="margin: 2px 0; font-weight: 700; font-size: 9.5pt;">${razonSocial}</p>
-          <p style="margin: 2px 0; font-size: 9pt; color: #64748B;">NIT ${nit}</p>
-          <p style="margin: 4px 0 0 0; font-weight: 700; font-size: 9pt; color: #1E40AF;">LA EMPRESA PATROCINADORA</p>
-        </div>
-
-        <div class="bloque-firma" style="text-align: left;">
-          <div style="border-top: 1.5px solid #0F172A; width: 85%; margin-bottom: 8px;"></div>
-          <p style="margin: 0; font-weight: 800; font-size: 10.5pt; text-transform: uppercase;">${nombreAprendiz}</p>
-          <p style="margin: 2px 0; font-size: 9.5pt; color: #475569;">${tipoDoc}. ${numDoc}</p>
-          <p style="margin: 2px 0; font-size: 9pt; color: #64748B;">EL APRENDIZ</p>
-          <p style="margin: 4px 0 0 0; font-weight: 700; font-size: 9pt; color: #1E40AF;">${programa}</p>
-        </div>
-      </div>
+      ${generarBloqueFirmasDosColumnas(c, {
+        rolParte1: 'El Empleador',
+        rolParte2: 'EL Aprendiz',
+        rolCargoParte2: `${tipoDoc}. ${numDoc}`,
+        rolFirmaParte2: programa || 'APRENDIZ',
+        esWord,
+      })}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   `
 }
@@ -896,7 +1075,7 @@ export function generarHtmlLineaTiempoProrrogas(c) {
         <div style="flex: 1; min-width: 250px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <strong style="font-size: 13.5px; color: #0F172A;">${item.nombre}</strong>
-            ${item.esPrueba ? '<span style="background: #FEF3C7; color: #B45309; padding: 1px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 700;">Prueba (3 meses)</span>' : ''}
+            ${item.esPrueba ? '<span style="background: #FEF3C7; color: #B45309; padding: 1px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 700;">Prueba (2 meses)</span>' : ''}
             ${item.esAnual ? '<span style="background: #EDE9FE; color: #6D28D9; padding: 1px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 700;">⭐ Contrato Anual</span>' : ''}
           </div>
           <div style="font-size: 12px; color: #64748B; margin-top: 4px;">
@@ -920,9 +1099,9 @@ export function generarHtmlLineaTiempoProrrogas(c) {
           🔄 Régimen de Renovación Automática del Contrato
         </h3>
         <p style="margin: 0 0 10px 0; font-size: 13px; color: #334155; line-height: 1.5;">
-          • <strong>Primeros 3 meses:</strong> Período de evaluación y prueba inicial.<br>
-          • <strong>Meses 4 a 12:</strong> Se renueva automáticamente cada 3 meses si no hay preaviso de 30 días.<br>
-          • <strong>A partir del Año 1:</strong> Pasa automáticamente a <strong>Contrato Anual (1 año)</strong> renovable año a año (Art. 46 CST).
+          • <strong>Contrato inicial:</strong> Duración de 3 meses, con <strong>2 meses de período de prueba legal</strong> (Art. 78 CST).<br>
+          • <strong>Renovación Automática Trimestral:</strong> Al culminar cada ciclo de 3 meses, se prorroga automáticamente por 3 meses más si ninguna de las partes notifica preaviso con 30 días de antelación.<br>
+          • <strong>A partir del Año 1:</strong> Cumplido el primer año continuo (4 trimestres), pasa automáticamente a <strong>Contrato Anual (1 año)</strong> renovable año a año (Art. 46 CST).
         </p>
         <div style="background: #FFFFFF; border-radius: 8px; padding: 10px 14px; border: 1px solid #DBEAFE; font-size: 12.5px; color: #1E293B; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
           <div>
@@ -949,7 +1128,7 @@ export function generarHtmlLineaTiempoProrrogas(c) {
 /**
  * 5. Genera la Carta Oficial de Comunicación / No Renovación / Preaviso
  */
-export function generarHtmlCartaTerminacion(c, datosTerminacion = {}) {
+export function generarHtmlCartaTerminacion(c, datosTerminacion = {}, { esWord = false } = {}) {
   const hoyStr = datosTerminacion.fecha_comunicacion || new Date().toISOString().slice(0, 10)
   const { dia, mes, anio } = getPartesFecha(hoyStr)
   const fechaFinEfectiva = datosTerminacion.fecha_efectiva ? formatearFechaLarga(datosTerminacion.fecha_efectiva) : formatearFechaLarga(c.fecha_fin)
@@ -963,6 +1142,14 @@ export function generarHtmlCartaTerminacion(c, datosTerminacion = {}) {
   const tipoDoc = c.tipo_documento || 'CC'
   const numDoc = c.numero_documento || '—'
   const cargo = c.cargo || 'Colaborador'
+
+  const encabezadoOficial = generarHtmlEncabezadoOficial({
+    titulo: 'COMUNICACIÓN OFICIAL',
+    version: '01',
+    edicion: '07/02/2020',
+    pagina: '1 De 1',
+    esWord,
+  })
 
   let asunto = 'COMUNICACIÓN DE NO RENOVACIÓN DE CONTRATO DE TRABAJO (PREAVISO LEGAL)'
   let parrafoMotivo = ''
@@ -985,10 +1172,21 @@ export function generarHtmlCartaTerminacion(c, datosTerminacion = {}) {
   }
 
   return `
-    <div class="contrato-documento carta-terminacion" style="max-width: 750px; margin: 0 auto; padding: 30px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.65; color: #0F172A;">
-      <div style="margin-bottom: 24px; font-size: 11pt;">
-        <strong>${c.ciudad_contrato || 'Medellín'}</strong>, ${dia} de ${mes} de ${anio}
-      </div>
+    <div class="contrato-documento carta-terminacion" style="max-width: 750px; margin: 0 auto; padding: 20px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.65; color: #0F172A;">
+      <table class="documento-impresion-paginado" style="width: 100%; border-collapse: collapse; border: none;">
+        <thead>
+          <tr>
+            <td style="border: none; padding: 0 0 14px 0;">
+              ${encabezadoOficial}
+            </td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border: none; padding: 0;">
+              <div style="margin-bottom: 24px; font-size: 11pt;">
+                <strong>${c.ciudad_contrato || 'Medellín'}</strong>, ${dia} de ${mes} de ${anio}
+              </div>
 
       <div style="margin-bottom: 24px;">
         Señor(a):<br>
@@ -1022,7 +1220,10 @@ export function generarHtmlCartaTerminacion(c, datosTerminacion = {}) {
         Atentamente,
       </p>
 
-      <div style="margin-top: 50px;">
+      <div style="margin-top: 40px; page-break-inside: avoid;">
+        <div style="height: 55px; margin-bottom: 4px;">
+          <img src="${obtenerFirmaEmpleador(c)}" alt="Firma ${repLegal}" width="160" height="50" style="display: block; width: 160px; height: 50px; object-fit: contain; border: none;" />
+        </div>
         <div style="border-top: 1.5px solid #0F172A; width: 260px; margin-bottom: 6px;"></div>
         <strong style="text-transform: uppercase;">${repLegal}</strong><br>
         Representante Legal<br>
@@ -1030,11 +1231,11 @@ export function generarHtmlCartaTerminacion(c, datosTerminacion = {}) {
         NIT ${nit}
       </div>
 
-      <div style="margin-top: 60px; border-top: 1px dashed #CBD5E1; padding-top: 20px;">
+      <div style="margin-top: 50px; border-top: 1px dashed #CBD5E1; padding-top: 20px; page-break-inside: avoid;">
         <div style="font-size: 10pt; color: #475569; margin-bottom: 8px;">
           <strong>CONSTANCIA DE RECIBIDO POR EL TRABAJADOR:</strong>
         </div>
-        <div style="margin-top: 40px;">
+        <div style="margin-top: 35px;">
           <div style="border-top: 1.5px solid #0F172A; width: 260px; margin-bottom: 6px;"></div>
           Firma: _________________________________________<br>
           Nombre: <strong>${nombreTrabajador}</strong><br>
@@ -1042,6 +1243,10 @@ export function generarHtmlCartaTerminacion(c, datosTerminacion = {}) {
           Fecha y Hora de Recibido: _____ / _____ / _________ &nbsp; ____ : ____
         </div>
       </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   `
 }
@@ -1050,26 +1255,27 @@ export function generarHtmlCartaTerminacion(c, datosTerminacion = {}) {
  * Genera el documento completo según la vista seleccionada:
  * 'completo' | 'principal' | 'confidencialidad' | 'linea_tiempo' | 'carta_terminacion'
  */
-export function generarHtmlDocumento(c, vista = 'completo', datosExtra = {}) {
+export function generarHtmlDocumento(c, vista = 'completo', datosExtra = {}, opciones = {}) {
   const esAprendiz = c.tipo_contrato === 'aprendizaje'
-  const htmlPrincipal = esAprendiz ? generarHtmlContratoAprendizaje(c) : generarHtmlContratoLaboral(c)
-  const htmlConfidencialidad = generarHtmlConfidencialidad(c)
+  const htmlPrincipal = esAprendiz ? generarHtmlContratoAprendizaje(c, opciones) : generarHtmlContratoLaboral(c, opciones)
+  const htmlConfidencialidad = generarHtmlConfidencialidad(c, opciones)
 
   if (vista === 'principal') return htmlPrincipal
   if (vista === 'confidencialidad') return htmlConfidencialidad
   if (vista === 'linea_tiempo') return generarHtmlLineaTiempoProrrogas(c)
-  if (vista === 'carta_terminacion') return generarHtmlCartaTerminacion(c, datosExtra)
+  if (vista === 'carta_terminacion') return generarHtmlCartaTerminacion(c, datosExtra, opciones)
   return `
     ${htmlPrincipal}
-    <div style="page-break-before: always; margin: 40px 0; border-top: 2px dashed #94A3B8;"></div>
+    <div class="salto-pagina-impresion" style="page-break-before: always; break-before: page; margin: 30px 0; border-top: 2px dashed #94A3B8;"></div>
     ${htmlConfidencialidad}
   `
 }
 
 /**
- * Abre la ventana de impresión con los estilos óptimos para PDF y papel A4.
+ * Abre la ventana de impresión con los estilos óptimos para PDF y papel A4,
+ * repitiendo el encabezado oficial en cada hoja impresa.
  */
-export function imprimirContrato(c, vista = 'completo') {
+export function imprimirContrato(c, vista = 'completo', datosExtra = {}) {
   const titulo = c.tipo_contrato === 'aprendizaje'
     ? `Contrato_Aprendizaje_${(c.nombre_trabajador || 'Aprendiz').replace(/\s+/g, '_')}`
     : `Contrato_Laboral_${(c.nombre_trabajador || 'Trabajador').replace(/\s+/g, '_')}`
@@ -1080,7 +1286,7 @@ export function imprimirContrato(c, vista = 'completo') {
     return
   }
 
-  const contenido = generarHtmlDocumento(c, vista)
+  const contenido = generarHtmlDocumento(c, vista, datosExtra, { esWord: false })
 
   win.document.write(`
     <!DOCTYPE html>
@@ -1090,15 +1296,15 @@ export function imprimirContrato(c, vista = 'completo') {
       <title>${titulo}</title>
       <style>
         @page {
-          size: A4;
-          margin: 20mm 18mm 20mm 18mm;
+          size: A4 portrait;
+          margin: 14mm 16mm 14mm 16mm;
         }
         body {
           font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
           color: #0F172A;
           background: #fff;
           margin: 0;
-          padding: 24px;
+          padding: 20px;
           font-size: 10pt;
           line-height: 1.55;
         }
@@ -1124,6 +1330,37 @@ export function imprimirContrato(c, vista = 'completo') {
           cursor: pointer;
         }
         .btn-print:hover { background: #1D4ED8; }
+
+        /* Estructura para repetir encabezado en cada página impresa */
+        table.documento-impresion-paginado {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          border: none !important;
+          background: transparent !important;
+        }
+        table.documento-impresion-paginado > thead {
+          display: table-header-group !important;
+        }
+        table.documento-impresion-paginado > tbody {
+          display: table-row-group !important;
+        }
+        table.documento-impresion-paginado > tbody > tr {
+          page-break-inside: auto !important;
+        }
+
+        /* Encabezado oficial cuadrícula */
+        .tabla-encabezado-oficial {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          border: 1.5px solid #000000 !important;
+          margin-bottom: 16px !important;
+          background: #ffffff !important;
+          page-break-inside: avoid !important;
+        }
+        .tabla-encabezado-oficial td {
+          border: 1px solid #000000 !important;
+        }
+
         .tabla-datos-contrato td {
           font-size: 9.5pt;
           line-height: 1.4;
@@ -1134,8 +1371,26 @@ export function imprimirContrato(c, vista = 'completo') {
         }
         @media print {
           .no-print { display: none !important; }
-          body { padding: 0 !important; }
-          .contrato-confidencialidad { page-break-before: always !important; }
+          body { padding: 0 !important; margin: 0 !important; }
+          .salto-pagina-impresion {
+            page-break-before: always !important;
+            break-before: page !important;
+            height: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tr {
+            page-break-inside: auto;
+          }
+          .firmas-grid, table.tabla-firmas-contrato {
+            page-break-inside: avoid !important;
+          }
+          table.tabla-firmas-contrato, table.tabla-firmas-contrato td {
+            border: none !important;
+          }
         }
       </style>
     </head>
@@ -1144,7 +1399,7 @@ export function imprimirContrato(c, vista = 'completo') {
         <div>
           <strong style="color: #1E40AF; font-size: 14px;">📑 Vista previa de impresión oficial</strong>
           <div style="font-size: 12px; color: #475569; margin-top: 2px;">
-            Ambos contratos se encuentran vinculados y listos para firma.
+            Encabezado de calidad institucional visible en cada hoja del contrato.
           </div>
         </div>
         <button class="btn-print" onclick="window.print()">
@@ -1163,29 +1418,53 @@ export function imprimirContrato(c, vista = 'completo') {
 
 /**
  * Descarga el contrato como archivo compatible con Microsoft Word (.doc)
+ * configurando los campos dinámicos de página y cuadrícula oficial.
  */
 export function descargarComoWord(c, vista = 'completo') {
   const titulo = c.tipo_contrato === 'aprendizaje'
     ? `Contrato_Aprendizaje_${(c.nombre_trabajador || 'Aprendiz').replace(/\s+/g, '_')}.doc`
     : `Contrato_Laboral_${(c.nombre_trabajador || 'Trabajador').replace(/\s+/g, '_')}.doc`
 
-  const contenido = generarHtmlDocumento(c, vista)
+  const contenido = generarHtmlDocumento(c, vista, {}, { esWord: true })
 
   const wordHtml = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
     <head>
       <meta charset='utf-8'>
       <title>${titulo}</title>
+      <!--[if gte mso 9]>
+      <xml>
+        <w:WordDocument>
+          <w:View>Print</w:View>
+          <w:Zoom>100</w:Zoom>
+          <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+      </xml>
+      <![endif]-->
       <style>
+        @page Section1 {
+          size: 21.0cm 29.7cm;
+          margin: 2.0cm 2.0cm 2.0cm 2.0cm;
+          mso-header-margin: 0.8cm;
+          mso-footer-margin: 0.8cm;
+        }
+        div.Section1 { page: Section1; }
         body { font-family: 'Calibri', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #000; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 16pt; }
-        td { border: 1pt solid #ccc; padding: 5pt; }
-        .clausula { margin-bottom: 12pt; text-align: justify; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 14pt; }
+        .tabla-encabezado-oficial { width: 100% !important; border-collapse: collapse !important; border: 1.5pt solid #000 !important; margin-bottom: 8pt !important; }
+        .tabla-encabezado-oficial td { border: 1pt solid #000 !important; padding: 2pt 4pt !important; vertical-align: middle !important; }
+        .tabla-encabezado-oficial p, .tabla-encabezado-oficial div { margin: 0 !important; }
+        .clausula { margin-bottom: 10pt; text-align: justify; }
         .firmas-grid { margin-top: 40pt; }
+        table.tabla-firmas-contrato { border: none !important; width: 100% !important; margin-top: 35pt !important; margin-bottom: 20pt !important; border-collapse: collapse !important; }
+        table.tabla-firmas-contrato td { border: none !important; padding: 4pt 10pt !important; vertical-align: top !important; }
+        table.documento-impresion-paginado, table.documento-impresion-paginado td { border: none !important; padding: 0 !important; }
       </style>
     </head>
     <body>
-      ${contenido}
+      <div class="Section1">
+        ${contenido}
+      </div>
     </body>
     </html>
   `

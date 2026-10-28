@@ -1,4 +1,11 @@
-import { diasHabilesEntre, obtenerFechaRegresoLaboral } from './diasHabiles'
+import {
+  diasHabilesEntre,
+  obtenerFechaRegresoLaboral,
+  calcularFechaFinVacaciones,
+  obtenerFestivosEnRango,
+  getFestivosColDetalle,
+  getFestivosCol,
+} from './diasHabiles'
 import { hoyISO } from './fecha'
 
 export function aFechaInputDate(val) {
@@ -21,35 +28,20 @@ export function aFechaInputDate(val) {
 
 /**
  * Calcula la cantidad de días hábiles de vacaciones entre dos fechas (lunes a sábado),
- * omitiendo únicamente los domingos según la normativa laboral colombiana.
+ * omitiendo domingos y festivos oficiales de Colombia según la normativa laboral (Art. 177 y 186 CST).
  */
 export function calcularDiasHabiles(fechaInicio, fechaFin) {
   if (!fechaInicio || !fechaFin) return ''
   const cleanInicio = String(fechaInicio).trim().slice(0, 10)
   const cleanFin = String(fechaFin).trim().slice(0, 10)
-  const partsIni = cleanInicio.split('-').map(Number)
-  const partsFin = cleanFin.split('-').map(Number)
-  if (partsIni.length !== 3 || partsFin.length !== 3 || partsIni.some(isNaN) || partsFin.some(isNaN)) return ''
-
-  // Usar mediodía (12:00:00) para evitar desfaces horarios o UTC
-  const cur = new Date(partsIni[0], partsIni[1] - 1, partsIni[2], 12, 0, 0)
-  const end = new Date(partsFin[0], partsFin[1] - 1, partsFin[2], 12, 0, 0)
-  if (end < cur) return ''
-
-  let count = 0
-  while (cur <= end) {
-    // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
-    if (cur.getDay() !== 0) {
-      count++
-    }
-    cur.setDate(cur.getDate() + 1)
-  }
-  return count
+  return diasHabilesEntre(cleanInicio, cleanFin)
 }
 
 export function calcDias(inicio, fin) {
   return calcularDiasHabiles(inicio, fin)
 }
+
+export { calcularFechaFinVacaciones, obtenerFestivosEnRango, getFestivosColDetalle, getFestivosCol }
 
 
 export function formatFecha(iso) {

@@ -1,8 +1,10 @@
 // =============================================================
 // src/components/contratos/ModalContratoForm.jsx
 // =============================================================
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import AnimatedModal from '../ui/AnimatedModal'
+import { useCompany } from '../../context/CompanyContext'
+import { DEPENDENCIAS_EXTENDIDAS } from '../../constants'
 import {
   extraerDatosContratoDesdeEmpleado,
   calcularFinYPrueba,
@@ -32,7 +34,11 @@ export default function ModalContratoForm({
   const [formData, setFormData] = useState(() => {
     return contratoInicial || {
       tipo_contrato: 'termino_fijo_menor_anio',
-      estado: 'vigente',
+      estado: 'pendiente_empleado',
+      empleado_id: null,
+      dependencia: '',
+      telefono_trabajador: '',
+      email_trabajador: '',
       razon_social: companyConfig.razon_social || companyConfig.nombre || 'AMERIGLOBAL S.A.S',
       nit: companyConfig.nit || '901272369-7',
       domicilio_empleador: 'Cra. 43A #1 Sur – 150 Edificio La Strada, piso 4.',
@@ -55,8 +61,8 @@ export default function ModalContratoForm({
       ciudad_contrato: 'Medellín',
       horario: '9:00 AM - 6:00 PM',
       jornada_laboral: 'Diurno',
-      periodo_prueba_dias: 18,
-      periodo_prueba_texto: 'dieciocho (18) días, pudiendo extenderse hasta el máximo permitido por la ley, equivalente a dos (2) meses.',
+      periodo_prueba_dias: 60,
+      periodo_prueba_texto: 'dos (2) meses (60 días calendario)',
       institucion_educativa: 'SENA',
       programa_formacion: '',
       etapa_aprendizaje: 'Productiva',
@@ -69,26 +75,89 @@ export default function ModalContratoForm({
     }
   })
 
+  const [modoIngreso, setModoIngreso] = useState(() => {
+    if (contratoInicial?.empleado_id) return 'existente'
+    return 'candidato'
+  })
+
+  const {
+    departamentos = [],
+    cargos = [],
+    cargosCompletos = [],
+  } = useCompany()
+
+  const [modoOtroCargo, setModoOtroCargo] = useState(false)
+  const [modoOtraDep, setModoOtraDep] = useState(false)
+
   const [searchEmpleado, setSearchEmpleado] = useState('')
   const [empleadoSeleccionadoNombre, setEmpleadoSeleccionadoNombre] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
+  // Lista de Áreas / Dependencias dinámicas desde Usuarios
+  const baseDepartamentos = departamentos && departamentos.length > 0 ? departamentos : DEPENDENCIAS_EXTENDIDAS
+  const listaDepartamentos = useMemo(() => {
+    const list = [...baseDepartamentos]
+    if (!list.includes('APRENDIZ')) list.push('APRENDIZ')
+    return [...new Set(list)]
+  }, [baseDepartamentos])
+
+  // Lista de Cargos dinámicos desde Usuarios (ordenados según el área seleccionada)
+  const listaCargosFiltrados = useMemo(() => {
+    let base = cargos && cargos.length > 0 ? cargos : []
+    if (base.length === 0) {
+      base = [
+        'ASESOR COMERCIAL', 'ANALISTA DE CARTERA', 'ANALISTA DE UNDERWRITING',
+        'ANALISTA DE VERIFICACIÓN', 'ANALISTA CONTABLE', 'COORDINADOR DE OPERACIONES',
+        'SUPERVISOR DE ÁREA', 'ANALISTA DE RRHH', 'SOPORTE TI', 'SERVICIOS GENERALES',
+        'APRENDIZ ETAPA LECTIVA', 'APRENDIZ ETAPA PRODUCTIVA'
+      ]
+    }
+    let resultado = [...base]
+
+    if (cargosCompletos && cargosCompletos.length > 0 && formData.dependencia) {
+      const depNorm = formData.dependencia.trim().toUpperCase()
+      const delDep = cargosCompletos
+        .filter(c => c.departamento && c.departamento.trim().toUpperCase() === depNorm)
+        .map(c => c.nombre)
+      const otros = cargosCompletos
+        .filter(c => !c.departamento || c.departamento.trim().toUpperCase() !== depNorm)
+        .map(c => c.nombre)
+      if (delDep.length > 0) {
+        resultado = [...new Set([...delDep, ...otros])]
+      }
+    }
+
+    if (formData.tipo_contrato === 'aprendizaje') {
+      const aprendices = resultado.filter(c => c.toLowerCase().includes('aprendiz'))
+      const otros = resultado.filter(c => !c.toLowerCase().includes('aprendiz'))
+      resultado = [...aprendices, ...otros]
+    }
+
+    return [...new Set(resultado)]
+  }, [cargos, cargosCompletos, formData.dependencia, formData.tipo_contrato])
+
   useEffect(() => {
+    setModoOtroCargo(false)
+    setModoOtraDep(false)
     if (contratoInicial) {
       setFormData(contratoInicial)
       setEmpleadoSeleccionadoNombre(contratoInicial.nombre_trabajador || '')
+      setModoIngreso(contratoInicial.empleado_id ? 'existente' : 'candidato')
     } else {
       const hoy = new Date().toISOString().slice(0, 10)
       const { fechaFin, diasPrueba } = calcularFinYPrueba(hoy, 3)
       setFormData(prev => ({
         ...prev,
+        estado: 'pendiente_empleado',
+        empleado_id: null,
         fecha_ingreso: hoy,
         fecha_fin: fechaFin,
         fecha_confidencialidad: hoy,
         periodo_prueba_dias: diasPrueba,
       }))
       setEmpleadoSeleccionadoNombre('')
+      setModoIngreso('candidato')
     }
     setErrorMsg('')
   }, [contratoInicial, open])
@@ -110,9 +179,22 @@ export default function ModalContratoForm({
     setFormData(prev => ({
       ...prev,
       ...datosAuto,
+      empleado_id: emp.id,
+      estado: prev.estado === 'pendiente_empleado' ? 'vigente' : prev.estado,
     }))
     setEmpleadoSeleccionadoNombre(emp.nombre_completo)
     setSearchEmpleado('')
+    setModoIngreso('existente')
+  }
+
+  const handleCambiarACandidato = () => {
+    setModoIngreso('candidato')
+    setFormData(prev => ({
+      ...prev,
+      empleado_id: null,
+      estado: 'pendiente_empleado',
+    }))
+    setEmpleadoSeleccionadoNombre('')
   }
 
   // Cambio de duración en meses
@@ -124,7 +206,7 @@ export default function ModalContratoForm({
       duracion_meses: n,
       fecha_fin: fechaFin,
       periodo_prueba_dias: diasPrueba,
-      periodo_prueba_texto: `${diasPrueba} días, pudiendo extenderse hasta el máximo permitido por la ley, equivalente a dos (2) meses.`,
+      periodo_prueba_texto: diasPrueba === 60 ? 'dos (2) meses (60 días calendario)' : `${diasPrueba} días`,
     }))
   }
 
@@ -202,59 +284,120 @@ export default function ModalContratoForm({
         </div>
       )}
 
-      {/* SELECTOR RÁPIDO DE EMPLEADO */}
-      <div style={{ background: 'var(--surface)', border: '1px solid #BFDBFE', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <label style={{ fontSize: 12.5, fontWeight: 700, color: '#1E40AF', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Sparkles size={15} color="#2563EB" />
-            <span>TRAER DATOS AUTOMÁTICAMENTE DESDE EMPLEADOS:</span>
-          </label>
-          {empleadoSeleccionadoNombre && (
-            <span style={{ fontSize: 11.5, background: '#DCFCE7', color: '#15803D', fontWeight: 700, padding: '2px 8px', borderRadius: 6 }}>
-              ✓ Vinculado: {empleadoSeleccionadoNombre}
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
-            <input
-              type="text"
-              placeholder="Buscar colaborador por nombre, documento o cargo..."
-              value={searchEmpleado}
-              onChange={e => setSearchEmpleado(e.target.value)}
-              style={{
-                width: '100%', padding: '8px 12px 8px 32px', borderRadius: 8,
-                border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13,
-              }}
-            />
-          </div>
-
-          <select
-            onChange={e => {
-              const emp = empleados.find(x => x.id === e.target.value)
-              if (emp) handleSeleccionarEmpleado(emp)
-            }}
-            value=""
+      {/* MODO DE INGRESO: CANDIDATO VS EMPLEADO EXISTENTE */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+          <button
+            type="button"
+            onClick={handleCambiarACandidato}
             style={{
-              padding: '8px 12px', borderRadius: 8, border: '1px solid #BFDBFE',
-              background: '#EFF6FF', color: '#1D4ED8', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              flex: 1,
+              padding: '9px 14px',
+              borderRadius: 8,
+              border: `2px solid ${modoIngreso === 'candidato' ? '#F59E0B' : 'var(--border)'}`,
+              background: modoIngreso === 'candidato' ? '#FFFBEB' : 'var(--bg)',
+              color: modoIngreso === 'candidato' ? '#B45309' : 'var(--text-muted)',
+              fontWeight: 800,
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease'
             }}
           >
-            <option value="">— Elegir de la lista ({empleadosFiltrados.length}) —</option>
-            {empleadosFiltrados.map(emp => (
-              <option key={emp.id} value={emp.id}>
-                {emp.nombre_completo} ({emp.numero_documento || 'Sin doc'}) — {emp.cargo || 'Sin cargo'}
-              </option>
-            ))}
-          </select>
+            <span>🟡 Candidato / Nuevo Ingreso</span>
+            <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}>(Pendiente de ingresar a empleados)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setModoIngreso('existente')}
+            style={{
+              flex: 1,
+              padding: '9px 14px',
+              borderRadius: 8,
+              border: `2px solid ${modoIngreso === 'existente' ? '#2563EB' : 'var(--border)'}`,
+              background: modoIngreso === 'existente' ? '#EFF6FF' : 'var(--bg)',
+              color: modoIngreso === 'existente' ? '#1D4ED8' : 'var(--text-muted)',
+              fontWeight: 800,
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Sparkles size={16} color={modoIngreso === 'existente' ? '#2563EB' : 'currentColor'} />
+            <span>🟢 Empleado Existente</span>
+            <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}>(Precargar desde nómina)</span>
+          </button>
         </div>
 
-        {empleadoSeleccionadoNombre && (
-          <div className="banner-autocompletado" style={{ marginTop: 10, padding: '8px 12px', fontSize: 12 }}>
-            <UserCheck size={16} />
-            <span>Los datos de <strong>{empleadoSeleccionadoNombre}</strong> (documento, dirección, salario, fecha de ingreso y cargo) fueron precargados con éxito. Puedes modificarlos si lo necesitas.</span>
+        {modoIngreso === 'candidato' ? (
+          <div style={{ background: '#FFFDF5', border: '1px dashed #F59E0B', borderRadius: 8, padding: '10px 14px', fontSize: 12.5, color: '#92400E', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>💡</span>
+            <div>
+              <strong>Modo Candidato:</strong> Puedes redactar y firmar el contrato antes de registrar a la persona en la lista de empleados. El contrato quedará en estado <strong>Pendiente por registrar empleado</strong>. Si la persona no se presenta o desiste, puedes marcarla como desistida sin crear registros innecesarios en empleados; y cuando inicie labores, podrás pasarla a empleados con <strong>1 solo clic</strong>.
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#1E40AF', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>Selecciona el colaborador existente para precargar sus datos:</span>
+              </label>
+              {empleadoSeleccionadoNombre && (
+                <span style={{ fontSize: 11.5, background: '#DCFCE7', color: '#15803D', fontWeight: 700, padding: '2px 8px', borderRadius: 6 }}>
+                  ✓ Vinculado: {empleadoSeleccionadoNombre}
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={15} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  placeholder="Buscar colaborador por nombre, documento o cargo..."
+                  value={searchEmpleado}
+                  onChange={e => setSearchEmpleado(e.target.value)}
+                  style={{
+                    width: '100%', padding: '8px 12px 8px 32px', borderRadius: 8,
+                    border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13,
+                  }}
+                />
+              </div>
+
+              <select
+                onChange={e => {
+                  const emp = empleados.find(x => x.id === e.target.value)
+                  if (emp) handleSeleccionarEmpleado(emp)
+                }}
+                value=""
+                style={{
+                  padding: '8px 12px', borderRadius: 8, border: '1px solid #BFDBFE',
+                  background: '#EFF6FF', color: '#1D4ED8', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <option value="">— Elegir de la lista ({empleadosFiltrados.length}) —</option>
+                {empleadosFiltrados.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.nombre_completo} ({emp.numero_documento || 'Sin doc'}) — {emp.cargo || 'Sin cargo'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {empleadoSeleccionadoNombre && (
+              <div className="banner-autocompletado" style={{ marginTop: 10, padding: '8px 12px', fontSize: 12 }}>
+                <UserCheck size={16} />
+                <span>Datos de <strong>{empleadoSeleccionadoNombre}</strong> precargados. Puedes editarlos libremente.</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -390,16 +533,233 @@ export default function ModalContratoForm({
           </div>
 
           <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Briefcase size={13} style={{ color: 'var(--primary)' }} />
+                Cargo a Desempeñar *
+              </label>
+              <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                {listaCargosFiltrados.length} en Usuarios
+              </span>
+            </div>
+
+            <select
+              value={modoOtroCargo ? '__OTRO__' : (formData.cargo || '')}
+              onChange={e => {
+                const val = e.target.value
+                if (val === '__OTRO__') {
+                  setModoOtroCargo(true)
+                  setFormData(prev => ({ ...prev, cargo: '' }))
+                } else {
+                  setModoOtroCargo(false)
+                  const cargoObj = cargosCompletos?.find(c => c.nombre === val)
+                  setFormData(prev => ({
+                    ...prev,
+                    cargo: val,
+                    dependencia: (!prev.dependencia && cargoObj?.departamento) ? cargoObj.departamento : prev.dependencia,
+                  }))
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '7px 10px',
+                borderRadius: 8,
+                border: '1.5px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--text)',
+                fontWeight: formData.cargo ? 600 : 400,
+                cursor: 'pointer',
+              }}
+              required={!modoOtroCargo}
+            >
+              <option value="">-- Selecciona el Cargo --</option>
+              {formData.cargo && !listaCargosFiltrados.includes(formData.cargo) && !modoOtroCargo && (
+                <option value={formData.cargo}>{formData.cargo} (Actual)</option>
+              )}
+              {listaCargosFiltrados.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option value="__OTRO__">✏️ + Otro cargo personalizado...</option>
+            </select>
+
+            {modoOtroCargo && (
+              <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Escribe el cargo a desempeñar..."
+                  value={formData.cargo || ''}
+                  onChange={e => setFormData({ ...formData, cargo: e.target.value.toUpperCase() })}
+                  autoFocus
+                  required
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    borderRadius: 6,
+                    border: '1.5px solid var(--primary)',
+                    background: 'var(--bg)',
+                    color: 'var(--text)',
+                    fontSize: 12,
+                    textTransform: 'uppercase',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModoOtroCargo(false)
+                    if (listaCargosFiltrados.length > 0) {
+                      setFormData(prev => ({ ...prev, cargo: listaCargosFiltrados[0] }))
+                    }
+                  }}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  ← Ver lista
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.2fr 1.6fr', gap: 12, marginBottom: 12 }}>
+          <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-              Cargo a Desempeñar
+              Teléfono / Celular
             </label>
             <input
               type="text"
-              value={formData.cargo}
-              onChange={e => setFormData({ ...formData, cargo: e.target.value })}
-              placeholder={esAprendiz ? 'Aprendiz SENA' : 'Ej. Agente de Verificación'}
+              value={formData.telefono_trabajador || ''}
+              onChange={e => setFormData({ ...formData, telefono_trabajador: e.target.value })}
+              placeholder="Ej. 300 123 4567"
               style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
             />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+              Correo Electrónico
+            </label>
+            <input
+              type="email"
+              value={formData.email_trabajador || ''}
+              onChange={e => setFormData({ ...formData, email_trabajador: e.target.value })}
+              placeholder="colaborador@correo.com"
+              style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+            />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Building2 size={13} style={{ color: 'var(--primary)' }} />
+                Área / Dependencia
+              </label>
+              <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                {listaDepartamentos.length} en Usuarios
+              </span>
+            </div>
+
+            <select
+              value={modoOtraDep ? '__OTRO__' : (formData.dependencia || '')}
+              onChange={e => {
+                const val = e.target.value
+                if (val === '__OTRO__') {
+                  setModoOtraDep(true)
+                  setFormData(prev => ({ ...prev, dependencia: '' }))
+                } else {
+                  setModoOtraDep(false)
+                  setFormData(prev => ({ ...prev, dependencia: val }))
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '7px 10px',
+                borderRadius: 8,
+                border: '1.5px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--text)',
+                fontWeight: formData.dependencia ? 600 : 400,
+                cursor: 'pointer',
+              }}
+            >
+              <option value="">-- Selecciona el Área --</option>
+              {formData.dependencia && !listaDepartamentos.includes(formData.dependencia) && !modoOtraDep && (
+                <option value={formData.dependencia}>{formData.dependencia} (Actual)</option>
+              )}
+              {listaDepartamentos.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+              <option value="__OTRO__">✏️ + Otra área personalizada...</option>
+            </select>
+
+            {modoOtraDep && (
+              <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Escribe el área..."
+                  value={formData.dependencia || ''}
+                  onChange={e => setFormData({ ...formData, dependencia: e.target.value.toUpperCase() })}
+                  autoFocus
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    borderRadius: 6,
+                    border: '1.5px solid var(--primary)',
+                    background: 'var(--bg)',
+                    color: 'var(--text)',
+                    fontSize: 12,
+                    textTransform: 'uppercase',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModoOtraDep(false)
+                    if (listaDepartamentos.length > 0) {
+                      setFormData(prev => ({ ...prev, dependencia: listaDepartamentos[0] }))
+                    }
+                  }}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  ← Ver lista
+                </button>
+              </div>
+            )}
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+              Estado del Contrato
+            </label>
+            <select
+              value={formData.estado || 'pendiente_empleado'}
+              onChange={e => setFormData({ ...formData, estado: e.target.value })}
+              style={{
+                width: '100%', padding: '7px 10px', borderRadius: 8,
+                border: '1.5px solid var(--border)',
+                background: formData.estado === 'pendiente_empleado' ? '#FEF3C7' : (formData.estado === 'vigente' ? '#DCFCE7' : (formData.estado === 'desistido' ? '#F3F4F6' : 'var(--bg)')),
+                color: formData.estado === 'pendiente_empleado' ? '#92400E' : (formData.estado === 'vigente' ? '#15803D' : (formData.estado === 'desistido' ? '#4B5563' : 'var(--text)')),
+                fontWeight: 700
+              }}
+            >
+              <option value="pendiente_empleado">🟡 Pendiente por registrar empleado</option>
+              <option value="vigente">🟢 Vigente (Empleado en nómina)</option>
+              <option value="desistido">⚪ Desistió del proceso / No ingresó</option>
+              <option value="finalizado">🔴 Finalizado / Terminado</option>
+            </select>
           </div>
         </div>
 

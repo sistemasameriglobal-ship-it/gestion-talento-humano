@@ -5,7 +5,7 @@ import { useCompany } from '../../context/CompanyContext'
 import {
   X, Check, Shield, CheckCircle2,
   AlertCircle, Loader2, LayoutDashboard, FileText,
-  ShieldAlert, Sun, UserCog, Users, ParkingCircle, TrendingUp,
+  ShieldAlert, Sun, UserCog, Users, FileSignature, ParkingCircle, TrendingUp,
   Eye, EyeOff, UserCheck, UserX, Mail, KeyRound, CheckSquare,
 } from 'lucide-react'
 
@@ -16,6 +16,7 @@ const SECCIONES_APP = [
   { id: 'vacaciones',     label: 'Vacaciones',          icon: Sun,             emoji: '🌴' },
   { id: 'empleados',     label: 'Empleados',           icon: UserCog,         emoji: '👥' },
   { id: 'colaboradores', label: 'Colaboradores',       icon: Users,           emoji: '🤝' },
+  { id: 'contratos',     label: 'Contratos',           icon: FileSignature,   emoji: '📝' },
   { id: 'parqueadero',   label: 'Parqueadero',         icon: ParkingCircle,   emoji: '🅿️' },
   { id: 'productividad', label: 'Productividad',       icon: TrendingUp,      emoji: '📈' },
 ]
