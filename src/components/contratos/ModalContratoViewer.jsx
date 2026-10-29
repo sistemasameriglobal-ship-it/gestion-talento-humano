@@ -1,17 +1,14 @@
 // =============================================================
 // src/components/contratos/ModalContratoViewer.jsx
 // =============================================================
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import AnimatedModal from '../ui/AnimatedModal'
+import ModalFirmaRepresentante from './ModalFirmaRepresentante'
 import {
   generarHtmlDocumento,
   imprimirContrato,
   descargarComoWord,
 } from '../../utils/contratosTemplates'
-import {
-  obtenerFirmaEmpleador,
-  guardarFirmaEmpleadorPersonalizada,
-} from '../../utils/contratoFirma'
 import {
   Printer,
   Download,
@@ -27,8 +24,6 @@ import {
   Briefcase,
   CreditCard,
   PenTool,
-  FileUp,
-  RotateCcw,
   Link2,
 } from 'lucide-react'
 
@@ -36,13 +31,21 @@ export default function ModalContratoViewer({ contrato, onClose, onEdit, onCompa
   const [tab, setTab] = useState('completo') // 'completo' | 'principal' | 'confidencialidad' | 'linea_tiempo'
   const [copiado, setCopiado] = useState(false)
   const [firmaVersion, setFirmaVersion] = useState(0)
-  const [mostrarFirmaConfig, setMostrarFirmaConfig] = useState(false)
-  const fileInputRef = useRef(null)
+  const [modalFirmaRepOpen, setModalFirmaRepOpen] = useState(false)
+
+  // Escuchar actualizaciones globales de firma para refrescar la vista al instante
+  useEffect(() => {
+    const handleFirmaActualizada = () => setFirmaVersion(v => v + 1)
+    window.addEventListener('firma-empleador-actualizada', handleFirmaActualizada)
+    return () => window.removeEventListener('firma-empleador-actualizada', handleFirmaActualizada)
+  }, [])
 
   if (!contrato) return null
 
-  const esAprendiz = contrato.tipo_contrato === 'aprendizaje'
-  const tituloModal = esAprendiz ? 'Contrato de Aprendizaje (Ley 789)' : 'Contrato a Término Fijo Inferior a 1 Año'
+  const esAprendiz = contrato.tipo_contrato === 'aprendizaje' || (contrato.cargo && /aprendiz/i.test(contrato.cargo)) || contrato.tipo_documento === 'TI'
+  const esFinDeSemana = /fin.*semana|s[aá]bado.*domingo/i.test(contrato.jornada_laboral || '') || /fin.*semana|s[aá]bado.*domingo/i.test(contrato.horario || '')
+  const esFirmado = Boolean(contrato.firmado_por_trabajador || contrato.firma_trabajador)
+  const tituloModal = esAprendiz ? 'Contrato de Aprendizaje (Ley 789)' : (esFinDeSemana ? 'Contrato a Término Fijo (Fin de Semana)' : 'Contrato a Término Fijo Inferior a 1 Año')
 
   // Recalcular documento cuando cambia la pestaña o la firma
   const htmlContent = useMemo(() => {
@@ -60,8 +63,9 @@ export default function ModalContratoViewer({ contrato, onClose, onEdit, onCompa
   }
 
   return (
-    <AnimatedModal
-      open={Boolean(contrato)}
+    <>
+      <AnimatedModal
+        open={Boolean(contrato)}
       onRequestClose={onClose}
       maxWidth="1160px"
       backdropStyle={{ alignItems: 'flex-start', paddingTop: '20px', paddingBottom: '24px' }}
@@ -85,6 +89,24 @@ export default function ModalContratoViewer({ contrato, onClose, onEdit, onCompa
             <span className={`contrato-badge-tipo ${esAprendiz ? 'badge-aprendizaje' : 'badge-termino-fijo'}`}>
               {esAprendiz ? '🎓 Aprendiz SENA' : '⏱️ Término Fijo < 1 Año (Prórrogas c/3 meses)'}
             </span>
+            {esFinDeSemana && (
+              <span style={{ background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                🗓️ Fines de Semana
+              </span>
+            )}
+            {esFirmado ? (
+              <span style={{ background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                ✓ Firmado por Colaborador • Firma Rep. Legal Colocada
+              </span>
+            ) : contrato.firmado_por_empleador ? (
+              <span style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                ✍️ Firma Rep. Legal Colocada
+              </span>
+            ) : (
+              <span style={{ background: '#F8FAFC', color: '#64748B', border: '1px solid #CBD5E1', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }} title="Por confidencialidad, la firma del Representante Legal se coloca automáticamente una vez firme el colaborador">
+                🔒 Firma Rep. Legal Protegida (esperando firma del colaborador)
+              </span>
+            )}
             {contrato.estado === 'pendiente_empleado' && (
               <span style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
                 🟡 Candidato por Ingresar
@@ -191,112 +213,21 @@ export default function ModalContratoViewer({ contrato, onClose, onEdit, onCompa
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {/* Botón Gestión de Firma del Empleador (solo si tiene permisos de edición) */}
           {puedeEditar && (
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                className="btn-viewer-action"
-                onClick={() => setMostrarFirmaConfig(v => !v)}
-                title="Configurar o cambiar la firma digital oficial del Empleador"
-                style={{
-                  background: '#F0FDF4',
-                  borderColor: '#BBF7D0',
-                  color: '#15803D',
-                  fontWeight: 700,
-                }}
-              >
-                <PenTool size={14} />
-                <span>Firma Empleador ✓</span>
-              </button>
-
-              {mostrarFirmaConfig && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: 6,
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 10,
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.18)',
-                  padding: '14px 16px',
-                  width: 290,
-                  zIndex: 100,
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>
-                    ✍️ Firma del Empleador
-                  </div>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>
-                    Aparece por defecto en todos los contratos y documentos Word/PDF para <strong>Carlos Alberto Herrera</strong>.
-                  </div>
-
-                  <div style={{
-                    background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: 8,
-                    padding: '8px',
-                    textAlign: 'center',
-                    marginBottom: 10,
-                  }}>
-                    <img
-                      src={obtenerFirmaEmpleador(contrato)}
-                      alt="Vista previa firma empleador"
-                      style={{ maxHeight: 45, maxWidth: '100%', objectFit: 'contain' }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        padding: '7px 10px', borderRadius: 7, border: '1px solid #BFDBFE',
-                        background: '#EFF6FF', color: '#1D4ED8', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                      }}
-                    >
-                      <FileUp size={14} />
-                      <span>Subir Foto / Escaneo de Firma</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        guardarFirmaEmpleadorPersonalizada(null)
-                        setFirmaVersion(v => v + 1)
-                        setMostrarFirmaConfig(false)
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)',
-                        background: 'var(--bg)', color: 'var(--text-muted)', fontSize: 11.5, cursor: 'pointer',
-                      }}
-                    >
-                      <RotateCcw size={13} />
-                      <span>Restablecer firma por defecto</span>
-                    </button>
-                  </div>
-
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/png, image/jpeg, image/jpg"
-                    style={{ display: 'none' }}
-                    onChange={e => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      const reader = new FileReader()
-                      reader.onload = evt => {
-                        const b64 = evt.target.result
-                        guardarFirmaEmpleadorPersonalizada(b64)
-                        setFirmaVersion(v => v + 1)
-                        setMostrarFirmaConfig(false)
-                      }
-                      reader.readAsDataURL(file)
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              className="btn-viewer-action"
+              onClick={() => setModalFirmaRepOpen(true)}
+              title="Subir foto o cambiar la firma digital oficial del Representante Legal"
+              style={{
+                background: '#F0FDF4',
+                borderColor: '#BBF7D0',
+                color: '#15803D',
+                fontWeight: 700,
+              }}
+            >
+              <PenTool size={14} />
+              <span>✍️ Firma Rep. Legal</span>
+            </button>
           )}
 
           {onCompartirFirma && (
@@ -376,5 +307,13 @@ export default function ModalContratoViewer({ contrato, onClose, onEdit, onCompa
         />
       </div>
     </AnimatedModal>
+
+    {/* MODAL CONFIGURAR / SUBIR FOTO FIRMA REPRESENTANTE LEGAL */}
+    <ModalFirmaRepresentante
+      open={modalFirmaRepOpen}
+      onClose={() => setModalFirmaRepOpen(false)}
+      onFirmaGuardada={() => setFirmaVersion(v => v + 1)}
+    />
+  </>
   )
 }

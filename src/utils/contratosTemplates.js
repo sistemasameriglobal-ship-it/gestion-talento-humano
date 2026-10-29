@@ -89,6 +89,19 @@ export function formatearFechaLarga(fechaStr) {
 }
 
 /**
+ * Convierte '1977-01-07' en '07/01/1977' tal como aparece en la minuta original de Word
+ */
+export function formatearFechaCorta(fechaStr) {
+  if (!fechaStr) return '—'
+  if (String(fechaStr).includes('/')) return fechaStr
+  const partes = String(fechaStr).slice(0, 10).split('-')
+  if (partes.length === 3) {
+    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0]}`
+  }
+  return fechaStr
+}
+
+/**
  * Obtiene día, mes y año para firmas
  */
 export function getPartesFecha(fechaStr) {
@@ -117,24 +130,26 @@ export function generarBloqueFirmasDosColumnas(c, {
   const tipoDoc = c.tipo_documento || 'CC'
   const numDoc = c.numero_documento || '—'
 
-  const firmaEmpleadorImg = obtenerFirmaEmpleador(c)
+  // Por confidencialidad: la firma del Representante Legal NO se muestra en contratos pendientes
+  // Únicamente se estampa automáticamente una vez la persona haya firmado el contrato (o cuando el empleador la active)
+  const haFirmadoTrabajador = Boolean(c && (c.firmado_por_trabajador || c.firma_trabajador))
+  const puedeMostrarFirmaEmpleador = Boolean(c && (c.firmado_por_empleador || haFirmadoTrabajador))
+  const firmaEmpleadorImg = puedeMostrarFirmaEmpleador ? obtenerFirmaEmpleador(c) : null
 
   return `
     <table class="tabla-firmas-contrato" border="0" cellpadding="0" cellspacing="0" width="100%" style="width: 100% !important; border: none !important; border-collapse: collapse !important; margin-top: 40pt; margin-bottom: 20pt; page-break-inside: avoid !important;">
       <tr>
         <td width="50%" valign="top" style="width: 50% !important; vertical-align: top !important; border: none !important; padding: 0 25px 0 0 !important; text-align: left !important;">
-          <p style="margin: 0 0 10px 0; font-weight: 700; font-size: 11pt; color: #000000; font-family: Arial, Helvetica, sans-serif;">
-            ${rolParte1}
-          </p>
-
           <div style="height: 60px; margin-bottom: 4px;">
-            <img
-              src="${firmaEmpleadorImg}"
-              alt="Firma ${repLegal}"
-              width="170"
-              height="55"
-              style="display: block; width: 170px; height: 55px; object-fit: contain; border: none;"
-            />
+            ${firmaEmpleadorImg ? `
+              <img
+                src="${firmaEmpleadorImg}"
+                alt="Firma ${repLegal}"
+                width="170"
+                height="55"
+                style="display: block; width: 170px; height: 55px; object-fit: contain; border: none;"
+              />
+            ` : `<!-- Espacio reservado para firma del Representante Legal (se estampa tras la firma del colaborador) -->`}
           </div>
 
           <div style="border-top: 1.5pt solid #000000; width: 90%; margin-bottom: 6px;"></div>
@@ -154,10 +169,6 @@ export function generarBloqueFirmasDosColumnas(c, {
         </td>
 
         <td width="50%" valign="top" style="width: 50% !important; vertical-align: top !important; border: none !important; padding: 0 0 0 25px !important; text-align: left !important;">
-          <p style="margin: 0 0 10px 0; font-weight: 700; font-size: 11pt; color: #000000; font-family: Arial, Helvetica, sans-serif;">
-            ${rolParte2}
-          </p>
-
           <div style="height: 60px; margin-bottom: 4px;">
             ${c.firma_trabajador ? `
               <img
@@ -186,11 +197,6 @@ export function generarBloqueFirmasDosColumnas(c, {
           ${rolCargoParte2 ? `
             <p style="margin: 2px 0; font-size: 8.5pt; color: #555555; font-family: Arial, Helvetica, sans-serif;">
               ${rolCargoParte2}
-            </p>
-          ` : ''}
-          ${rolFirmaParte2 ? `
-            <p style="margin: 3px 0 0 0; font-weight: 700; font-size: 8.5pt; color: #1E40AF; font-family: Arial, Helvetica, sans-serif;">
-              ${rolFirmaParte2}
             </p>
           ` : ''}
         </td>
@@ -257,14 +263,14 @@ export function calcularFinYPrueba(fechaInicioISO, duracionMeses = 3) {
  */
 export function calcularCiclosYProrroga(contrato, fechaReferenciaISO = new Date().toISOString().slice(0, 10)) {
   if (!contrato || !contrato.fecha_ingreso) return null
-  const esAprendiz = contrato.tipo_contrato === 'aprendizaje'
+  const esAprendiz = contrato.tipo_contrato === 'aprendizaje' || (contrato.cargo && /aprendiz/i.test(contrato.cargo)) || contrato.tipo_documento === 'TI'
   const fechaIngreso = contrato.fecha_ingreso
   const refDate = new Date(fechaReferenciaISO + 'T00:00:00')
 
   // Si es aprendizaje, es plazo fijo pactado (ej. 6 meses)
   if (esAprendiz) {
     const meses = contrato.duracion_meses || 6
-    const { fechaFin } = calcularFinYPrueba(fechaIngreso, meses)
+    const fechaFin = contrato.fecha_fin || calcularFinYPrueba(fechaIngreso, meses).fechaFin
     const finDate = new Date(fechaFin + 'T00:00:00')
     const diffDias = Math.round((finDate - refDate) / 86400000)
     return {
@@ -504,6 +510,9 @@ export function extraerDatosContratoDesdeEmpleado(emp, companyConfig = {}) {
     tipo_documento: emp.tipo_documento || (esAprendiz ? 'TI' : 'CC'),
     numero_documento: emp.numero_documento || '',
     direccion_trabajador: direccionCompleta,
+    telefono_trabajador: emp.telefono || emp.celular || '',
+    email_trabajador: emp.correo || emp.email || '',
+    dependencia: emp.departamento || emp.dependencia || '',
     fecha_nacimiento: emp.fecha_nacimiento || '',
     cargo: emp.cargo || '',
     salario_texto: salarioTexto,
@@ -551,6 +560,7 @@ export function generarHtmlContratoLaboral(c, { esWord = false } = {}) {
   const nombreTrabajador = c.nombre_trabajador || '—'
   const tipoDoc = c.tipo_documento || 'CC'
   const numDoc = c.numero_documento || '—'
+  const esFinDeSemana = /fin.*semana|s[aá]bado.*domingo/i.test(c.jornada_laboral || '') || /fin.*semana|s[aá]bado.*domingo/i.test(c.horario || '')
 
   const encabezadoOficial = generarHtmlEncabezadoOficial({
     titulo: 'CONTRATO INDIVIDUAL DE TRABAJO A TÉRMINO FIJO INFERIOR A UN AÑO',
@@ -573,62 +583,66 @@ export function generarHtmlContratoLaboral(c, { esWord = false } = {}) {
         <tbody>
           <tr>
             <td style="border: none; padding: 0;">
-              <table class="tabla-datos-contrato" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9.5pt;">
-        <tbody>
-          <tr>
-            <td style="width: 32%; font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Nombre del Empleador:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 600;">${razonSocial}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Domicilio del Empleador:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${c.domicilio_empleador || 'Cra. 43A #1 Sur – 150 Edificio La Strada, piso 4.'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Nombre del Trabajador:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 700; color: #1E3A8A;">${nombreTrabajador}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Documento de identidad:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${tipoDoc} ${numDoc}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Dirección del Trabajador:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${c.direccion_trabajador || 'Medellín-Antioquia'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Fecha de Nacimiento:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${c.fecha_nacimiento ? formatearFechaLarga(c.fecha_nacimiento) : '—'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Cargo para desempeñar:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 700;">${c.cargo || '—'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Salario mensual:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 600;">${c.salario_texto || 'Salario Mínimo más Auxilio De Transporte'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Periodos de Pago:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${c.periodo_pago || 'Quincenal'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Fecha de ingreso:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 600;">${fechaIngresoTexto}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Lugar donde desempeñará las labores:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${c.lugar_labores || 'Oficina Medellín'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Ciudad donde se contrató / Horario / Jornada:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">
-              <strong>Ciudad:</strong> ${c.ciudad_contrato || 'Medellín'} &nbsp;|&nbsp; 
-              <strong>Horario:</strong> ${c.horario || '9:00 AM - 6:00 PM'} &nbsp;|&nbsp; 
-              <strong>Jornada:</strong> ${c.jornada_laboral || 'Diurno'}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              <table class="tabla-datos-contrato" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 10pt; line-height: 1.5; border: none !important;">
+                <tbody>
+                  <tr>
+                    <td style="width: 44%; font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Nombre del Empleador:</td>
+                    <td style="width: 56%; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${razonSocial}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Domicilio del Empleador:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.domicilio_empleador || 'Cra. 43A #1 Sur – 150 Edificio La Strada, piso 4.'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Nombre del Trabajador:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${nombreTrabajador}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Documento de identidad:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${numDoc}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Dirección del Trabajador:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.direccion_trabajador || 'Medellín-Antioquia'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Fecha de Nacimiento:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${formatearFechaCorta(c.fecha_nacimiento)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Cargo para desempeñar:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.cargo || '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Salario mensual:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.salario_texto || 'Salario Mínimo más Auxilio De Transporte'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Periodos de Pago:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.periodo_pago || 'Quincenal'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Fecha de ingreso:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${fechaIngresoTexto}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Lugar donde desempeñara las labores:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.lugar_labores || 'Oficina Medellín'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Ciudad donde se contrató:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.ciudad_contrato || 'Medellín'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Horario:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.horario || '9:00 AM - 6:00 PM'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Jornada Laboral:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.jornada_laboral || 'Diurno'}</td>
+                  </tr>
+                </tbody>
+              </table>
 
       <p class="parrafo-intro" style="text-align: justify; line-height: 1.6; margin-bottom: 14px;">
         Entre <strong>EL EMPLEADOR</strong> y <strong>EL TRABAJADOR</strong>, se ha celebrado el presente contrato de trabajo, el cual se regirá por las siguientes cláusulas y en lo no previsto en ellas por el Reglamento Interno de Trabajo de LA EMPRESA, del Código Sustantivo del Trabajo y demás normas concordantes:
@@ -715,7 +729,11 @@ export function generarHtmlContratoLaboral(c, { esWord = false } = {}) {
       </div>
 
       <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>NOVENA: JORNADA DE TRABAJO DIURNO.</strong> EL TRABAJADOR se obliga a laborar la jornada ordinaria de 42 horas en los turnos y dentro de las horas señaladas por EL EMPLEADOR, pudiendo hacer éste ajustes o cambios de horario cuando lo estime conveniente. Por el acuerdo expreso o tácito de las partes, podrán repartirse las horas de la jornada ordinaria en la forma prevista en el artículo 164 del Código Sustantivo del Trabajo, modificado por el artículo 23 de la ley 50 de 1990, teniendo en cuenta que los tiempos de descanso entre las secciones de la jornada no se computan dentro de la misma, según el artículo 167 ibídem.</p>
+        ${esFinDeSemana ? `
+          <p><strong>NOVENA: JORNADA DE TRABAJO - FINES DE SEMANA.</strong> EL TRABAJADOR se obliga a laborar la jornada especial de fin de semana pactada en los turnos y dentro de las horas señaladas por EL EMPLEADOR (<strong>${c.horario || 'Sábados, Domingos y Festivos'}</strong>), bajo la modalidad de <strong>${c.jornada_laboral || 'Fin de Semana'}</strong>, pudiendo hacer éste ajustes o cambios de horario cuando las necesidades operativas de la empresa lo requieran dentro del marco legal. Las partes acuerdan expresamente que la labor se ejecutará primordialmente en fines de semana y festivos, liquidándose la remuneración, descansos compensatorios y recargos con sujeción a las disposiciones legales aplicables del Código Sustantivo del Trabajo.</p>
+        ` : `
+          <p><strong>NOVENA: JORNADA DE TRABAJO DIURNO.</strong> EL TRABAJADOR se obliga a laborar la jornada ordinaria de 42 horas en los turnos y dentro de las horas señaladas por EL EMPLEADOR, pudiendo hacer éste ajustes o cambios de horario cuando lo estime conveniente. Por el acuerdo expreso o tácito de las partes, podrán repartirse las horas de la jornada ordinaria en la forma prevista en el artículo 164 del Código Sustantivo del Trabajo, modificado por el artículo 23 de la ley 50 de 1990, teniendo en cuenta que los tiempos de descanso entre las secciones de la jornada no se computan dentro de la misma, según el artículo 167 ibídem.</p>
+        `}
       </div>
 
       <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
@@ -761,8 +779,7 @@ export function generarHtmlContratoLaboral(c, { esWord = false } = {}) {
       ${generarBloqueFirmasDosColumnas(c, {
         rolParte1: 'El Empleador',
         rolParte2: 'El Trabajador',
-        rolCargoParte2: c.cargo || 'Trabajador',
-        rolFirmaParte2: 'TRABAJADOR',
+        rolCargoParte2: c.cargo || '',
         esWord,
       })}
             </td>
@@ -892,8 +909,7 @@ export function generarHtmlConfidencialidad(c, { esWord = false } = {}) {
       ${generarBloqueFirmasDosColumnas(c, {
         rolParte1: 'El Empleador',
         rolParte2: esAprendiz ? 'EL Aprendiz' : 'El Trabajador',
-        rolCargoParte2: `${tipoDocParte2}. ${numDocParte2}`,
-        rolFirmaParte2: rolFirma,
+        rolCargoParte2: c.cargo || '',
         esWord,
       })}
             </td>
@@ -905,7 +921,8 @@ export function generarHtmlConfidencialidad(c, { esWord = false } = {}) {
 }
 
 /**
- * 3. Genera el HTML del Contrato de Aprendizaje (Ley 789 de 2002)
+ * 3. Genera el HTML del Contrato de Aprendizaje Oficial Ameriglobal (Ley 789 de 2002)
+ * Incluye encabezado completo con horario, todas las cláusulas, obligaciones (a-v), código penal estafa/fraude, conductas prohibidas y confidencialidad.
  */
 export function generarHtmlContratoAprendizaje(c, { esWord = false } = {}) {
   const { dia, mes, anio } = getPartesFecha(c.fecha_ingreso)
@@ -915,12 +932,15 @@ export function generarHtmlContratoAprendizaje(c, { esWord = false } = {}) {
   const repLegal = c.representante_legal || 'CARLOS ALBERTO HERRERA'
   const nit = c.nit || '901272369-7'
   const nombreAprendiz = c.nombre_trabajador || '—'
-  const tipoDoc = c.tipo_documento || 'TI'
+  const tipoDoc = c.tipo_documento || 'T.I.'
   const numDoc = c.numero_documento || '—'
-  const institucion = c.institucion_educativa || 'Servicio Nacional de Aprendizaje - SENA'
-  const programa = c.programa_formacion || c.cargo || 'Técnico / Tecnólogo en Formación'
-  const etapa = c.etapa_aprendizaje || 'Productiva'
-  const apoyo = c.apoyo_sostenimiento || '100% SMMLV + Afiliación a EPS y ARL'
+  const cargoAprendiz = c.cargo || 'Aprendiz Asesor Comercial'
+  const salarioTexto = c.salario_texto || c.apoyo_sostenimiento || 'Salario Mínimo más Auxilio de Transporte'
+  const periodosPago = c.periodo_pago || 'Quincenal'
+  const lugarLabores = c.lugar_labores || 'Oficina Medellín'
+  const ciudadContrato = c.ciudad_contrato || 'Medellín'
+  const horario = c.horario || '9:00 AM - 6:00 PM'
+  const duracionMeses = c.duracion_meses || 6
 
   const encabezadoOficial = generarHtmlEncabezadoOficial({
     titulo: 'CONTRATO DE APRENDIZAJE',
@@ -943,102 +963,174 @@ export function generarHtmlContratoAprendizaje(c, { esWord = false } = {}) {
         <tbody>
           <tr>
             <td style="border: none; padding: 0;">
-              <table class="tabla-datos-contrato" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9.5pt;">
-        <tbody>
-          <tr>
-            <td style="width: 32%; font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Empresa Patrocinadora:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 600;">${razonSocial} (NIT ${nit})</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Representante Legal:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${repLegal} — C.C. ${c.cedula_representante || '79778677'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Nombre del Aprendiz:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 700; color: #1E3A8A;">${nombreAprendiz}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Documento de Identidad:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${tipoDoc} ${numDoc}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Dirección del Aprendiz:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${c.direccion_trabajador || 'Medellín-Antioquia'}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Institución Educativa:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">${institucion}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Especialidad / Programa:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 600;">${programa}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Etapa del Aprendizaje:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;"><strong style="color: #2563EB;">Etapa ${etapa}</strong></td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Apoyo de Sostenimiento:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 600;">${apoyo}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Duración y Fechas:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">
-              ${numeroAMesesTexto(c.duracion_meses || 6)} &nbsp;|&nbsp; Desde el <strong>${fechaIngresoTexto}</strong> hasta el <strong>${fechaFinTexto}</strong>
-            </td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; border: 1px solid #CBD5E1; padding: 6px 10px; background: #F8FAFC;">Lugar y Horario:</td>
-            <td style="border: 1px solid #CBD5E1; padding: 6px 10px;">
-              ${c.lugar_labores || 'Oficina Medellín'} &nbsp;|&nbsp; ${c.horario || '9:00 AM - 6:00 PM'}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              <table class="tabla-datos-contrato" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 10pt; line-height: 1.5; border: none !important;">
+                <tbody>
+                  <tr>
+                    <td style="width: 44%; font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Nombre del Empleador:</td>
+                    <td style="width: 56%; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${razonSocial}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Domicilio del Empleador:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.domicilio_empleador || 'Cra. 43A #1 Sur – 150 Edificio La Strada, piso 4.'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Nombre del PRACTICANTE:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${nombreAprendiz}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Documento de identidad:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${numDoc}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Dirección del Trabajador:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.direccion_trabajador || 'Medellín-Antioquia'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Fecha de Nacimiento:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${formatearFechaCorta(c.fecha_nacimiento)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Cargo para desempeñar:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${cargoAprendiz}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Salario mensual:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${salarioTexto}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Periodos de Pago:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${periodosPago}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Fecha de ingreso:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${fechaIngresoTexto}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Lugar donde desempeñara las labores:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${lugarLabores}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Ciudad donde se contrató:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${ciudadContrato}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Horario:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${horario}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700; border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">Jornada Laboral:</td>
+                    <td style="border: none !important; padding: 2.5px 0; color: #000000; vertical-align: top;">${c.jornada_laboral || 'Diurno'}</td>
+                  </tr>
+                </tbody>
+              </table>
 
-      <p class="parrafo-intro" style="text-align: justify; line-height: 1.6; margin-bottom: 14px;">
-        Entre los suscritos a saber: por una parte, <strong>${razonSocial}</strong>, debidamente representada por <strong>${repLegal}</strong>, quien en adelante se denominará <strong>LA EMPRESA PATROCINADORA</strong>; y por la otra parte <strong>${nombreAprendiz}</strong>, quien en adelante se denominará <strong>EL APRENDIZ</strong>, se celebra el presente <strong>CONTRATO DE APRENDIZAJE</strong> bajo las siguientes cláusulas:
-      </p>
+              <p class="parrafo-intro" style="text-align: justify; line-height: 1.6; margin-bottom: 14px;">
+                Entre <strong>EL EMPLEADOR</strong> y <strong>EL APRENDIZ</strong>, se ha celebrado el presente contrato de <strong>APRENDIZAJE</strong>, el cual se regirá por las siguientes cláusulas y en lo no previsto en ellas por el Reglamento Interno de Trabajo de <strong>LA EMPRESA</strong>, del Código Sustantivo del Trabajo y demás normas concordantes:
+              </p>
 
-      <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>PRIMERA: OBJETO.</strong> El objeto del presente contrato es facilitar la formación práctica metódica y completa de EL APRENDIZ en la especialidad u oficio referida en el encabezamiento, mediante el auspicio y la práctica formativa en las instalaciones y procesos de LA EMPRESA PATROCINADORA.</p>
-      </div>
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>PRIMERA: OBJETO DEL CONTRATO.</strong> EL APRENDIZ se obliga a prestar sus servicios personales AL EMPLEADOR, en el desempeño de las funciones propias de aprendiz, en las labores anexas y complementarias del mismo.</p>
+              </div>
 
-      <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>SEGUNDA: OBLIGACIONES DE LA EMPRESA PATROCINADORA.</strong> En virtud de este contrato, la empresa se obliga a: 1. Proporcionar al aprendiz los medios necesarios para la formación técnica y práctica requerida en su especialidad; 2. Afiliar y cotizar oportunamente a EL APRENDIZ a la Entidad Promotora de Salud (EPS) y a la Administradora de Riesgos Laborales (ARL) conforme a la ley; 3. Cancelar oportunamente el apoyo de sostenimiento mensual pactado; 4. Asignar un tutor o coordinador para la orientación y evaluación de su desempeño formativo.</p>
-      </div>
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>SEGUNDA: OBLIGACIONES DEL APRENDIZ.</strong> Se obliga a desempeñar las funciones del presente contrato, en caso de no cumplirlas se le hará el llamado de atención y en su defecto, podrá dar terminación unilateral del contrato, EL APRENDIZ se obliga a:</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>a)</strong> Desarrollar su labor con excelente disposición, diligencia y entrega, poniendo al servicio del EMPLEADOR toda su capacidad de aprendizaje en el desempeño de las funciones propias de la labor contratada, atendiendo las instrucciones que le imparta EL EMPLEADOR o los superiores jerárquicos.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>b)</strong> Manejar escrupulosamente los valores, bienes y documentos que se le encomienden, transitoria o permanentemente, por razón de su cargo y rendir cuenta rigurosa de ellos AL EMPLEADOR, en las condiciones y tiempo que se le indique.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>c)</strong> Cumplir con el contrato de manera juiciosa y diligente en el lugar, tiempo y condiciones que EL EMPLEADOR le señale.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>d)</strong> Leer y cumplir rigurosamente la disciplina interna establecida por EL EMPLEADOR o por las personas autorizadas por este.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>e)</strong> Guardar estrictamente la reserva de la información que llegue a su conocimiento por razones de su oficio, haciéndose responsable hasta de la culpa leve por los perjuicios que llegare a generar AL EMPLEADOR por la violación de esta reserva.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>f)</strong> No atender durante las horas de aprendizaje, asuntos u ocupaciones diferentes (como uso de correo y redes personales en la oficina, ni celular personal) a los que EL EMPLEADOR, o las personas autorizadas por este le encomiende.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>g)</strong> Conservar y restituir en buen estado, salvo el natural deterioro causado por el servicio, los computadores, herramientas, utensilios y demás bienes del establecimiento donde presta sus servicios.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>h)</strong> Acatar el reglamento interno de trabajo.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>i)</strong> Atender comedidamente las reclamaciones del público e informar a sus superiores inmediatos sobre las irregularidades que se presenten.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>j)</strong> Aceptar los traslados del lugar de trabajo que determina EL EMPLEADOR.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>k)</strong> A no prestarle directa o indirectamente servicios laborales a otros empleadores, ni trabajar por cuenta propia en actividades que afecten su capacidad, rendimiento, productividad o que en cualquier otra forma afecten el servicio contratado.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>l)</strong> A hacer uso de su horario de trabajo en forma puntual y exclusivamente para el cumplimiento de las labores contratadas con EL EMPLEADOR.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>m)</strong> Las demás obligaciones que le corresponden de acuerdo con la ley.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>n)</strong> A RESPETAR (quiere decir a no alzar la voz con malos tratos, ni hablar mal de la compañía, además no generar mal ambiente laboral con chismes, ni malos comentarios con sus compañeros de trabajo) a sus superiores y compañeros de trabajo.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>o)</strong> A llegar cumplidamente a su jornada laboral y registrarse en el sistema de verificación de entrada a la hora señalada, para el ingreso a la empresa; y cerrar debidamente el sistema TIME CLOCK.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>p)</strong> A no estar en los puestos de trabajo de sus compañeros charlando o haciendo algo diferente a su trabajo.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>q)</strong> A cumplir con las órdenes que su superior o jefe le indiquen.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>r)</strong> A no tener ningún vínculo afectivo (noviazgo) con un superior o compañero de trabajo.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>s)</strong> A llevar adecuadamente la ropa de trabajo, de lunes a jueves tener una vestimenta formal, los días viernes se puede usar Jean; pero no Jean roto.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>t)</strong> A responder íntegramente por la totalidad de los daños y perjuicios ocasionados directamente a la empresa.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>u)</strong> A no fumar, consumir licor o cualquier alucinógeno dentro de la empresa, o en su defecto llegar embriagado a su puesto de trabajo, o comenzar su jornada laboral bajo los efectos de algún tipo de alucinógeno como Marihuana, Éxtasis, Ketamina, Cocaína, etc.</p>
+                <p style="margin: 4px 0 4px 18px;"><strong>v)</strong> A no tener en el celular personal, información de clientes de las empresas a los cuales AMERIGLOBAL S.A.S les presta el servicio.</p>
 
-      <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>TERCERA: OBLIGACIONES DEL APRENDIZ.</strong> EL APRENDIZ se compromete a: 1. Concurrir puntualmente a las actividades formativas y prácticas programadas; 2. Someterse a los reglamentos internos, normas de seguridad y disciplina de LA EMPRESA PATROCINADORA; 3. Dedicar su mayor empeño y cuidado para el óptimo aprendizaje y desempeño de las labores asignadas; 4. Cuidar escrupulosamente los equipos, programas, herramientas y bienes puestos a su disposición; 5. Guardar estricta reserva y confidencialidad respecto a la información, secretos comerciales y procesos de la compañía y sus clientes; 6. Cumplir cabalmente el Contrato de Confidencialidad anexo al presente documento.</p>
-      </div>
+                <p style="margin-top: 10px;"><strong>PARÁGRAFO:</strong> En caso de que se diligencien los documentos sin el lleno de estos requisitos, o que la información sea falsa, o firmar un documento por otra persona se considera un fraude, por lo tanto, esto es una acción que resulta contraria a la verdad y a la rectitud. El fraude se comete en perjuicio contra otra persona u organización y está penado por la ley. Este concepto se asocia al de estafa, que es un delito contra el patrimonio o la propiedad.</p>
+                <p style="margin-top: 6px;">El delito de estafa está regulado por el <strong>Código Penal en su artículo 246</strong>, el cual manifiesta: <em>“El que obtenga provecho ilícito para sí o para un tercero, con perjuicio ajeno, induciendo o manteniendo a otro en error por medio de artificios o engaños, incurrirá en prisión de dos (2) a ocho (8) años y multa de cincuenta (50) a mil (1.000) salarios mínimos legales mensuales vigentes”</em>. La persona que cometa este delito y al firmar este contrato se entiende y asume que este es el castigo por robo y fraude a la empresa y además obviamente es causal de terminación inmediata de contrato con justa causa se le descontarán los gastos que ocasionó a la empresa para solucionar los daños que ocasionó.</p>
 
-      <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>CUARTA: APOYO DE SOSTENIMIENTO.</strong> LA EMPRESA PATROCINADORA entregará a EL APRENDIZ un apoyo de sostenimiento mensual equivalente a lo indicado en el encabezado. Se deja expresa constancia de que, de conformidad con el artículo 30 de la Ley 789 de 2002, este apoyo en ningún caso constituye salario, ni genera derecho al pago de prestaciones sociales, cesantías, primas o vacaciones.</p>
-      </div>
+                <p style="margin-top: 10px;"><strong>PARÁGRAFO:</strong> De igual manera quedan <strong>PROHIBIDAS</strong> las siguientes conductas:</p>
+                <ul style="margin: 6px 0 6px 20px; padding-left: 10px;">
+                  <li>Llamadas personales en horarios de aprendizaje.</li>
+                  <li>El uso del correo y redes sociales personales en la oficina.</li>
+                  <li>El uso del celular personal dentro de la oficina.</li>
+                  <li>El uso de la página o chat EMPRESARIAL para conversaciones personales.</li>
+                  <li>El envío de mensajes de texto personales en el celular de la EMPRESA.</li>
+                  <li>Utilizar las claves de cuentas con fines diferentes al normal desarrollo de las actividades empresariales cotidianas.</li>
+                  <li>Apropiarse de la base de datos de los clientes y contactos de la empresa para beneficio propio o de terceros.</li>
+                  <li>Hacer negocios o celebrar contratos con clientes de la empresa.</li>
+                  <li>El uso no autorizado de propiedad intelectual de Visas y Trámites Internacionales.</li>
+                </ul>
+              </div>
 
-      <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>QUINTA: DURACIÓN.</strong> La duración del presente contrato será de ${numeroAMesesTexto(c.duracion_meses || 6)}, contados a partir del ${fechaIngresoTexto} hasta el ${fechaFinTexto}.</p>
-      </div>
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>TERCERA: DURACIÓN.</strong> El presente contrato tiene una duración de <strong>${duracionMeses} meses</strong> desde el <strong>${fechaIngresoTexto}</strong> HASTA el <strong>${fechaFinTexto}</strong> (LOS CONTRATOS DE LOS APRENDICES SON DE 6 MESES).</p>
+              </div>
 
-      <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>SEXTA: SUSPENSIÓN Y TERMINACIÓN.</strong> La relación de aprendizaje se podrá suspender o dar por terminada por las causales consagradas en la legislación laboral colombiana y en el Acuerdo 015 de 2003 del SENA, entre ellas: el mutuo acuerdo, el vencimiento del plazo pactado, la cancelación de la matrícula por la institución de formación, el bajo rendimiento comprobado o el incumplimiento grave de las obligaciones y normas internas de la empresa.</p>
-      </div>
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>CUARTA: REGLAMENTO INTERNO DE TRABAJO.</strong> El APRENDIZ acepta y conoce lo que está estipulado en el Reglamento Interno de Trabajo.</p>
+              </div>
 
-      <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.6;">
-        <p><strong>SÉPTIMA: CONTRATO DE CONFIDENCIALIDAD ANEXO.</strong> Las partes convienen que, dada la naturaleza de los procesos y el acceso a bases de datos y sistemas corporativos, la firma del CONTRATO DE CONFIDENCIALIDAD es parte integrante e inescindible de este acuerdo formativo.</p>
-      </div>
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>QUINTA: TERMINACIÓN UNILATERAL.</strong> Son justas causas para dar por terminado unilateralmente este contrato por cualquiera de las partes:</p>
+                <ul style="margin: 6px 0 6px 20px; padding-left: 10px;">
+                  <li>Por tener 3 llamados de atención por cualquier acto cometido en contra del Reglamento Interno de Trabajo o tener 3 llamados de atención por incumplir la Cláusula Segunda (OBLIGACIONES DEL APRENDIZ).</li>
+                  <li>Cuando se cometa fraude y/o estafa o se produzca la divulgación de información confidencial de la empresa o clientes.</li>
+                  <li>Todo acto de violencia, injuria, malos tratamientos o grave indisciplina en que incurra el aprendiz en sus labores, contra el patrono, los miembros de su familia, el personal directivo o los compañeros de trabajo.</li>
+                  <li>Todo acto grave de violencia, injuria o malos tratamientos en que incurra el trabajador fuera del servicio, en contra del patrono, de los miembros de su familia o de sus representantes, y socios, jefes, vigilantes o celadores.</li>
+                  <li>El que el aprendiz revele los secretos técnicos o comerciales o dé a conocer asuntos de carácter reservado, con perjuicio de la empresa.</li>
+                  <li>Todo vicio del aprendiz que perturbe la disciplina del establecimiento.</li>
+                  <li>Además, cualquier acto del aprendiz hacia la empresa o sus superiores tales como: Mala fe, Fraude, mala actitud en su trabajo de prácticas y ante sus jefes, uso de malas palabras, groserías o mal vocabulario, mal comportamiento, llegadas tarde sin justificación.</li>
+                  <li>Que la información sea falsa, o firmar documentos por otra persona, si hay venta de información privada de la empresa a un tercero, manipulación de información en celulares o emails personales, este acto será denunciado ante la FISCALÍA y es causal de despido inmediato con justa causa.</li>
+                </ul>
+              </div>
 
-      <p style="margin-top: 24px; text-align: justify; line-height: 1.6;">
-        Para constancia se firma en dos ejemplares del mismo tenor por las partes en la ciudad de ${c.ciudad_contrato || 'Medellín'} a los ${dia} días del mes de ${mes} de ${anio}.
-      </p>
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>SEXTA: REMUNERACIÓN.</strong> Por la prestación de sus servicios EL EMPLEADOR se obliga a pagar AL APRENDIZ el apoyo de sostenimiento equivalente al <strong>100% de un (1) SMMLV</strong> de acuerdo con lo pactado en el encabezado de este documento y/o en sus anexos, serán pagaderos por transferencia bancaria, en dos quincenas, los días 15 y 30 de cada mes.</p>
+              </div>
 
-      ${generarBloqueFirmasDosColumnas(c, {
-        rolParte1: 'El Empleador',
-        rolParte2: 'EL Aprendiz',
-        rolCargoParte2: `${tipoDoc}. ${numDoc}`,
-        rolFirmaParte2: programa || 'APRENDIZ',
-        esWord,
-      })}
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>SÉPTIMA: JORNADA DE APRENDIZAJE.</strong> Se obliga a la jornada ordinaria en los turnos y dentro de las horas señaladas por EL EMPLEADOR (Horario: <strong>${horario}</strong>).</p>
+              </div>
+
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>OCTAVA PRIMERA: CONFIDENCIALIDAD.</strong> EL APRENDIZ se obliga a guardar absoluta reserva sobre toda la información que adquiera o conozca en razón de su trabajo para EL EMPLEADOR y, se obliga a no utilizar esta fuera de la empresa, a no comunicarlo a terceros en especial, los secretos profesionales, industriales, comerciales y tecnológicos de la empresa como software de operaciones, desarrollos de sistemas, análisis, estudios, bases de datos, diseños, dibujo, sistemas de cálculos, entre otros, o de aquella información de naturaleza reservada, durante la vigencia del contrato y dentro de los <strong>diez (10) años posteriores a su terminación</strong>, con fines diferentes a la prestación de los servicios contratados con EL EMPLEADOR. La violación de esta obligación durante la vigencia del contrato constituye una falta grave que da lugar a la terminación del contrato de aprendizaje, aun por la primera vez. Si esto ocurre finalizado el contrato de trabajo, da lugar al pago de la indemnización de los perjuicios que cause AL EMPLEADOR.</p>
+                <p style="margin-top: 6px;">EL APRENDIZ acepta que la información de carácter confidencial incluye, pero no se limita a toda la información de la compañía y/o de cualquiera de sus clientes y/ o potenciales clientes, como la relacionada con cifras, procedimientos, estrategias (incluidas las publicitarias).</p>
+                <p style="margin-top: 6px;">Se presume como violación del compromiso de confidencialidad y por ende un incumplimiento del presente acuerdo, cualquier utilización o divulgación de la información confidencial con la intención de obtener un provecho personal, directa o indirectamente, lo cual incluye la utilización de la información confidencial en la realización de trabajos o la prestación de servicios a personas naturales o jurídicas que desarrollen actividades similares de la empresa.</p>
+                <p style="margin-top: 6px;">EL APRENDIZ se obliga a devolver toda la información confidencial que tenga en su posesión a la terminación del contrato de aprendizaje como documentos, archivos, informes etc.</p>
+                <p style="margin-top: 6px;">A cualquier incumplimiento en las obligaciones emanadas en el presente contrato de confidencialidad le serán aplicadas las sanciones consagradas en el <strong>artículo 16 de la Ley 256 de 1996</strong> y las acciones consagradas en el <strong>artículo 308 del Código Penal</strong>.</p>
+                <p style="margin-top: 6px;"><strong>PARÁGRAFO:</strong> En consecuencia, de lo anterior y de la naturaleza de las funciones del cargo de EL APRENDIZ, el incumplimiento a esta obligación de confidencialidad se trata como justa causa de terminación del contrato de aprendizaje.</p>
+              </div>
+
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>NOVENA: INVENCIONES.</strong> Las invenciones realizadas por EL APRENDIZ le pertenecen a la empresa siempre y cuando estas sean realizadas con ocasión y dentro de la ejecución del contrato de aprendizaje, y como parte del cumplimiento de las obligaciones del cargo. También lo son aquellas que se obtienen mediante los datos y medios conocidos o utilizados debido a la labor desempeñada.</p>
+              </div>
+
+              <div class="clausula" style="margin-bottom: 14px; text-align: justify; line-height: 1.65;">
+                <p><strong>DÉCIMA PRIMERA: DERECHOS DE AUTOR.</strong> Los derechos patrimoniales de autor sobre las obras creadas por EL APRENDIZ en ejercicio de sus funciones o con ocasión ellas pertenecen AL EMPLEADOR. Todo lo anterior sin perjuicio de los derechos morales de autor que permanecerán en cabeza del creador de la obra, de acuerdo con la Ley 23 de 1982 y la Decisión 351 de la Comisión del Acuerdo de Cartagena.</p>
+              </div>
+
+              <p style="margin-top: 24px; text-align: justify; line-height: 1.6;">
+                Para constancia se firma en dos ejemplares del mismo tenor tanto para EL EMPLEADOR como para EL APRENDIZ en la ciudad de ${ciudadContrato} a los ${dia} días del mes de ${mes.toUpperCase()} de ${anio} (FECHA DE INGRESO).
+              </p>
+
+              ${generarBloqueFirmasDosColumnas(c, {
+                rolParte1: 'El Empleador',
+                rolParte2: 'EL Aprendiz',
+                rolCargoParte2: cargoAprendiz || '',
+                esWord,
+              })}
             </td>
           </tr>
         </tbody>
@@ -1269,7 +1361,7 @@ export function generarHtmlCartaTerminacion(c, datosTerminacion = {}, { esWord =
  * 'completo' | 'principal' | 'confidencialidad' | 'linea_tiempo' | 'carta_terminacion'
  */
 export function generarHtmlDocumento(c, vista = 'completo', datosExtra = {}, opciones = {}) {
-  const esAprendiz = c.tipo_contrato === 'aprendizaje'
+  const esAprendiz = c.tipo_contrato === 'aprendizaje' || (c.cargo && /aprendiz/i.test(c.cargo)) || c.tipo_documento === 'TI'
   const htmlPrincipal = esAprendiz ? generarHtmlContratoAprendizaje(c, opciones) : generarHtmlContratoLaboral(c, opciones)
   const htmlConfidencialidad = generarHtmlConfidencialidad(c, opciones)
 
@@ -1384,7 +1476,13 @@ export function imprimirContrato(c, vista = 'completo', datosExtra = {}) {
         }
         @media print {
           .no-print { display: none !important; }
-          body { padding: 0 !important; margin: 0 !important; }
+          html, body {
+            padding: 0 !important;
+            margin: 0 !important;
+            background: #ffffff !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
           .salto-pagina-impresion {
             page-break-before: always !important;
             break-before: page !important;
@@ -1396,10 +1494,22 @@ export function imprimirContrato(c, vista = 'completo', datosExtra = {}) {
             display: table-header-group !important;
           }
           tr {
-            page-break-inside: auto;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          p, .clausula, ol, ul, li, .parrafo-intro, .parrafo-comparecencia {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+            orphans: 3 !important;
+            widows: 3 !important;
+          }
+          .tabla-datos-contrato {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .firmas-grid, table.tabla-firmas-contrato {
             page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           table.tabla-firmas-contrato, table.tabla-firmas-contrato td {
             border: none !important;

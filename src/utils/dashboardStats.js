@@ -150,10 +150,12 @@ export function calcularDiasPeriodo({ rangoMes, filterAnio, filterMeses, filterP
     return { diasPeriodoBase: dias, diasPeriodoLabel: `año completo ${y} (${dias} días)`, periodoIni: `${y}-01-01`, periodoFin: `${y}-12-31` }
   }
   const conFecha = dataBase.filter(r => r.fecha_inicio)
-  if (!conFecha.length) return { diasPeriodoBase: 30, diasPeriodoLabel: 'sin novedades con fecha (30 días por defecto)', periodoIni: null, periodoFin: hoyISO() }
+  if (!conFecha.length) return { diasPeriodoBase: 30, diasPeriodoLabel: 'sin novedades con fecha (30 días por defecto)', periodoIni: null, periodoFin: null }
   const minFecha = conFecha.reduce((min, r) => (r.fecha_inicio < min ? r.fecha_inicio : min), conFecha[0].fecha_inicio)
   const dias = Math.max(1, Math.round((hoyUTCMidnight - new Date(minFecha).getTime()) / 86400000) + 1)
-  return { diasPeriodoBase: dias, diasPeriodoLabel: `desde ${minFecha} hasta hoy (${dias} días)`, periodoIni: minFecha, periodoFin: hoyISO() }
+  // Cuando no hay filtro de periodo (filtro "Todos"), no se debe recortar con periodoIni/periodoFin
+  // para no truncar días de novedades que terminan a fin de mes o en días futuros.
+  return { diasPeriodoBase: dias, diasPeriodoLabel: `desde ${minFecha} hasta hoy (${dias} días)`, periodoIni: null, periodoFin: null }
 }
 
 // ── Estadísticas derivadas del Dashboard ─────────────────────────────────────

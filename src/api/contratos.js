@@ -99,6 +99,7 @@ function enriquecerContrato(item) {
         if (!res.token_firma && meta.token_firma) res.token_firma = meta.token_firma
         if (!res.ip_firma && meta.ip_firma) res.ip_firma = meta.ip_firma
         if (meta.firmado_por_trabajador !== undefined) res.firmado_por_trabajador = Boolean(meta.firmado_por_trabajador)
+        if (meta.firmado_por_empleador !== undefined) res.firmado_por_empleador = Boolean(meta.firmado_por_empleador)
         if (meta.empleado_registrado !== undefined) res.empleado_registrado = Boolean(meta.empleado_registrado)
         if (meta.novedad_ingreso_registrada !== undefined) res.novedad_ingreso_registrada = Boolean(meta.novedad_ingreso_registrada)
       } catch {
@@ -141,6 +142,7 @@ function normalizarPayloadContrato(payload = {}, empresa = 'ameriglobal') {
     token_firma: out.token_firma || '',
     ip_firma: out.ip_firma || '',
     firmado_por_trabajador: Boolean(out.firma_trabajador || out.firmado_por_trabajador),
+    firmado_por_empleador: Boolean(out.firmado_por_empleador),
     empleado_registrado: Boolean(out.empleado_registrado),
     novedad_ingreso_registrada: Boolean(out.novedad_ingreso_registrada),
   }
@@ -391,8 +393,27 @@ export async function firmarContratoEmpleado(id, datosFirma = {}, empresa = null
     fecha_firma_trabajador: fechaFirma,
     ip_firma: datosFirma.ip_firma || '',
     firmado_por_trabajador: true,
+    firmado_por_empleador: true, // Por confidencialidad: se estampa la firma del representante legal automáticamente tras la firma del colaborador
   }
 
+  const { data, error } = await actualizarContrato(id, payloadActualizado, empresaDestino)
+  if (error) throw error
+  return data?.[0] || payloadActualizado
+}
+
+/**
+ * Permite a la empresa colocar manualmente la firma del Representante Legal (ej. para imprimir).
+ */
+export async function colocarFirmaEmpleador(id, empresa = null) {
+  const { data: contratoExistente } = await obtenerContrato(id, empresa)
+  if (!contratoExistente) {
+    throw new Error('Contrato no encontrado en el sistema.')
+  }
+  const empresaDestino = contratoExistente.empresa || empresa || 'ameriglobal'
+  const payloadActualizado = {
+    ...contratoExistente,
+    firmado_por_empleador: true,
+  }
   const { data, error } = await actualizarContrato(id, payloadActualizado, empresaDestino)
   if (error) throw error
   return data?.[0] || payloadActualizado

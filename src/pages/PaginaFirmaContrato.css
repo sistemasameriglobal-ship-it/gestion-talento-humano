@@ -338,8 +338,9 @@
 .firma-visor-paper-wrapper {
   background: #090D16;
   padding: 24px 20px;
-  max-height: 560px;
+  max-height: 75vh;
   overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .firma-documento-paper {

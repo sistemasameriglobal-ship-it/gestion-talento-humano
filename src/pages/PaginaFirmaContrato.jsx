@@ -15,8 +15,6 @@ import {
 } from '../api/contratos'
 import {
   generarHtmlDocumento,
-  descargarComoWord,
-  imprimirContrato,
 } from '../utils/contratosTemplates'
 import {
   FileSignature,
@@ -29,9 +27,8 @@ import {
   DollarSign,
   Building2,
   Check,
+  CheckCircle2,
   RotateCcw,
-  Download,
-  Printer,
   ShieldCheck,
   AlertCircle,
   Loader2,
@@ -303,6 +300,177 @@ export default function PaginaFirmaContrato() {
     )
   }
 
+  // PANTALLA DE ÉXITO CUANDO YA ESTÁ FIRMADO
+  // Por estricta confidencialidad de la empresa, no se muestra el contrato con la firma del representante legal en esta vista pública
+  if (exitoFirma) {
+    return (
+      <div className="firma-page-root">
+        {/* Barra superior institucional */}
+        <header className="firma-navbar">
+          <div className="firma-navbar-container">
+            <div className="firma-navbar-brand">
+              <div className="firma-navbar-logo-badge">
+                <FileSignature size={22} />
+              </div>
+              <div>
+                <span className="firma-navbar-company">
+                  {contrato.razon_social || 'AmeriGlobal S.A.S'}
+                </span>
+                <span className="firma-navbar-portal-name">
+                  Portal Oficial de Firma Digital de Contratos
+                </span>
+              </div>
+            </div>
+
+            <div className="firma-legal-badge">
+              <ShieldCheck size={16} />
+              <span>Validez Legal (Ley 527 de 1999)</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Contenido principal centrado con tarjeta de éxito */}
+        <main className="firma-main-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 180px)', padding: '32px 16px' }}>
+          <div style={{
+            maxWidth: 600,
+            width: '100%',
+            background: '#1E293B',
+            border: '1px solid #334155',
+            borderRadius: 20,
+            padding: '36px 30px',
+            textAlign: 'center',
+            boxShadow: '0 20px 45px rgba(0,0,0,0.35)',
+            color: '#F8FAFC'
+          }}>
+            <div style={{
+              width: 76,
+              height: 76,
+              borderRadius: '50%',
+              background: '#064E3B',
+              border: '2px solid #10B981',
+              color: '#34D399',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px auto',
+              boxShadow: '0 0 25px rgba(16, 185, 129, 0.25)'
+            }}>
+              <CheckCircle2 size={44} />
+            </div>
+
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 10px 0', color: '#FFFFFF' }}>
+              ¡Contrato Firmado con Éxito!
+            </h1>
+
+            <p style={{ fontSize: 14.5, color: '#94A3B8', lineHeight: 1.6, margin: '0 0 24px 0' }}>
+              Tu firma digital ha sido registrada y procesada satisfactoriamente en el sistema.
+            </p>
+
+            {/* Ficha resumen informativa */}
+            <div style={{
+              background: '#0F172A',
+              border: '1px solid #334155',
+              borderRadius: 14,
+              padding: '18px 20px',
+              textAlign: 'left',
+              marginBottom: 22,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1E293B', paddingBottom: 10 }}>
+                <span style={{ fontSize: 12.5, color: '#94A3B8' }}>Colaborador:</span>
+                <strong style={{ fontSize: 13.5, color: '#F1F5F9' }}>{contrato.nombre_trabajador}</strong>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1E293B', paddingBottom: 10 }}>
+                <span style={{ fontSize: 12.5, color: '#94A3B8' }}>Documento de Identidad:</span>
+                <span style={{ fontSize: 13, color: '#CBD5E1', fontWeight: 600 }}>{contrato.tipo_documento} {contrato.numero_documento}</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1E293B', paddingBottom: 10 }}>
+                <span style={{ fontSize: 12.5, color: '#94A3B8' }}>Cargo a Desempeñar:</span>
+                <span style={{ fontSize: 13, color: '#60A5FA', fontWeight: 700 }}>{contrato.cargo || '—'}</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1E293B', paddingBottom: 10 }}>
+                <span style={{ fontSize: 12.5, color: '#94A3B8' }}>Documentos Suscritos:</span>
+                <span style={{ fontSize: 12.5, color: '#A7F3D0', fontWeight: 700 }}>Contrato Laboral y Confidencialidad</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12.5, color: '#94A3B8' }}>Fecha y Hora de Firma:</span>
+                <span style={{ fontSize: 12.5, color: '#34D399', fontWeight: 700 }}>{contrato.fecha_firma_trabajador || 'Registrada exitosamente'}</span>
+              </div>
+            </div>
+
+            {/* Aviso de Confidencialidad y Custodia Documental */}
+            <div style={{
+              background: '#0B2027',
+              border: '1px solid #164E63',
+              borderRadius: 12,
+              padding: '14px 16px',
+              textAlign: 'left',
+              display: 'flex',
+              gap: 12,
+              alignItems: 'flex-start',
+              marginBottom: 24,
+            }}>
+              <ShieldCheck size={20} color="#22D3EE" style={{ flexShrink: 0, marginTop: 2 }} />
+              <div style={{ fontSize: 12.5, color: '#CFFAFE', lineHeight: 1.5 }}>
+                <strong>Custodia y Formalización Documental:</strong> Tu expediente ha sido radicado ante Gestión del Talento Humano. La copia legalizada y finalizada te será entregada por el equipo de Talento Humano de AmeriGlobal S.A.S.
+              </div>
+            </div>
+
+            <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px 0' }}>
+              ✓ Has finalizado el proceso de firma. Ya puedes cerrar esta ventana con total tranquilidad.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (window.opener) {
+                  window.close()
+                } else {
+                  window.location.href = 'about:blank'
+                }
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '11px 24px',
+                borderRadius: 10,
+                background: '#334155',
+                color: '#F8FAFC',
+                border: '1px solid #475569',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#475569' }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#334155' }}
+            >
+              Cerrar esta Ventana
+            </button>
+          </div>
+        </main>
+
+        {/* Pie de página */}
+        <footer className="firma-footer">
+          <p style={{ margin: 0, fontWeight: 600 }}>
+            Sistema de Gestión de Talento Humano — {contrato.razon_social || 'AmeriGlobal S.A.S'}
+          </p>
+          <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#64748B' }}>
+            Documento electrónico con plena validez probatoria legal (Ley 527 de 1999).
+          </p>
+        </footer>
+      </div>
+    )
+  }
+
   const htmlVisualizar = generarHtmlDocumento(contrato, activeTab)
   const esAprendiz = contrato.tipo_contrato === 'aprendizaje'
   const tituloContrato = esAprendiz ? 'Contrato de Aprendizaje (Ley 789)' : 'Contrato Laboral a Término Fijo'
@@ -336,56 +504,6 @@ export default function PaginaFirmaContrato() {
       {/* Contenedor principal */}
       <main className="firma-main-content">
 
-        {/* Banner de Éxito cuando ya está firmado */}
-        {exitoFirma && (
-          <div className="firma-banner-success">
-            <div className="firma-banner-success-left">
-              <div className="firma-banner-success-icon">
-                <FileCheck2 size={26} />
-              </div>
-              <div>
-                <h2 className="firma-banner-success-title">
-                  ¡Contratos Legalizados y Firmados!
-                </h2>
-                <p className="firma-banner-success-desc">
-                  Tu firma digital fue estampada exitosamente en el <strong>Contrato Laboral</strong> y en el <strong>Acuerdo de Confidencialidad</strong> el <strong>{contrato.fecha_firma_trabajador || 'Fecha registrada'}</strong>.
-                </p>
-              </div>
-            </div>
-
-            {/* Botones de descarga y consulta */}
-            <div className="firma-download-actions">
-              <button
-                type="button"
-                onClick={() => descargarComoWord(contrato, 'principal')}
-                className="firma-btn-download"
-                title="Descargar Contrato Laboral en Word"
-              >
-                <Download size={14} color="#60A5FA" />
-                <span>Contrato (.docx)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => descargarComoWord(contrato, 'confidencialidad')}
-                className="firma-btn-download"
-                title="Descargar Acuerdo de Confidencialidad en Word"
-              >
-                <Download size={14} color="#FBBF24" />
-                <span>Confidencialidad (.docx)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => imprimirContrato(contrato, 'completo')}
-                className="firma-btn-print"
-                title="Imprimir o guardar como PDF"
-              >
-                <Printer size={14} />
-                <span>Imprimir / PDF</span>
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Ficha Resumen del Colaborador y Cargo */}
         <div className="firma-card-colaborador">
           <div className="firma-card-colaborador-top">
@@ -417,7 +535,7 @@ export default function PaginaFirmaContrato() {
               <span className="firma-stat-label">Cargo a desempeñar</span>
               <span className="firma-stat-value">
                 <Briefcase size={15} color="#60A5FA" style={{ flexShrink: 0 }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.3 }}>
                   {contrato.cargo || '—'}
                 </span>
               </span>
@@ -425,7 +543,7 @@ export default function PaginaFirmaContrato() {
 
             <div className="firma-stat-item">
               <span className="firma-stat-label">Tipo de Vinculación</span>
-              <span className="firma-stat-value" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span className="firma-stat-value" style={{ wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.3 }}>
                 {tituloContrato}
               </span>
             </div>
@@ -466,7 +584,7 @@ export default function PaginaFirmaContrato() {
                 onClick={() => setActiveTab('principal')}
                 className={`firma-tab-btn ${activeTab === 'principal' ? 'active' : ''}`}
               >
-                1. Contrato Laboral
+                {esAprendiz ? '1. Contrato Aprendizaje' : '1. Contrato Laboral'}
               </button>
               <button
                 type="button"
@@ -492,9 +610,8 @@ export default function PaginaFirmaContrato() {
           </div>
         </div>
 
-        {/* Sección de Firma Manuscrita (Solo si no ha sido firmado) */}
-        {!exitoFirma ? (
-          <div className="firma-card-pad">
+        {/* Sección de Firma Manuscrita */}
+        <div className="firma-card-pad">
             <div className="firma-pad-header">
               <div className="firma-pad-icon">
                 <FileSignature size={24} />
@@ -585,41 +702,6 @@ export default function PaginaFirmaContrato() {
               </button>
             </div>
           </div>
-        ) : (
-          /* Card mostrando la firma registrada */
-          <div className="firma-card-registrada">
-            <h3 style={{ fontSize: 15, fontWeight: 800, margin: '0 0 14px 0', color: '#ffffff', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Check size={18} color="#34D399" />
-              <span>Firma Digital Registrada en Expediente</span>
-            </h3>
-
-            <div className="firma-card-registrada-content">
-              <div>
-                <p style={{ margin: 0, fontSize: 12, color: '#94A3B8' }}>Firmado por:</p>
-                <p style={{ margin: '2px 0 8px 0', fontSize: 15, fontWeight: 700, color: '#F8FAFC' }}>{contrato.nombre_trabajador}</p>
-                <p style={{ margin: 0, fontSize: 12, color: '#94A3B8' }}>Identificación:</p>
-                <p style={{ margin: '2px 0 8px 0', fontSize: 13, fontWeight: 600, color: '#E2E8F0' }}>{contrato.tipo_documento} {contrato.numero_documento}</p>
-                <p style={{ margin: 0, fontSize: 12, color: '#94A3B8' }}>Fecha y hora de registro:</p>
-                <p style={{ margin: '2px 0 0 0', fontSize: 13, fontWeight: 700, color: '#34D399' }}>{contrato.fecha_firma_trabajador || 'Fecha registrada'}</p>
-              </div>
-
-              <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: 11.5, color: '#94A3B8', display: 'block', marginBottom: 6 }}>Estampa de firma manuscrita:</span>
-                <div className="firma-stamp-img-box">
-                  {contrato.firma_trabajador ? (
-                    <img
-                      src={contrato.firma_trabajador}
-                      alt="Firma del colaborador"
-                      className="firma-stamp-img"
-                    />
-                  ) : (
-                    <span style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>Firma registrada</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
       </main>
 

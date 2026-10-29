@@ -23,12 +23,13 @@ import ModalCompartirFirma from '../components/contratos/ModalCompartirFirma'
 import ModalFinalizarContrato from '../components/contratos/ModalFinalizarContrato'
 import ModalRegistrarEmpleado from '../components/contratos/ModalRegistrarEmpleado'
 import ModalDesistirContrato from '../components/contratos/ModalDesistirContrato'
+import ModalFirmaRepresentante from '../components/contratos/ModalFirmaRepresentante'
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
 import * as contratosApi from '../api/contratos'
 import * as empleadosApi from '../api/empleados'
 import * as novedadesApi from '../api/novedades'
 import { calcularCiclosYProrroga } from '../utils/contratosTemplates'
-import { FileSignature, Plus, Search, Filter, RefreshCw, X, ShieldAlert } from 'lucide-react'
+import { FileSignature, Plus, Search, Filter, RefreshCw, X, ShieldAlert, PenTool } from 'lucide-react'
 import '../components/contratos/contratos.css'
 
 export default function Contratos() {
@@ -51,6 +52,7 @@ export default function Contratos() {
   const [contratoParaEliminar, setContratoParaEliminar] = useState(null)
   const [contratoParaRegistrar, setContratoParaRegistrar] = useState(null)
   const [contratoParaDesistir, setContratoParaDesistir] = useState(null)
+  const [modalFirmaRepOpen, setModalFirmaRepOpen] = useState(false)
   const [msg, setMsg] = useState(null)
 
   const cargarDatos = useCallback(async () => {
@@ -267,8 +269,13 @@ export default function Contratos() {
       }
 
       // Filtro tipo
-      if (filtroTipo && c.tipo_contrato !== filtroTipo) {
-        return false
+      if (filtroTipo) {
+        if (filtroTipo === 'fin_de_semana') {
+          const esFinDeSemana = /fin.*semana|s[aá]bado.*domingo/i.test(c.jornada_laboral || '') || /fin.*semana|s[aá]bado.*domingo/i.test(c.horario || '')
+          if (!esFinDeSemana) return false
+        } else if (c.tipo_contrato !== filtroTipo) {
+          return false
+        }
       }
 
       // Filtro estado / ciclo
@@ -335,14 +342,39 @@ export default function Contratos() {
         />
 
         {puedeEditar && (
-          <button
-            type="button"
-            className="btn-nuevo-contrato"
-            onClick={() => { setContratoParaEditar(null); setFormOpen(true) }}
-          >
-            <Plus size={18} />
-            <span>Nuevo Contrato</span>
-          </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setModalFirmaRepOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '9px 15px',
+                borderRadius: 8,
+                border: '1.5px solid #BBF7D0',
+                background: '#F0FDF4',
+                color: '#15803D',
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title="Subir foto de la firma o configurar la firma del Representante Legal"
+            >
+              <PenTool size={16} />
+              <span>✍️ Firma Rep. Legal</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn-nuevo-contrato"
+              onClick={() => { setContratoParaEditar(null); setFormOpen(true) }}
+            >
+              <Plus size={18} />
+              <span>Nuevo Contrato</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -380,6 +412,7 @@ export default function Contratos() {
             <option value="">Todos los Tipos</option>
             <option value="termino_fijo_menor_anio">⏱️ Término Fijo (Renovable c/3 meses)</option>
             <option value="aprendizaje">🎓 Contrato de Aprendizaje</option>
+            <option value="fin_de_semana">🗓️ Fines de Semana (Término Fijo)</option>
           </select>
 
           <select
@@ -501,6 +534,15 @@ export default function Contratos() {
           message={`¿Estás seguro de que deseas eliminar el contrato de "${contratoParaEliminar.nombre_trabajador}"? Esta acción removerá el registro del contrato y su confidencialidad vinculada.`}
         />
       )}
+
+      {/* MODAL CONFIGURAR / SUBIR FOTO FIRMA REPRESENTANTE LEGAL */}
+      <ModalFirmaRepresentante
+        open={modalFirmaRepOpen}
+        onClose={() => setModalFirmaRepOpen(false)}
+        onFirmaGuardada={() => {
+          cargarDatos()
+        }}
+      />
     </div>
   )
 }

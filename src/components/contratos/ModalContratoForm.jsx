@@ -483,7 +483,14 @@ export default function ModalContratoForm({
             </label>
             <select
               value={formData.tipo_documento}
-              onChange={e => setFormData({ ...formData, tipo_documento: e.target.value })}
+              onChange={e => {
+                const val = e.target.value
+                setFormData(prev => ({
+                  ...prev,
+                  tipo_documento: val,
+                  ...(val === 'TI' ? { tipo_contrato: 'aprendizaje', duracion_meses: 6, ...calcularFinYPrueba(prev.fecha_ingreso, 6) } : {})
+                }))
+              }}
               style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
             >
               <option value="CC">Cédula de Ciudadanía (CC)</option>
@@ -554,10 +561,16 @@ export default function ModalContratoForm({
                 } else {
                   setModoOtroCargo(false)
                   const cargoObj = cargosCompletos?.find(c => c.nombre === val)
+                  const esAprendizCargo = /aprendiz/i.test(val)
                   setFormData(prev => ({
                     ...prev,
                     cargo: val,
                     dependencia: (!prev.dependencia && cargoObj?.departamento) ? cargoObj.departamento : prev.dependencia,
+                    ...(esAprendizCargo ? {
+                      tipo_contrato: 'aprendizaje',
+                      duracion_meses: 6,
+                      ...calcularFinYPrueba(prev.fecha_ingreso, 6),
+                    } : {})
                   }))
                 }
               }}
@@ -923,16 +936,121 @@ export default function ModalContratoForm({
 
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-              Horario / Turno
+              Jornada Laboral *
             </label>
-            <input
-              type="text"
-              value={formData.horario}
-              onChange={e => setFormData({ ...formData, horario: e.target.value })}
-              placeholder="9:00 AM - 6:00 PM"
-              style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
-            />
+            <select
+              value={formData.jornada_laboral || 'Diurno'}
+              onChange={e => {
+                const val = e.target.value
+                const esFinSem = /fin.*semana/i.test(val)
+                setFormData(prev => ({
+                  ...prev,
+                  jornada_laboral: val,
+                  ...(esFinSem && (!prev.horario || prev.horario === '9:00 AM - 6:00 PM')
+                    ? { horario: 'Sábados, Domingos y Festivos: 8:00 AM - 5:00 PM' }
+                    : {})
+                }))
+              }}
+              style={{
+                width: '100%',
+                padding: '7px 10px',
+                borderRadius: 8,
+                border: '1.5px solid var(--border)',
+                background: /fin.*semana/i.test(formData.jornada_laboral) ? '#FEF3C7' : 'var(--bg)',
+                color: /fin.*semana/i.test(formData.jornada_laboral) ? '#92400E' : 'var(--text)',
+                fontWeight: /fin.*semana/i.test(formData.jornada_laboral) ? 800 : 500,
+              }}
+            >
+              <option value="Diurno">☀️ Diurno (Semana Ordinaria)</option>
+              <option value="Fin de Semana">🗓️ Fin de Semana (Sábados, Domingos y Festivos)</option>
+            </select>
           </div>
+        </div>
+
+        {/* HORARIO Y PRESETS DE JORNADA */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+              Horario / Turno de Trabajo
+            </label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sugerencias:</span>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, jornada_laboral: 'Fin de Semana', horario: 'Sábados, Domingos y Festivos: 8:00 AM - 5:00 PM' })}
+                style={{
+                  fontSize: 10.5,
+                  padding: '2px 7px',
+                  borderRadius: 5,
+                  border: '1px solid #FDE68A',
+                  background: '#FEF3C7',
+                  color: '#92400E',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                🗓️ Fin de Semana (8am - 5pm)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, jornada_laboral: 'Fin de Semana', horario: 'Sábados y Domingos: 8:00 AM - 6:00 PM' })}
+                style={{
+                  fontSize: 10.5,
+                  padding: '2px 7px',
+                  borderRadius: 5,
+                  border: '1px solid #FDE68A',
+                  background: '#FEF3C7',
+                  color: '#92400E',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                🗓️ Sáb y Dom (8am - 6pm)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, jornada_laboral: 'Diurno', horario: '9:00 AM - 6:00 PM' })}
+                style={{
+                  fontSize: 10.5,
+                  padding: '2px 7px',
+                  borderRadius: 5,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                ☀️ Lunes a Viernes (9am - 6pm)
+              </button>
+            </div>
+          </div>
+          <input
+            type="text"
+            value={formData.horario}
+            onChange={e => setFormData({ ...formData, horario: e.target.value })}
+            placeholder="Ej. Sábados, Domingos y Festivos: 8:00 AM - 5:00 PM"
+            style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+          />
+
+          {/fin.*semana/i.test(formData.jornada_laboral || formData.horario) && (
+            <div style={{
+              marginTop: 6,
+              background: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              borderRadius: 6,
+              padding: '6px 10px',
+              fontSize: 11.5,
+              color: '#92400E',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <span>💡</span>
+              <span>
+                <strong>Contrato Fines de Semana activo:</strong> La <strong>Cláusula Novena</strong> del contrato se adaptará automáticamente a la modalidad de fines de semana y festivos bajo término fijo inferior a un año.
+              </span>
+            </div>
+          )}
         </div>
 
         {/* VINCULACIÓN CONTRATO DE CONFIDENCIALIDAD */}

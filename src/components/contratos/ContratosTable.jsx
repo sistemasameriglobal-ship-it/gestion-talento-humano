@@ -20,7 +20,6 @@ import {
   UserX,
   Sparkles,
   UserPlus,
-  XCircle,
   Link2,
   FileCheck2,
 } from 'lucide-react'
@@ -77,7 +76,8 @@ export default function ContratosTable({
           </thead>
           <tbody>
             {contratos.map(c => {
-              const esAprendiz = c.tipo_contrato === 'aprendizaje'
+              const esAprendiz = c.tipo_contrato === 'aprendizaje' || (c.cargo && /aprendiz/i.test(c.cargo)) || c.tipo_documento === 'TI'
+              const esFinDeSemana = /fin.*semana|s[aá]bado.*domingo/i.test(c.jornada_laboral || '') || /fin.*semana|s[aá]bado.*domingo/i.test(c.horario || '')
               const esPendienteEmpleado = c.estado === 'pendiente_empleado'
               const esDesistido = c.estado === 'desistido'
               const esFinalizado = c.estado === 'finalizado'
@@ -261,6 +261,18 @@ export default function ContratosTable({
                         {c.institucion_educativa} ({c.etapa_aprendizaje || 'Productiva'})
                       </div>
                     )}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 3 }}>
+                      {esFinDeSemana && (
+                        <div style={{ fontSize: 10.5, color: '#B45309', display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FEF3C7', border: '1px solid #FDE68A', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                          <span>🗓️ Fin de Semana</span>
+                        </div>
+                      )}
+                      {c.horario && (
+                        <div style={{ fontSize: 11, color: '#4338CA', display: 'inline-flex', alignItems: 'center', gap: 4, background: '#EEF2FF', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>
+                          <span>🕒 {c.horario}</span>
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   {/* Vigencia & Renovación */}
@@ -352,22 +364,6 @@ export default function ContratosTable({
                         </button>
                       ) : null}
 
-                      {/* BOTÓN DESISTIÓ (Si aún no está en empleados y es candidato) */}
-                      {puedeEditar && !tieneEmpleadoAsociado && (esPendienteEmpleado || !esFirmado) && !esFinalizado && !esDesistido && onDesistirContrato && (
-                        <button
-                          type="button"
-                          onClick={() => onDesistirContrato(c)}
-                          title="Marcar como desistido (la persona no asistió o declinó el empleo)"
-                          style={{
-                            padding: '6px 9px', borderRadius: 7, border: '1px solid #E5E7EB',
-                            background: '#F9FAFB', color: '#6B7280', cursor: 'pointer',
-                            display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600,
-                          }}
-                        >
-                          <XCircle size={13} />
-                          <span>Desistió</span>
-                        </button>
-                      )}
 
                       {/* BOTÓN COMPARTIR ENLACE DE FIRMA */}
                       {onCompartirFirma && !esFinalizado && !esDesistido && (
