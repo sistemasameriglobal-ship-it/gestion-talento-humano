@@ -30,15 +30,15 @@ export function aFechaInputDate(val) {
  * Calcula la cantidad de días hábiles de vacaciones entre dos fechas (lunes a sábado),
  * omitiendo domingos y festivos oficiales de Colombia según la normativa laboral (Art. 177 y 186 CST).
  */
-export function calcularDiasHabiles(fechaInicio, fechaFin) {
+export function calcularDiasHabiles(fechaInicio, fechaFin, opciones = {}) {
   if (!fechaInicio || !fechaFin) return ''
   const cleanInicio = String(fechaInicio).trim().slice(0, 10)
   const cleanFin = String(fechaFin).trim().slice(0, 10)
-  return diasHabilesEntre(cleanInicio, cleanFin)
+  return diasHabilesEntre(cleanInicio, cleanFin, opciones)
 }
 
-export function calcDias(inicio, fin) {
-  return calcularDiasHabiles(inicio, fin)
+export function calcDias(inicio, fin, opciones = {}) {
+  return calcularDiasHabiles(inicio, fin, opciones)
 }
 
 export { calcularFechaFinVacaciones, obtenerFestivosEnRango, getFestivosColDetalle, getFestivosCol }
@@ -455,7 +455,7 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
       const dinero = parseFloat(v.dias_en_dinero || v.dias_dinero) || (v.tipo_vacacion === 'Vacaciones en dinero' ? (parseFloat(v.total_dias || v.dias_solicitados) || 15) : 0)
       const tiempo = v.tipo_vacacion === 'Vacaciones en dinero' ? 0 : (
         parseFloat(v.dias_disfrutados || v.dias_tiempo) || parseFloat(v.total_dias || v.dias_solicitados) || (
-          (v.fecha_inicio && v.fecha_fin) ? (diasHabilesEntre(v.fecha_inicio, v.fecha_fin) || 0) : 0
+          (v.fecha_inicio && v.fecha_fin) ? (diasHabilesEntre(v.fecha_inicio, v.fecha_fin, { periodo: rawPeriodo }) || 0) : 0
         )
       )
 
@@ -477,10 +477,11 @@ export function obtenerPeriodosVacacionesEmpleado(empleado, solicitudesVacacione
   )
 
   solicitudesNoAsignadas.forEach(v => {
+    const rawPeriodo = v.periodo_vacaciones || v.ciclo_vacaciones || v.periodo
     const dinero = parseFloat(v.dias_en_dinero || v.dias_dinero) || (v.tipo_vacacion === 'Vacaciones en dinero' ? (parseFloat(v.total_dias || v.dias_solicitados) || 15) : 0)
     const tiempo = v.tipo_vacacion === 'Vacaciones en dinero' ? 0 : (
       parseFloat(v.dias_disfrutados || v.dias_tiempo) || parseFloat(v.total_dias || v.dias_solicitados) || (
-        (v.fecha_inicio && v.fecha_fin) ? (diasHabilesEntre(v.fecha_inicio, v.fecha_fin) || 0) : 0
+        (v.fecha_inicio && v.fecha_fin) ? (diasHabilesEntre(v.fecha_inicio, v.fecha_fin, { periodo: rawPeriodo }) || 0) : 0
       )
     )
 

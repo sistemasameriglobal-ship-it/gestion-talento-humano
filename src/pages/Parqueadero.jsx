@@ -127,7 +127,14 @@ export default function Parqueadero() {
     if (!form.mes || !form.anio)
       return setMsg({type:'error',text:'Selecciona el mes y el año del registro.'})
     setSaving(true)
-    const cleanForm = { ...form, placa: form.placa.toUpperCase(), fecha_ingreso: form.fecha_ingreso||null, fecha_retiro: form.fecha_retiro||null, fecha_envio_reporte: form.fecha_envio_reporte||null }
+    const cleanForm = { 
+      ...form, 
+      tipo: String(form.tipo || '').trim().toUpperCase(),
+      placa: form.placa ? form.placa.trim().toUpperCase() : '', 
+      fecha_ingreso: form.fecha_ingreso||null, 
+      fecha_retiro: form.fecha_retiro||null, 
+      fecha_envio_reporte: form.fecha_envio_reporte||null 
+    }
     try {
       if (modal==='add') {
         const { error } = await parqueaderoApi.crearRegistroParqueadero(omit(['id', 'created_at'], cleanForm), currentCompany)
@@ -140,7 +147,15 @@ export default function Parqueadero() {
       setModal(null); load()
       setTimeout(()=>setMsg(null),3000)
     } catch(e) {
-      setMsg({type:'error',text:e.message||'Error al guardar.'})
+      const errMsg = e.message || ''
+      if (errMsg.includes('registros_parqueadero_tipo_check')) {
+        setMsg({
+          type: 'error',
+          text: 'La base de datos aún no tiene habilitado el tipo "' + cleanForm.tipo + '". Por favor ejecuta en Supabase SQL el script SQL/27_PARQUEADERO_PERMITIR_BICICLETA.sql.'
+        })
+      } else {
+        setMsg({type:'error',text:errMsg || 'Error al guardar.'})
+      }
     } finally { setSaving(false) }
   }
 

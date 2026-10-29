@@ -85,10 +85,16 @@ export function getFestivosCol(year) {
 }
 
 /**
- * Calcula la cantidad de días hábiles entre dos fechas (lunes a sábado),
- * excluyendo domingos y festivos oficiales de Colombia (Art. 177 y 186 CST).
+ * Calcula la cantidad de días hábiles entre dos fechas.
+ * Regla general (< 2026): lunes a sábado excluyendo domingos y festivos oficiales (Art. 177 y 186 CST).
+ * Regla 2026 (Reforma Laboral / Periodos 2026): se maneja un sábado como día hábil y el siguiente
+ * sábado NO se cuenta como día hábil (sábados alternados: 1er sábado hábil, 2do no hábil, 3ero hábil...).
+ *
+ * @param {string} inicio - Fecha inicio YYYY-MM-DD
+ * @param {string} fin - Fecha fin YYYY-MM-DD
+ * @param {Object|string} [opciones] - Objeto de opciones o string de periodo (ej. { periodo: '2025-2026' })
  */
-export function diasHabilesEntre(inicio, fin) {
+export function diasHabilesEntre(inicio, fin, opciones = {}) {
   if (!inicio || !fin) return ''
   const cleanInicio = String(inicio).trim().slice(0, 10)
   const cleanFin = String(fin).trim().slice(0, 10)
@@ -101,17 +107,38 @@ export function diasHabilesEntre(inicio, fin) {
   const end = new Date(partsFin[0], partsFin[1] - 1, partsFin[2], 12, 0, 0)
   if (end < cur) return ''
 
+  const periodoOpt = typeof opciones === 'string' ? opciones : (opciones?.periodo || opciones?.periodo_vacaciones || opciones?.ciclo_vacaciones || '')
+  const es2026 = (periodoOpt && String(periodoOpt).includes('2026')) || partsIni[0] >= 2026
+
   let count = 0
+  let sabadoIndex = 0
   const yearsSeen = new Set()
   const festivosCache = {}
 
   while (cur <= end) {
     const y = cur.getFullYear()
     if (!yearsSeen.has(y)) { festivosCache[y] = getFestivosCol(y); yearsSeen.add(y) }
-    const dow = cur.getDay()
+    const dow = cur.getDay() // 0 = Domingo, 6 = Sábado
     const iso = `${y}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
-    // Lunes(1) a Sábado(6), sin festivos
-    if (dow !== 0 && !festivosCache[y].has(iso)) count++
+    const esFestivo = festivosCache[y].has(iso)
+
+    if (dow !== 0 && !esFestivo) {
+      if (dow === 6) {
+        if (iso < '2026-06-01') {
+          // Antes de junio de 2026: todos los sábados no festivos cuentan como día hábil
+          count++
+        } else {
+          // Desde junio de 2026 en adelante: regla de sábados alternados
+          // (1er sábado es hábil, 2do no hábil, 3ero hábil, etc.)
+          sabadoIndex++
+          if (sabadoIndex % 2 === 1) {
+            count++
+          }
+        }
+      } else {
+        count++
+      }
+    }
     cur.setDate(cur.getDate() + 1)
   }
   return count
@@ -161,10 +188,19 @@ export function obtenerFestivosEnRango(inicio, fin) {
 }
 
 /**
- * Dada una fecha de inicio y una cantidad de días hábiles de vacaciones (lunes a sábado excluyendo festivos),
+ * Dada una fecha de inicio y una cantidad de días hábiles de vacaciones,
  * calcula la fecha de fin (último día de vacaciones del trabajador).
+ *
+ * Para periodos en 2026 (o que inicien en 2026), aplica la regla de sábados alternados:
+ * - 1er sábado cuenta como hábil (ej: en 6 días de vacaciones el sábado sí es hábil).
+ * - 2do sábado NO cuenta como hábil (ej: en 15 días el 2do sábado no se cuenta y amplía la fecha).
+ * - 3er sábado cuenta como hábil, 4to no, etc.
+ *
+ * @param {string} fechaInicio - Fecha de inicio YYYY-MM-DD
+ * @param {number|string} diasHabiles - Cantidad de días hábiles solicitados
+ * @param {Object|string} [opciones] - Periodo o configuración adicional
  */
-export function calcularFechaFinVacaciones(fechaInicio, diasHabiles) {
+export function calcularFechaFinVacaciones(fechaInicio, diasHabiles, opciones = {}) {
   const d = parseFloat(diasHabiles)
   if (!fechaInicio || isNaN(d) || d <= 0) return ''
   const clean = String(fechaInicio).trim().slice(0, 10)
@@ -174,7 +210,11 @@ export function calcularFechaFinVacaciones(fechaInicio, diasHabiles) {
   const cur = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0)
   const festivosCache = {}
   let contados = 0
+  let sabadoIndex = 0
   let ultimaFechaValida = clean
+
+  const periodoOpt = typeof opciones === 'string' ? opciones : (opciones?.periodo || opciones?.periodo_vacaciones || opciones?.ciclo_vacaciones || '')
+  const es2026 = (periodoOpt && String(periodoOpt).includes('2026')) || parts[0] >= 2026
 
   const fmtISO = (dt) => {
     const y = dt.getFullYear()
@@ -188,13 +228,30 @@ export function calcularFechaFinVacaciones(fechaInicio, diasHabiles) {
   while (contados < meta) {
     const y = cur.getFullYear()
     if (!festivosCache[y]) festivosCache[y] = getFestivosCol(y)
-    const dow = cur.getDay() // 0 = Domingo
+    const dow = cur.getDay() // 0 = Domingo, 6 = Sábado
     const iso = fmtISO(cur)
+    const esFestivo = festivosCache[y].has(iso)
 
-    if (dow !== 0 && !festivosCache[y].has(iso)) {
-      contados++
-      ultimaFechaValida = iso
+    if (dow !== 0 && !esFestivo) {
+      if (dow === 6) {
+        if (iso < '2026-06-01') {
+          // Antes de junio de 2026: todos los sábados no festivos cuentan como día hábil
+          contados++
+          ultimaFechaValida = iso
+        } else {
+          // Desde junio de 2026 en adelante: regla de sábados alternados
+          sabadoIndex++
+          if (sabadoIndex % 2 === 1) {
+            contados++
+            ultimaFechaValida = iso
+          }
+        }
+      } else {
+        contados++
+        ultimaFechaValida = iso
+      }
     }
+
     if (contados < meta) {
       cur.setDate(cur.getDate() + 1)
     }

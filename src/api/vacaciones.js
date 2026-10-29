@@ -5,6 +5,7 @@
 // =============================================================
 import { supabase } from '../supabaseClient'
 import { resolverIdsRelacionales } from './idResolvers'
+import { diasHabilesEntre } from '../utils/diasHabiles'
 
 const TABLA = 'vacaciones'
 
@@ -105,3 +106,43 @@ export async function eliminarVacacion(id) {
     return { data: null, error: err }
   }
 }
+
+/**
+ * Recalcula los días de vacaciones en base de datos aplicando la regla 2026
+ * (sábados alternados: 1er sábado hábil, 2do no hábil).
+ * Devuelve la cantidad de registros actualizados.
+ */
+export async function recalcularDiasVacaciones2026(empresa) {
+  try {
+    let query = supabase
+      .from(TABLA)
+      .select('id, fecha_inicio, fecha_fin, total_dias, periodo_vacaciones, tipo_vacacion')
+      .neq('tipo_vacacion', 'Vacaciones en dinero')
+    if (empresa) query = query.eq('empresa', empresa)
+    const { data, error } = await query
+    if (error) throw error
+
+    let actualizados = 0
+    for (const r of data || []) {
+      if (!r.fecha_inicio || !r.fecha_fin) continue
+      const es2026 = (r.periodo_vacaciones && String(r.periodo_vacaciones).includes('2026')) ||
+                     String(r.fecha_inicio).startsWith('2026') ||
+                     String(r.fecha_fin).startsWith('2026')
+      if (!es2026) continue
+
+      const nuevoTotal = diasHabilesEntre(r.fecha_inicio, r.fecha_fin, { periodo: r.periodo_vacaciones })
+      if (nuevoTotal !== Number(r.total_dias)) {
+        const { error: errorUpdate } = await supabase
+          .from(TABLA)
+          .update({ total_dias: nuevoTotal })
+          .eq('id', r.id)
+        if (!errorUpdate) actualizados++
+      }
+    }
+    return { actualizados, error: null }
+  } catch (err) {
+    console.warn('Error al recalcular vacaciones 2026:', err)
+    return { actualizados: 0, error: err }
+  }
+}
+

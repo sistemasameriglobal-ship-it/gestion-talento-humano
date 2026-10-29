@@ -345,7 +345,7 @@ create table if not exists public.registros_parqueadero (
   placa text not null,
   cedula text,
   telefono text,
-  tipo text check (tipo in ('CARRO','MOTO')),
+  tipo text check (tipo is null or upper(trim(tipo)) in ('CARRO','MOTO','BICICLETA')),
   fecha_ingreso date,
   fecha_retiro date,
   observacion text,

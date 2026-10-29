@@ -17,6 +17,7 @@ export function listarRegistrosParqueadero(empresa) {
 
 export async function crearRegistroParqueadero(payload, empresa = 'ameriglobal') {
   const empresaFinal = payload.empresa || empresa
+  const tipoFinal = payload.tipo ? String(payload.tipo).trim().toUpperCase() : payload.tipo
   // registros_parqueadero no tiene columna de departamento, por eso solo
   // se resuelven empleado_id y empresa_id.
   const { empleado_id, empresa_id } = await resolverIdsRelacionales({
@@ -25,6 +26,7 @@ export async function crearRegistroParqueadero(payload, empresa = 'ameriglobal')
   })
   return supabase.from(TABLA).insert([{
     ...payload,
+    tipo: tipoFinal,
     empresa: empresaFinal,
     empleado_id,
     empresa_id,
@@ -39,6 +41,9 @@ export async function crearRegistrosParqueadero(payloads, empresa = 'ameriglobal
 
 export async function actualizarRegistroParqueadero(id, payload) {
   const dataToUpdate = { ...payload }
+  if (dataToUpdate.tipo) {
+    dataToUpdate.tipo = String(dataToUpdate.tipo).trim().toUpperCase()
+  }
 
   if (payload.nombre_empleado || payload.empresa) {
     let { nombre_empleado, empresa } = payload

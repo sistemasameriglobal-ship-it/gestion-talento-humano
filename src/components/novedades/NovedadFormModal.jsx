@@ -584,7 +584,7 @@ export default function NovedadFormModal({
                             const val = e.target.value
                             setForm(p => {
                               const dDin = val === '' ? 0 : Number(val)
-                              const dFis = p.fecha_inicio && p.fecha_fin ? (diasHabilesEntre(p.fecha_inicio, p.fecha_fin) || 0) : 0
+                              const dFis = p.fecha_inicio && p.fecha_fin ? (diasHabilesEntre(p.fecha_inicio, p.fecha_fin, { periodo: p.periodo || p.periodo_vacaciones }) || 0) : 0
                               const tot = (dFis + dDin) > 0 ? (dFis + dDin) : p.total_dias
                               return {
                                 ...p,
@@ -614,7 +614,7 @@ export default function NovedadFormModal({
                         }}>
                           {(() => {
                             const dDin = Number(form.dias_en_dinero) || 0
-                            const dFis = form.fecha_inicio && form.fecha_fin ? (diasHabilesEntre(form.fecha_inicio, form.fecha_fin) || 0) : 0
+                            const dFis = form.fecha_inicio && form.fecha_fin ? (diasHabilesEntre(form.fecha_inicio, form.fecha_fin, { periodo: form.periodo || form.periodo_vacaciones }) || 0) : 0
                             if (dDin > 0 && dFis > 0) {
                               return `🌴 ${dFis}d disfrute + 💰 ${dDin}d dinero`
                             }

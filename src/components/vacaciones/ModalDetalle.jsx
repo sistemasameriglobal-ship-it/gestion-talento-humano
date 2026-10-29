@@ -30,7 +30,7 @@ export default function ModalDetalle({ row, onClose, onEdit, allRows = [] }) {
   }, vacsEmpleado, row.periodos || [], row.empleado)
 
   // Comparación: días en dinero calculados (15 - días hábiles) vs guardados
-  const habiles = row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin) : null
+  const habiles = row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin, { periodo: row.periodo_vacaciones }) : null
   const dineroCalculado = habiles != null
     ? Math.max(0, 15 - habiles)
     : (row.tipo_vacacion === 'Vacaciones en dinero' ? 15 : null)

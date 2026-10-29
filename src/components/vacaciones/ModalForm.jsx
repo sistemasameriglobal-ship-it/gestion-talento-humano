@@ -215,8 +215,9 @@ export default function ModalForm({
   const onFechaInicioChange = (e) => {
     const fIni = e.target.value
     const fFin = form.fecha_fin
+    const opts = { periodo: form.periodo_vacaciones }
     if (fIni && fFin) {
-      const dias = calcularDiasHabiles(fIni, fFin)
+      const dias = calcularDiasHabiles(fIni, fFin, opts)
       setForm(p => ({
         ...p,
         fecha_inicio: fIni,
@@ -224,7 +225,7 @@ export default function ModalForm({
       }))
     } else if (fIni && form.total_dias) {
       const diasNum = parseFloat(form.total_dias)
-      const fFinCalc = (!isNaN(diasNum) && diasNum > 0) ? calcularFechaFinVacaciones(fIni, diasNum) : ''
+      const fFinCalc = (!isNaN(diasNum) && diasNum > 0) ? calcularFechaFinVacaciones(fIni, diasNum, opts) : ''
       setForm(p => ({
         ...p,
         fecha_inicio: fIni,
@@ -238,7 +239,8 @@ export default function ModalForm({
   const onFechaFinChange = (e) => {
     const fFin = e.target.value
     const fIni = form.fecha_inicio
-    const dias = (fIni && fFin) ? calcularDiasHabiles(fIni, fFin) : form.total_dias
+    const opts = { periodo: form.periodo_vacaciones }
+    const dias = (fIni && fFin) ? calcularDiasHabiles(fIni, fFin, opts) : form.total_dias
     setForm(p => ({
       ...p,
       fecha_fin: fFin,
@@ -250,8 +252,9 @@ export default function ModalForm({
     const val = e.target.value
     const fIni = form.fecha_inicio
     const diasNum = parseFloat(val)
+    const opts = { periodo: form.periodo_vacaciones }
     if (fIni && !isNaN(diasNum) && diasNum > 0) {
-      const fFinCalc = calcularFechaFinVacaciones(fIni, diasNum)
+      const fFinCalc = calcularFechaFinVacaciones(fIni, diasNum, opts)
       setForm(p => ({
         ...p,
         total_dias: val,
@@ -264,6 +267,32 @@ export default function ModalForm({
       }))
     }
   }
+
+  const onPeriodoVacacionesChange = (e) => {
+    const nuevoPeriodo = e.target.value
+    setForm(p => {
+      const opts = { periodo: nuevoPeriodo }
+      let newFin = p.fecha_fin
+      let newTot = p.total_dias
+      if (p.fecha_inicio && p.total_dias && !isNaN(parseFloat(p.total_dias))) {
+        newFin = calcularFechaFinVacaciones(p.fecha_inicio, parseFloat(p.total_dias), opts)
+      } else if (p.fecha_inicio && p.fecha_fin) {
+        newTot = String(calcularDiasHabiles(p.fecha_inicio, p.fecha_fin, opts) || p.total_dias)
+      }
+      return {
+        ...p,
+        periodo_vacaciones: nuevoPeriodo,
+        fecha_fin: newFin,
+        total_dias: newTot,
+      }
+    })
+  }
+
+  const esReglaJunio2026 = useMemo(() => {
+    const ini = String(form.fecha_inicio || '')
+    const fin = String(form.fecha_fin || '')
+    return (ini >= '2026-06-01') || (fin >= '2026-06-01')
+  }, [form.fecha_inicio, form.fecha_fin])
 
   const festivosEnRango = useMemo(() => {
     if (!form.fecha_inicio || !form.fecha_fin) return []
@@ -498,7 +527,7 @@ export default function ModalForm({
                   <select
                     className="form-control"
                     value={form.periodo_vacaciones || ''}
-                    onChange={f('periodo_vacaciones')}
+                    onChange={onPeriodoVacacionesChange}
                     style={{ fontWeight: 600 }}
                   >
                     <option value="">— Seleccionar período —</option>
@@ -512,7 +541,7 @@ export default function ModalForm({
                   <input
                     className="form-control"
                     value={form.periodo_vacaciones || ''}
-                    onChange={f('periodo_vacaciones')}
+                    onChange={onPeriodoVacacionesChange}
                     placeholder="Ej: 2024-2025"
                   />
                 )}
@@ -590,6 +619,32 @@ export default function ModalForm({
                   </div>
                   <div style={{ fontSize: 11.5, opacity: 0.9 }}>
                     {festivosEnRango.map(f => `${f.diaSemana} ${f.fecha.slice(8, 10)}/${f.fecha.slice(5, 7)} (${f.nombre})`).join(' • ')}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Aviso informativo de la regla de sábados alternados desde junio 2026 */}
+            {esReglaJunio2026 && (form.tipo_vacacion || 'Vacaciones') !== 'Vacaciones en dinero' && (
+              <div style={{
+                marginTop: 10,
+                background: 'color-mix(in srgb, #8b5cf6 10%, var(--bg, #fff))',
+                border: '1px solid color-mix(in srgb, #8b5cf6 30%, transparent)',
+                borderRadius: 8,
+                padding: '8px 12px',
+                fontSize: 12,
+                color: '#6d28d9',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+              }}>
+                <span style={{ fontSize: 15 }}>⚖️</span>
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                    Ley Laboral (Desde Junio de 2026 - Sábados alternados)
+                  </div>
+                  <div style={{ fontSize: 11.5, opacity: 0.95, lineHeight: 1.4 }}>
+                    A partir del 1 de junio de 2026, el 1.er sábado del período cuenta como hábil y el 2.° sábado <strong>no se cuenta</strong>. Antes de junio de 2026 todos los sábados cuentan como días hábiles.
                   </div>
                 </div>
               </div>

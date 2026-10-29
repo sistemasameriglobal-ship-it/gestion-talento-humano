@@ -518,7 +518,7 @@ export default function Vacaciones() {
     const diasTotales = rows.reduce((acc, r) => {
       if (r.tipo_vacacion === 'Vacaciones en dinero') return acc
       const habiles = (r.fecha_inicio && r.fecha_fin)
-        ? diasHabilesEntre(r.fecha_inicio, r.fecha_fin)
+        ? diasHabilesEntre(r.fecha_inicio, r.fecha_fin, { periodo: r.periodo_vacaciones })
         : (parseFloat(r.total_dias) || 0)
       return acc + (habiles || 0)
     }, 0)

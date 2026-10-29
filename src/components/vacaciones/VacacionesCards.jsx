@@ -15,7 +15,7 @@ export default function VacacionesCards({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 12, paddingTop: 4 }}>
         {paged.map((row, idx) => {
           const estadoStyle = ESTADO_STYLES[row.estado] || ESTADO_STYLES['Pendiente']
-          const habiles = row.total_dias != null && row.total_dias !== '' ? row.total_dias : (row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin) : null)
+          const habiles = row.total_dias != null && row.total_dias !== '' ? row.total_dias : (row.fecha_inicio && row.fecha_fin ? diasHabilesEntre(row.fecha_inicio, row.fecha_fin, { periodo: row.periodo_vacaciones }) : null)
           return (
             <div key={row.id} className="vac-card" style={{
               animationDelay: `${Math.min(idx, 8) * 0.04}s`,

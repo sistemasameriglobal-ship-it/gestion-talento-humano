@@ -67,7 +67,7 @@ export default function VacacionesTabla({
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Calendar size={12} style={{ flexShrink: 0 }} /> {formatFecha(row.fecha_fin)}</span>
                 </td>
                 <td style={{ textAlign: 'center', fontWeight: 700, color: '#7C3AED' }}>
-                  {row.total_dias != null && row.total_dias !== '' ? formatoDias(row.total_dias) : (row.fecha_inicio && row.fecha_fin ? formatoDias(diasHabilesEntre(row.fecha_inicio, row.fecha_fin)) : '—')}
+                  {row.total_dias != null && row.total_dias !== '' ? formatoDias(row.total_dias) : (row.fecha_inicio && row.fecha_fin ? formatoDias(diasHabilesEntre(row.fecha_inicio, row.fecha_fin, { periodo: row.periodo_vacaciones })) : '—')}
                 </td>
                 <td style={{ textAlign: 'center' }}>
                   {row.dias_en_dinero != null && row.dias_en_dinero !== '' ? (
