@@ -99,6 +99,8 @@ function enriquecerContrato(item) {
         if (!res.token_firma && meta.token_firma) res.token_firma = meta.token_firma
         if (!res.ip_firma && meta.ip_firma) res.ip_firma = meta.ip_firma
         if (meta.firmado_por_trabajador !== undefined) res.firmado_por_trabajador = Boolean(meta.firmado_por_trabajador)
+        if (meta.empleado_registrado !== undefined) res.empleado_registrado = Boolean(meta.empleado_registrado)
+        if (meta.novedad_ingreso_registrada !== undefined) res.novedad_ingreso_registrada = Boolean(meta.novedad_ingreso_registrada)
       } catch {
         // Ignorar error de parseo de metadatos
       }
@@ -139,6 +141,8 @@ function normalizarPayloadContrato(payload = {}, empresa = 'ameriglobal') {
     token_firma: out.token_firma || '',
     ip_firma: out.ip_firma || '',
     firmado_por_trabajador: Boolean(out.firma_trabajador || out.firmado_por_trabajador),
+    empleado_registrado: Boolean(out.empleado_registrado),
+    novedad_ingreso_registrada: Boolean(out.novedad_ingreso_registrada),
   }
   const metaRegex = /<!--METADATA_CONTRATO:(.*?)-->/
   const obsLimpia = (out.observaciones || '').replace(metaRegex, '').trim()
@@ -162,8 +166,89 @@ function prepararObjetoSupabase(clean) {
 }
 
 /**
+ * Genera una clave lógica única para identificar un contrato por empresa, colaborador y vigencia.
+ */
+export function obtenerClaveContrato(c) {
+  if (!c) return ''
+  const emp = String(c.empresa || '').trim().toLowerCase()
+  const doc = String(c.numero_documento || '').replace(/\D/g, '') || String(c.nombre_trabajador || '').trim().toLowerCase()
+  const fi = String(c.fecha_ingreso || '').slice(0, 10)
+  const tipo = String(c.tipo_contrato || '').trim().toLowerCase()
+  return `${emp}__${doc}__${fi}__${tipo}`
+}
+
+/**
+ * Deduplica una lista de contratos conservando el registro con mejor estado/firma y eliminando los duplicados redundantes de Supabase.
+ */
+export function deduplicarListaContratos(lista = [], eliminarRemotos = false) {
+  const grupos = new Map()
+  const idsToDelete = []
+
+  for (const c of lista) {
+    if (!c) continue
+    const clave = obtenerClaveContrato(c)
+    if (!grupos.has(clave)) {
+      grupos.set(clave, [])
+    }
+    grupos.get(clave).push(c)
+  }
+
+  const deduped = []
+
+  for (const [, items] of grupos.entries()) {
+    if (items.length === 1) {
+      deduped.push(items[0])
+      continue
+    }
+
+    // Calcular puntaje para priorizar el contrato más completo y firmado
+    const evaluados = items.map(it => {
+      let score = 0
+      // Prioridad máxima: firmado por el trabajador
+      if (it.firmado_por_trabajador || it.firma_trabajador) score += 1000
+      // Prioridad: registrado en empleados
+      if (it.empleado_registrado || it.novedad_ingreso_registrada || it.empleado_id) score += 500
+      // Prioridad: id real de Supabase (no temporal loc_)
+      if (it.id && !String(it.id).startsWith('loc_')) score += 200
+      // Prioridad: vigente
+      if (it.estado === 'vigente') score += 50
+      // Desempate por fecha
+      const ts = new Date(it.updated_at || it.created_at || 0).getTime()
+      if (!isNaN(ts)) score += ts / 1e12
+      return { item: it, score }
+    })
+
+    evaluados.sort((a, b) => b.score - a.score)
+    const ganador = evaluados[0].item
+    deduped.push(ganador)
+
+    // Marcar duplicados sobrantes para depuración en base de datos
+    for (let i = 1; i < evaluados.length; i++) {
+      const perdedor = evaluados[i].item
+      if (perdedor.id && !String(perdedor.id).startsWith('loc_') && perdedor.id !== ganador.id) {
+        idsToDelete.push(perdedor.id)
+      }
+    }
+  }
+
+  // Si se solicita, borrar en segundo plano de Supabase para limpiar permanentemente la base de datos
+  if (eliminarRemotos && idsToDelete.length > 0) {
+    setTimeout(async () => {
+      try {
+        await supabase.from(TABLA).delete().in('id', idsToDelete)
+        console.log(`[Contratos] Limpieza permanente en Supabase: se eliminaron ${idsToDelete.length} duplicados.`)
+      } catch (e) {
+        console.warn('[Contratos] Error al depurar contratos duplicados en Supabase:', e)
+      }
+    }, 500)
+  }
+
+  return { deduped, idsToDelete }
+}
+
+/**
  * Lista todos los contratos de la empresa activa.
- * Combina datos de Supabase con el almacenamiento local para que NUNCA desaparezcan los contratos.
+ * Combina datos de Supabase con el almacenamiento local deduplicando automáticamente cualquier repetición.
  */
 export async function listarContratos(empresa = 'ameriglobal') {
   try {
@@ -181,16 +266,27 @@ export async function listarContratos(empresa = 'ameriglobal') {
 
     if (error) {
       console.warn('Advertencia al consultar contratos en Supabase (usando datos locales):', error.message)
-      return { data: localCached, error: null, isFallback: true }
+      const { deduped } = deduplicarListaContratos(localCached, false)
+      return { data: deduped, error: null, isFallback: true }
     }
 
     const itemsSupabase = (data || []).map(enriquecerContrato)
+    // Deduplicar lo que viene de Supabase y purgar copias duplicadas de la BD
+    const { deduped: supabaseDeduped } = deduplicarListaContratos(itemsSupabase, true)
 
-    // Fusionar: conservar contratos locales creados que aún no estén en Supabase
-    const idsSupabase = new Set(itemsSupabase.map(c => c.id))
-    const localesPendientes = localCached.filter(c => c.id && !idsSupabase.has(c.id))
+    // Fusionar: conservar contratos locales creados que realmente no existan en Supabase
+    const clavesSupabase = new Set(supabaseDeduped.map(obtenerClaveContrato))
+    const idsSupabase = new Set(supabaseDeduped.map(c => c.id))
 
-    // Intentar sincronizar en segundo plano los contratos locales pendientes
+    const localesPendientes = localCached.filter(c => {
+      if (!c.id) return false
+      if (idsSupabase.has(c.id)) return false
+      const clave = obtenerClaveContrato(c)
+      if (clavesSupabase.has(clave)) return false
+      return true
+    })
+
+    // Intentar sincronizar en segundo plano los contratos locales pendientes legítimos
     if (localesPendientes.length > 0) {
       setTimeout(async () => {
         for (const loc of localesPendientes) {
@@ -202,7 +298,8 @@ export async function listarContratos(empresa = 'ameriglobal') {
               const updatedCache = leerCacheLocal(empresa)
                 .filter(c => c.id !== loc.id)
                 .concat(enriquecerContrato(synced[0]))
-              guardarCacheLocal(empresa, updatedCache)
+              const { deduped: finalCache } = deduplicarListaContratos(updatedCache, false)
+              guardarCacheLocal(empresa, finalCache)
             }
           } catch {
             // Ignorar errores de sync en background
@@ -211,13 +308,14 @@ export async function listarContratos(empresa = 'ameriglobal') {
       }, 500)
     }
 
-    const listaFinal = [...itemsSupabase, ...localesPendientes]
+    const { deduped: listaFinal } = deduplicarListaContratos([...supabaseDeduped, ...localesPendientes], false)
     guardarCacheLocal(empresa, listaFinal)
 
     return { data: listaFinal, error: null }
   } catch (err) {
     console.warn('Excepción al listar contratos:', err)
-    return { data: leerCacheLocal(empresa).map(enriquecerContrato), error: null, isFallback: true }
+    const { deduped } = deduplicarListaContratos(leerCacheLocal(empresa).map(enriquecerContrato), false)
+    return { data: deduped, error: null, isFallback: true }
   }
 }
 
@@ -309,13 +407,37 @@ export async function crearContrato(payload, empresa = 'ameriglobal') {
   clean.created_at = new Date().toISOString()
   clean.updated_at = new Date().toISOString()
 
-  // 1. Guardar de inmediato en almacenamiento local para respuesta instantánea y máxima resiliencia
+  // 1. Evitar crear duplicados si ya existe un contrato activo para el mismo documento y fecha en Supabase
+  if (clean.numero_documento) {
+    try {
+      const { data: existentes } = await supabase
+        .from(TABLA)
+        .select('*')
+        .eq('empresa', clean.empresa)
+        .eq('numero_documento', clean.numero_documento)
+        .eq('fecha_ingreso', clean.fecha_ingreso)
+
+      if (existentes && existentes.length > 0) {
+        const activos = existentes.filter(c => c.estado !== 'finalizado' && c.estado !== 'desistido')
+        if (activos.length > 0) {
+          console.warn('[Contratos] Contrato idéntico ya existente en base de datos. Evitando duplicado.')
+          const primero = enriquecerContrato(activos[0])
+          return { data: [primero], error: null }
+        }
+      }
+    } catch (checkErr) {
+      console.warn('Advertencia al verificar contratos existentes:', checkErr)
+    }
+  }
+
+  // 2. Guardar de inmediato en almacenamiento local para respuesta instantánea
   const localId = clean.id || 'loc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)
   const itemLocal = { ...clean, id: localId }
   const current = leerCacheLocal(empresa)
-  guardarCacheLocal(empresa, [itemLocal, ...current.filter(c => c.id !== localId)])
+  const { deduped: cacheActualizada } = deduplicarListaContratos([itemLocal, ...current.filter(c => c.id !== localId)], false)
+  guardarCacheLocal(empresa, cacheActualizada)
 
-  // 2. Intentar guardar en Supabase
+  // 3. Intentar guardar en Supabase
   try {
     const dbPayload = prepararObjetoSupabase(clean)
     delete dbPayload.id
@@ -334,7 +456,8 @@ export async function crearContrato(payload, empresa = 'ameriglobal') {
       const savedItem = enriquecerContrato(data[0])
       // Reemplazar el id temporal con el id real de Supabase
       const actualizados = [savedItem, ...leerCacheLocal(empresa).filter(c => c.id !== localId && c.id !== savedItem.id)]
-      guardarCacheLocal(empresa, actualizados)
+      const { deduped: finalCache } = deduplicarListaContratos(actualizados, false)
+      guardarCacheLocal(empresa, finalCache)
       return { data: [savedItem], error: null }
     }
 

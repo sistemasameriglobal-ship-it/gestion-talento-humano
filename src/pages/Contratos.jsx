@@ -26,6 +26,7 @@ import ModalDesistirContrato from '../components/contratos/ModalDesistirContrato
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal'
 import * as contratosApi from '../api/contratos'
 import * as empleadosApi from '../api/empleados'
+import * as novedadesApi from '../api/novedades'
 import { calcularCiclosYProrroga } from '../utils/contratosTemplates'
 import { FileSignature, Plus, Search, Filter, RefreshCw, X, ShieldAlert } from 'lucide-react'
 import '../components/contratos/contratos.css'
@@ -139,20 +140,35 @@ export default function Contratos() {
     }
   }
 
-  // Registrar Candidato en Empleados
+  // Registrar Candidato en Empleados y generar Novedad de Ingreso automática
   const handleConfirmarRegistroEmpleado = async (contrato, datosEmpleado) => {
     try {
-      // 1. Crear el empleado en la base de datos de nómina
-      const { data: empCreado, error: empErr } = await empleadosApi.crearEmpleado(datosEmpleado, currentCompany)
-      if (empErr) throw empErr
+      // 1. Verificar si el empleado ya existe por documento para evitar duplicaciones
+      const docNormalizado = String(datosEmpleado.numero_documento || contrato.numero_documento || '').trim().replace(/\D/g, '')
+      const empExistente = (empleados || []).find(e => {
+        const docE = String(e.numero_documento || '').trim().replace(/\D/g, '')
+        return docE && docNormalizado && docE === docNormalizado
+      })
 
-      const nuevoEmpleadoId = empCreado?.id || (Array.isArray(empCreado) && empCreado[0]?.id)
+      let nuevoEmpleadoId = empExistente?.id
 
-      // 2. Actualizar el contrato vinculando el empleado_id y cambiando el estado a 'vigente'
+      if (!nuevoEmpleadoId) {
+        // Crear el empleado en la base de datos de nómina
+        const { data: empCreado, error: empErr } = await empleadosApi.crearEmpleado(datosEmpleado, currentCompany)
+        if (empErr) throw empErr
+        nuevoEmpleadoId = empCreado?.id || (Array.isArray(empCreado) && empCreado[0]?.id)
+      } else {
+        // Si ya existía, sincronizar sus datos actualizados
+        await empleadosApi.actualizarEmpleado(nuevoEmpleadoId, datosEmpleado, currentCompany)
+      }
+
+      // 2. Actualizar el contrato vinculando el empleado_id, empleado_registrado y cambiando el estado a 'vigente'
       const { error: contErr } = await contratosApi.actualizarContrato(
         contrato.id,
         {
           empleado_id: nuevoEmpleadoId || null,
+          empleado_registrado: true,
+          novedad_ingreso_registrada: true,
           estado: 'vigente',
           nombre_trabajador: datosEmpleado.nombre_completo || contrato.nombre_trabajador,
           numero_documento: datosEmpleado.numero_documento || contrato.numero_documento,
@@ -167,9 +183,40 @@ export default function Contratos() {
       )
       if (contErr) throw contErr
 
+      // 3. Crear novedad de "Ingreso" automática en el módulo de Novedades
+      const fechaIngresoFinal = datosEmpleado.fecha_ingreso || contrato.fecha_ingreso || new Date().toISOString().slice(0, 10)
+      const periodoIngreso = String(fechaIngresoFinal).slice(0, 7)
+
+      try {
+        const { data: novsExistentes } = await novedadesApi.buscarNovedadPorEmpleadoConceptoYFecha(
+          datosEmpleado.nombre_completo || contrato.nombre_trabajador,
+          'Ingreso',
+          fechaIngresoFinal,
+          currentCompany
+        )
+
+        if (!novsExistentes || novsExistentes.length === 0) {
+          await novedadesApi.crearNovedad({
+            nombre_empleado: datosEmpleado.nombre_completo || contrato.nombre_trabajador,
+            empleado_id: nuevoEmpleadoId || null,
+            concepto: 'Ingreso',
+            fecha_inicio: fechaIngresoFinal,
+            fecha_fin: fechaIngresoFinal,
+            total_dias: 0,
+            periodo: periodoIngreso,
+            cargo: datosEmpleado.cargo || contrato.cargo,
+            dependencia: datosEmpleado.dependencia || contrato.dependencia,
+            empresa: currentCompany,
+            observacion: 'Registro de ingreso formalizado automáticamente desde la firma y vinculación de contrato.',
+          }, currentCompany)
+        }
+      } catch (novErr) {
+        console.warn('Advertencia al registrar novedad de ingreso automática:', novErr)
+      }
+
       setMsg({
         type: 'success',
-        text: `¡${datosEmpleado.nombre_completo} ha sido registrado(a) exitosamente en Empleados y su contrato ahora está activo y vigente!`
+        text: `¡${datosEmpleado.nombre_completo} ha sido registrado(a) exitosamente en Empleados y se agregó la novedad de Ingreso en Novedades!`
       })
       setContratoParaRegistrar(null)
       await cargarDatos()
@@ -367,6 +414,7 @@ export default function Contratos() {
       {/* TABLA DE CONTRATOS */}
       <ContratosTable
         contratos={contratosFiltrados}
+        empleados={empleados}
         loading={loading}
         puedeEditar={puedeEditar}
         onVerContrato={c => setContratoParaVer(c)}

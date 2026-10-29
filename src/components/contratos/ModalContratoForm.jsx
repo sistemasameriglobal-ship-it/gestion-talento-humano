@@ -224,6 +224,7 @@ export default function ModalContratoForm({
 
   const handleSubmit = async (e, verInmediato = false) => {
     if (e) e.preventDefault()
+    if (guardando) return
     if (!formData.nombre_trabajador.trim()) {
       setErrorMsg('Debes ingresar el nombre del colaborador o seleccionarlo de la lista de empleados.')
       return

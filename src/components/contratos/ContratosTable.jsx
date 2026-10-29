@@ -27,6 +27,7 @@ import {
 
 export default function ContratosTable({
   contratos = [],
+  empleados = [],
   loading = false,
   onVerContrato,
   onEditarContrato,
@@ -80,6 +81,18 @@ export default function ContratosTable({
               const esPendienteEmpleado = c.estado === 'pendiente_empleado'
               const esDesistido = c.estado === 'desistido'
               const esFinalizado = c.estado === 'finalizado'
+              const esFirmado = Boolean(c.firmado_por_trabajador || c.firma_trabajador)
+              const tieneEmpleadoAsociado = Boolean(
+                c.empleado_registrado ||
+                c.novedad_ingreso_registrada ||
+                (c.empleado_id && !String(c.empleado_id).startsWith('loc_')) ||
+                (empleados || []).some(emp => {
+                  if (c.empleado_id && emp.id && String(emp.id) === String(c.empleado_id)) return true
+                  const docEmp = String(emp.numero_documento || '').trim().replace(/\D/g, '')
+                  const docCont = String(c.numero_documento || '').trim().replace(/\D/g, '')
+                  return docEmp && docCont && docEmp === docCont
+                })
+              )
               const infoProrroga = calcularCiclosYProrroga(c)
               const cicloActual = infoProrroga?.cicloActual || {}
               const diasParaVencer = infoProrroga?.diasParaVencer ?? 0
@@ -305,26 +318,42 @@ export default function ContratosTable({
                   {/* Acciones */}
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      {/* BOTÓN REGISTRAR EN EMPLEADOS (Si es candidato pendiente) */}
-                      {puedeEditar && esPendienteEmpleado && onRegistrarEmpleado && (
+                      {/* BADGE O BOTÓN REGISTRAR EN EMPLEADOS */}
+                      {tieneEmpleadoAsociado ? (
+                        <span
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0',
+                            padding: '4px 9px', borderRadius: 6, fontSize: 11, fontWeight: 700
+                          }}
+                          title="Este colaborador ya se encuentra registrado en la lista de Empleados"
+                        >
+                          <CheckCircle2 size={13} />
+                          <span>En Empleados</span>
+                        </span>
+                      ) : puedeEditar && !esFinalizado && !esDesistido && onRegistrarEmpleado ? (
                         <button
                           type="button"
                           onClick={() => onRegistrarEmpleado(c)}
-                          title="Crear ficha en empleados y marcar contrato como vigente"
+                          title={esFirmado ? 'Contrato firmado: Crear colaborador en Empleados y registrar novedad de ingreso' : 'Crear ficha en Empleados y marcar contrato como vigente'}
                           style={{
-                            padding: '6px 11px', borderRadius: 7, border: '1px solid #86EFAC',
-                            background: '#DCFCE7', color: '#15803D', cursor: 'pointer',
+                            padding: '6px 12px', borderRadius: 7,
+                            border: esFirmado ? '1px solid #16A34A' : '1px solid #86EFAC',
+                            background: esFirmado ? '#16A34A' : '#DCFCE7',
+                            color: esFirmado ? '#FFFFFF' : '#15803D',
+                            cursor: 'pointer',
                             display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800,
-                            boxShadow: '0 1px 2px rgba(22, 101, 52, 0.15)',
+                            boxShadow: esFirmado ? '0 2px 4px rgba(22, 163, 74, 0.25)' : '0 1px 2px rgba(22, 101, 52, 0.15)',
+                            transition: 'all 0.15s ease',
                           }}
                         >
                           <UserPlus size={14} />
-                          <span>Registrar Empleado</span>
+                          <span>{esFirmado ? '✍️ Registrar Empleado' : 'Registrar Empleado'}</span>
                         </button>
-                      )}
+                      ) : null}
 
-                      {/* BOTÓN DESISTIÓ (Si es candidato pendiente) */}
-                      {puedeEditar && esPendienteEmpleado && onDesistirContrato && (
+                      {/* BOTÓN DESISTIÓ (Si aún no está en empleados y es candidato) */}
+                      {puedeEditar && !tieneEmpleadoAsociado && (esPendienteEmpleado || !esFirmado) && !esFinalizado && !esDesistido && onDesistirContrato && (
                         <button
                           type="button"
                           onClick={() => onDesistirContrato(c)}
