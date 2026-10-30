@@ -897,7 +897,9 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_emp RECORD;
+  v_per RECORD;
 BEGIN
+  -- 1. Buscar la ficha oficial del colaborador
   IF NEW.empleado_id IS NOT NULL THEN
     SELECT id, dependencia, cargo, empresa_id, nombre_completo
     INTO v_emp
@@ -915,17 +917,45 @@ BEGIN
     END IF;
   END IF;
 
-  IF FOUND AND v_emp.id IS NOT NULL THEN
-    IF v_emp.dependencia IS NOT NULL AND TRIM(v_emp.dependencia) <> '' THEN
-      NEW.dependencia := v_emp.dependencia;
-    END IF;
-
-    IF v_emp.cargo IS NOT NULL AND TRIM(v_emp.cargo) <> '' THEN
-      NEW.cargo := v_emp.cargo;
-    END IF;
-
+  -- 2. Si se identificó el colaborador:
+  IF v_emp.id IS NOT NULL THEN
+    -- Asignar empresa_id si venía vacío
     IF NEW.empresa_id IS NULL AND v_emp.empresa_id IS NOT NULL THEN
       NEW.empresa_id := v_emp.empresa_id;
+    END IF;
+
+    -- Solo auto-asignar dependencia o cargo si el registro NO los tiene ya especificados.
+    -- NUNCA pisar un área histórica enviada explícitamente desde la aplicación.
+    IF NEW.dependencia IS NULL OR TRIM(NEW.dependencia) = '' OR NEW.cargo IS NULL OR TRIM(NEW.cargo) = '' THEN
+      -- Buscar si para la fecha_inicio de la novedad existe un período laboral específico en empleado_periodos
+      IF NEW.fecha_inicio IS NOT NULL THEN
+        SELECT dependencia, cargo
+        INTO v_per
+        FROM public.empleado_periodos
+        WHERE empleado_id = v_emp.id
+          AND fecha_ingreso <= NEW.fecha_inicio
+          AND (fecha_retiro IS NULL OR fecha_retiro >= NEW.fecha_inicio)
+        ORDER BY numero_periodo DESC
+        LIMIT 1;
+      END IF;
+
+      -- Auto-asignar dependencia si venía vacía
+      IF NEW.dependencia IS NULL OR TRIM(NEW.dependencia) = '' THEN
+        IF v_per.dependencia IS NOT NULL AND TRIM(v_per.dependencia) <> '' THEN
+          NEW.dependencia := v_per.dependencia;
+        ELSIF v_emp.dependencia IS NOT NULL AND TRIM(v_emp.dependencia) <> '' THEN
+          NEW.dependencia := v_emp.dependencia;
+        END IF;
+      END IF;
+
+      -- Auto-asignar cargo si venía vacío
+      IF NEW.cargo IS NULL OR TRIM(NEW.cargo) = '' THEN
+        IF v_per.cargo IS NOT NULL AND TRIM(v_per.cargo) <> '' THEN
+          NEW.cargo := v_per.cargo;
+        ELSIF v_emp.cargo IS NOT NULL AND TRIM(v_emp.cargo) <> '' THEN
+          NEW.cargo := v_emp.cargo;
+        END IF;
+      END IF;
     END IF;
   END IF;
 

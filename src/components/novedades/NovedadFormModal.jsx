@@ -39,10 +39,11 @@ export default function NovedadFormModal({
   sinFechas, minFechaForm, maxFechaForm,
   f, save, closeModal,
 }) {
-  // Auto-completar dependencia / área según el período correspondiente solo al CREAR una novedad
-  // Si la novedad tiene fecha anterior al cambio de área, se asigna su área anterior histórica.
+  // Auto-completar dependencia / área según el período correspondiente
+  // Si la novedad tiene fecha correspondiente a un período previo (ej. Ventas antes de Underwriting),
+  // se asigna automáticamente su área histórica de esa fecha.
   useEffect(() => {
-    if (modal !== 'add' || !form.nombre_empleado) return
+    if (!modal || !form.nombre_empleado) return
     const ficha = fichasEmpleados?.[form.nombre_empleado] ||
       Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
     if (!ficha) return
@@ -55,14 +56,28 @@ export default function NovedadFormModal({
     setForm(p => {
       let changed = false
       const next = { ...p }
-      if (depObjetivo && !next.dependencia) {
+      const listaAreasConocidas = [
+        ficha.dependencia,
+        ...(ficha.periodos || []).map(per => per.dependencia)
+      ].filter(Boolean)
+
+      // Si depObjetivo está definido y el campo dependencia está vacío o coincide con alguna área conocida del colaborador
+      if (depObjetivo && (!next.dependencia || listaAreasConocidas.includes(next.dependencia))) {
         const depMatch = (dependencias || []).find(d => d.trim().toLowerCase() === depObjetivo.trim().toLowerCase()) || depObjetivo
-        next.dependencia = depMatch
-        next.cargo = cargoObjetivo || next.cargo || ''
-        next.empleado_id = ficha?.id || next.empleado_id || null
-        changed = true
+        if (next.dependencia !== depMatch) {
+          next.dependencia = depMatch
+          changed = true
+        }
+        if (cargoObjetivo && next.cargo !== cargoObjetivo && (!next.cargo || [ficha.cargo, ...(ficha.periodos || []).map(per => per.cargo)].includes(next.cargo))) {
+          next.cargo = cargoObjetivo
+          changed = true
+        }
+        if (ficha?.id && !next.empleado_id) {
+          next.empleado_id = ficha.id
+          changed = true
+        }
       }
-      if (next.concepto === 'Ingreso' && ficha?.fecha_ingreso && (!next.fecha_inicio || next.fecha_inicio !== ficha.fecha_ingreso)) {
+      if (modal === 'add' && next.concepto === 'Ingreso' && ficha?.fecha_ingreso && (!next.fecha_inicio || next.fecha_inicio !== ficha.fecha_ingreso)) {
         next.fecha_inicio = ficha.fecha_ingreso
         next.fecha_fin = ficha.fecha_ingreso
         next.periodo = ficha.fecha_ingreso.slice(0, 7)
@@ -242,12 +257,34 @@ export default function NovedadFormModal({
                         <div style={{
                           marginTop: 8, fontSize: 11.5, color: '#1E3A8A', background: '#EFF6FF',
                           border: '1px solid #BFDBFE', borderRadius: 8, padding: '7px 10px',
-                          display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.4,
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, lineHeight: 1.4,
                         }}>
-                          <Info size={14} style={{ color: '#2563EB', flexShrink: 0, marginTop: 1 }} />
-                          <div>
-                            <strong>Área histórica detectada:</strong> En la fecha seleccionada ({form.fecha_inicio}), el colaborador pertenecía al área <strong>"{periodoFecha.dependencia}"</strong> (su área actual en ficha es "{ficha.dependencia}"). La novedad se registrará con dicha área para mantener la trazabilidad exacta.
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                            <Info size={14} style={{ color: '#2563EB', flexShrink: 0, marginTop: 1 }} />
+                            <div>
+                              <strong>Área histórica detectada:</strong> En la fecha seleccionada ({form.fecha_inicio || 'sin fecha'}), el colaborador pertenecía al área <strong>"{periodoFecha.dependencia}"</strong> (cargo: <strong>"{periodoFecha.cargo || ficha.cargo}"</strong>). Su área actual en ficha es "{ficha.dependencia}".
+                            </div>
                           </div>
+                          {form.dependencia !== periodoFecha.dependencia && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const depMatch = (dependencias || []).find(d => d.trim().toLowerCase() === periodoFecha.dependencia.trim().toLowerCase()) || periodoFecha.dependencia
+                                setForm(p => ({
+                                  ...p,
+                                  dependencia: depMatch,
+                                  cargo: periodoFecha.cargo || p.cargo,
+                                }))
+                                setFormDirty(true)
+                              }}
+                              style={{
+                                background: '#2563EB', color: '#fff', border: 'none', borderRadius: 6,
+                                padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
+                              }}
+                            >
+                              Asignar {periodoFecha.dependencia}
+                            </button>
+                          )}
                         </div>
                       )}
                     </>

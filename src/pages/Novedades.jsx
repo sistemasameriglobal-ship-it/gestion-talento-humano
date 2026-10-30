@@ -253,6 +253,13 @@ export default function Novedades() {
       if (e.nombre_completo) empPorNombreNorm.set(normalizarNombre(e.nombre_completo), e)
     })
 
+    const periodosPorEmpId = new Map()
+    ;(periodosData || []).forEach(p => {
+      if (!p.empleado_id) return
+      if (!periodosPorEmpId.has(p.empleado_id)) periodosPorEmpId.set(p.empleado_id, [])
+      periodosPorEmpId.get(p.empleado_id).push(p)
+    })
+
     const mismatchesToHeal = []
     const enrichedRows = (data || []).map(r => {
       let diasEnDinero
@@ -280,26 +287,42 @@ export default function Novedades() {
         (r.nombre_empleado ? fichas[r.nombre_empleado] : null) ||
         null
 
-      // Respetar el área y cargo históricos guardados en la novedad.
-      // Si la novedad no tenía área asignada, deducirla según el período laboral correspondiente a su fecha_inicio.
-      const periodosEmp = emp?.periodos || fichas[r.nombre_empleado]?.periodos || []
+      const empId = r.empleado_id || emp?.id || null
+      const periodosEmp = (empId && periodosPorEmpId.get(empId)) ||
+        emp?.periodos ||
+        (r.nombre_empleado ? fichas[r.nombre_empleado]?.periodos : null) ||
+        []
       const periodoHistorico = obtenerPeriodoPorFecha(periodosEmp, r.fecha_inicio)
-      const depHistorica = r.dependencia || periodoHistorico?.dependencia || emp?.dependencia || ''
-      const cargoHistorico = r.cargo || periodoHistorico?.cargo || emp?.cargo || ''
 
-      // Solo asociar empleado_id si no lo tenía en la BD, o dependencia si estaba vacía (sin sobreescribir áreas históricas existentes)
-      if (r.id && emp?.id && (!r.empleado_id || !r.dependencia)) {
+      // Respetar el área y cargo históricos correspondientes a la fecha de la novedad.
+      // Si la novedad cae en un período histórico previo (p. ej. Ventas) y su dependencia estaba vacía o
+      // sincronizada por error con el área actual del empleado (p. ej. Underwriting), prevalece el área del período.
+      const depHistorica = (periodoHistorico?.dependencia && (!r.dependencia || r.dependencia === emp?.dependencia))
+        ? periodoHistorico.dependencia
+        : (periodoHistorico?.dependencia || r.dependencia || emp?.dependencia || '')
+
+      const cargoHistorico = (periodoHistorico?.cargo && (!r.cargo || r.cargo === emp?.cargo))
+        ? periodoHistorico.cargo
+        : (periodoHistorico?.cargo || r.cargo || emp?.cargo || '')
+
+      // Auto-sanar en segundo plano si hay desfase de área histórica, cargo o ID faltante
+      if (r.id && (
+        (emp?.id && !r.empleado_id) ||
+        (depHistorica && r.dependencia !== depHistorica) ||
+        (cargoHistorico && r.cargo !== cargoHistorico)
+      )) {
         mismatchesToHeal.push({
           id: r.id,
-          empleado_id: emp.id,
-          dependencia: r.dependencia || depHistorica,
+          empleado_id: empId,
+          dependencia: depHistorica,
+          cargo: cargoHistorico,
         })
       }
 
       return {
         ...r,
         nombre_empleado: emp?.nombre_completo || r.nombre_empleado,
-        empleado_id: r.empleado_id || emp?.id || null,
+        empleado_id: empId,
         cargo: cargoHistorico,
         dependencia: depHistorica,
         dias_en_dinero: diasEnDinero > 0 ? diasEnDinero : null,
@@ -313,6 +336,7 @@ export default function Novedades() {
         mismatchesToHeal.map(item =>
           novedadesApi.actualizarNovedad(item.id, {
             dependencia: item.dependencia,
+            cargo: item.cargo,
             empleado_id: item.empleado_id,
           })
         )

@@ -38,7 +38,7 @@ export default function ColaboradoresBaseModal({ show, onCerrar, diasPeriodoLabe
                   .map(e => (
                     <tr key={e.id} style={{ borderBottom: '1px solid var(--bg)' }}>
                       <td style={{ padding: '6px 8px', fontWeight: 600 }}>{e.nombre_completo || '—'}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{e.dependencia || 'Sin área'}</td>
+                      <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{e.dependencia_en_periodo || e.dependencia || 'Sin área'}</td>
                       <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{e.fecha_ingreso || '—'}</td>
                       <td style={{ padding: '6px 8px' }}>
                         {e.activo === false

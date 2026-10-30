@@ -23,6 +23,7 @@ import DrillDownModal from '../components/dashboard/DrillDownModal'
 import UltimasNovedadesTabla from '../components/dashboard/UltimasNovedadesTabla'
 import EmpleadoHistorialModal from '../components/empleados/EmpleadoHistorialModal'
 import { normalizarConcepto } from '../utils/parseExcel'
+import { obtenerPeriodoPorFecha } from '../utils/novedadesValidacion'
 import '../components/dashboard/dashboard.css'
 
 export default function Dashboard({ onNavigate }) {
@@ -102,7 +103,7 @@ export default function Dashboard({ onNavigate }) {
     return { ini, fin }
   }, [filterAnio, filterMeses])
 
-  // Enriquecer allData con cargo y área oficial desde empleados
+  // Enriquecer allData con cargo y área oficial, respetando los períodos históricos del colaborador
   const allDataEnriched = useMemo(() => {
     if (!empleados || empleados.length === 0) return allData
     const empMap = new Map()
@@ -111,16 +112,39 @@ export default function Dashboard({ onNavigate }) {
       if (e.nombre_completo) empMap.set(e.nombre_completo.trim().toLowerCase(), e)
       if (e.id) empIdMap.set(e.id, e)
     })
+
+    const periodosPorEmp = new Map()
+    ;(periodosLaborales || []).forEach(p => {
+      if (!p.empleado_id) return
+      if (!periodosPorEmp.has(p.empleado_id)) periodosPorEmp.set(p.empleado_id, [])
+      periodosPorEmp.get(p.empleado_id).push(p)
+    })
+
     return allData.map(r => {
       const e = (r.empleado_id && empIdMap.get(r.empleado_id)) ||
         empMap.get((r.nombre_empleado || '').trim().toLowerCase())
+
+      const empId = r.empleado_id || e?.id
+      const misPeriodos = empId ? (periodosPorEmp.get(empId) || []) : []
+      const periodoHistorico = obtenerPeriodoPorFecha(misPeriodos, r.fecha_inicio)
+
+      // El área y cargo históricos correspondientes a la fecha_inicio tienen prioridad sobre
+      // el área actual del empleado (e.dependencia) y sobre registros erróneamente sincronizados.
+      const depHistorica = (periodoHistorico?.dependencia && (!r.dependencia || r.dependencia === e?.dependencia))
+        ? periodoHistorico.dependencia
+        : (periodoHistorico?.dependencia || r.dependencia || e?.dependencia || '')
+
+      const cargoHistorico = (periodoHistorico?.cargo && (!r.cargo || r.cargo === e?.cargo))
+        ? periodoHistorico.cargo
+        : (periodoHistorico?.cargo || r.cargo || e?.cargo || '')
+
       return {
         ...r,
-        cargo: e?.cargo || r.cargo || '',
-        dependencia: e?.dependencia || r.dependencia || '',
+        cargo: cargoHistorico,
+        dependencia: depHistorica,
       }
     })
-  }, [allData, empleados])
+  }, [allData, empleados, periodosLaborales])
 
   const hasFilter = filterAnio || filterMeses.length > 0 || filterPeriodo || filterDependencia || (filterConcepto && filterConcepto !== 'Incapacidad')
 
@@ -145,18 +169,13 @@ export default function Dashboard({ onNavigate }) {
   }), [allDataEnriched, filterAnio, filterMeses, filterPeriodo, filterDependencia, rangoMes, periodoIni, periodoFin])
 
   // ── Colaboradores realmente activos durante el período filtrado ────────────
-  // Antes el denominador de la tasa de ausentismo salía de "nombres únicos con
-  // alguna novedad en el período" (tabla `novedades`). Eso metía en la cuenta a
-  // gente que ya no está en la empresa (si tuvo una novedad dentro del rango de
-  // fechas usado) y, al revés, dejaba fuera a quien no tuvo ninguna novedad
-  // aunque estuviera activo todo el período. Ahora se calcula cruzando contra
-  // la tabla `empleados` real: cuenta a quien ya había ingresado antes de que
-  // terminara el período Y no se había retirado antes de que empezara.
+  // Denominador exacto de la tasa de ausentismo cruzando contra `empleados` y `empleado_periodos`.
+  // Si hay filtro por área, se evalúa el área en la que el colaborador estuvo durante el período filtrado.
   const empleadosActivosPeriodo = useMemo(() => {
     const hoy = hoyISO()
     // Indexar periodos laborales por empleado_id
     const periodosPorEmp = new Map()
-    periodosLaborales.forEach(p => {
+    ;(periodosLaborales || []).forEach(p => {
       if (!periodosPorEmp.has(p.empleado_id)) {
         periodosPorEmp.set(p.empleado_id, [])
       }
@@ -164,22 +183,29 @@ export default function Dashboard({ onNavigate }) {
     })
 
     return empleados.filter(e => {
-      if (filterDependencia && (e.dependencia || 'Sin área') !== filterDependencia) return false
-
       const misPeriodos = periodosPorEmp.get(e.id)
       if (misPeriodos && misPeriodos.length > 0) {
-        // Un empleado estuvo activo en el rango del dashboard si al menos UNO de sus periodos
-        // laborales se solapa con el intervalo [periodoIni, periodoFin].
-        return misPeriodos.some(p => {
-          // Si el periodo inició después de que terminó el rango del dashboard, no se solapa
+        // Encontrar los períodos que se solapan con el intervalo [periodoIni, periodoFin]
+        const periodosSolapados = misPeriodos.filter(p => {
           if (p.fecha_ingreso && periodoFin && p.fecha_ingreso > periodoFin) return false
-          // Si el periodo terminó antes de que iniciara el rango del dashboard, no se solapa
           if (p.fecha_retiro && periodoIni && p.fecha_retiro < periodoIni) return false
           return true
         })
+
+        if (periodosSolapados.length === 0) return false
+
+        // Si hay filtro de área, validar que en alguno de los períodos solapados perteneciera a esa área
+        if (filterDependencia && !periodosSolapados.some(p => (p.dependencia || 'Sin área') === filterDependencia)) {
+          return false
+        }
+
+        const pActivoEnPeriodo = periodosSolapados[periodosSolapados.length - 1]
+        e.dependencia_en_periodo = pActivoEnPeriodo?.dependencia || e.dependencia || ''
+        return true
       }
 
       // Fallback a los campos de la tabla empleados para compatibilidad previa
+      if (filterDependencia && (e.dependencia || 'Sin área') !== filterDependencia) return false
       // Aún no había ingresado cuando terminó el período
       if (e.fecha_ingreso && periodoFin && e.fecha_ingreso > periodoFin) return false
       if (e.fecha_retiro) {
