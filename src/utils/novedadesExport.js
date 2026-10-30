@@ -83,11 +83,11 @@ export function filaAPlantillaNovedades(r) {
 }
 
 // Exporta un conjunto de novedades (ej. las filtradas en pantalla) en el formato oficial
-export function exportarNovedadesExcel(filas, label = '', empresa = 'AmeriGlobal') {
+export async function exportarNovedadesExcel(filas, label = '', empresa = 'AmeriGlobal') {
   const dataToExport = filas || []
   const filasMapeadas = dataToExport.map(filaAPlantillaNovedades)
 
-  exportarExcel(filasMapeadas, {
+  return exportarExcel(filasMapeadas, {
     nombreHoja: 'Novedades',
     nombreArchivo: `Plantilla_Importar_Novedades_${empresa}_${label || hoyISO()}.xlsx`,
     marca: false, // Formato oficial de plantilla con encabezado en fila 1
@@ -97,11 +97,11 @@ export function exportarNovedadesExcel(filas, label = '', empresa = 'AmeriGlobal
 }
 
 // Exporta TODOS los registros en el mismo formato oficial de plantilla
-export function exportarNovedadesParaImportar(filas, empresa = 'AmeriGlobal') {
+export async function exportarNovedadesParaImportar(filas, empresa = 'AmeriGlobal') {
   const dataToExport = filas || []
   const filasMapeadas = dataToExport.map(filaAPlantillaNovedades)
 
-  exportarExcel(filasMapeadas, {
+  return exportarExcel(filasMapeadas, {
     nombreHoja: 'Novedades',
     nombreArchivo: `Plantilla_Importar_Novedades_${empresa}_${hoyISO()}.xlsx`,
     marca: false,

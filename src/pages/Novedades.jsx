@@ -15,6 +15,7 @@ import {
   MESES, EMPTY, loadExtraDeps,
 } from '../utils/novedadesConstants'
 import { normalizarNombre } from '../utils/novedadesImport'
+import { exportarNovedadesExcel, exportarNovedadesParaImportar } from '../utils/novedadesExport'
 import { useImportacionExcel } from '../hooks/useImportacionExcel'
 import { useNovedadesFiltros } from '../hooks/useNovedadesFiltros'
 import NovedadesFiltros from '../components/novedades/NovedadesFiltros'
@@ -653,24 +654,31 @@ export default function Novedades() {
   // ── Importación masiva desde Excel ── ver src/hooks/useImportacionExcel.js
 
   // Exporta lo que está filtrado/visible en pantalla ahora mismo.
-  const exportExcel = () => {
-    const dataToExport = filtered.length > 0 ? filtered : rows
-    if (!dataToExport || dataToExport.length === 0) {
-      setMsg({ type: 'error', text: 'No hay novedades para exportar.' })
-      return
+  const exportExcel = async () => {
+    try {
+      const dataToExport = filtered.length > 0 ? filtered : rows
+      if (!dataToExport || dataToExport.length === 0) {
+        setMsg({ type: 'error', text: 'No hay novedades para exportar.' })
+        return
+      }
+      const label = filterAnio && filterMes ? `${filterAnio}-${filterMes}` : filterAnio || filterPeriodo || 'todos'
+      await exportarNovedadesExcel(dataToExport, label, currentCompany)
+    } catch (e) {
+      console.error(e)
+      setMsg({ type: 'error', text: 'Error al exportar novedades: ' + (e?.message || e) })
     }
-    const label = filterAnio && filterMes ? `${filterAnio}-${filterMes}` : filterAnio || filterPeriodo || 'todos'
-    exportarNovedadesExcel(dataToExport, label, currentCompany)
   }
 
   // Exporta TODOS los registros (sin importar filtros activos en pantalla),
   // pensado para editar en bloque en Excel y volver a subirlo con "Importar Excel".
-  const exportExcelParaImportar = () => {
-    if (!rows || rows.length === 0) {
-      setMsg({ type: 'error', text: 'No hay novedades para exportar.' })
-      return
+  // Si no hay registros aún, descarga la plantilla oficial vacía con los encabezados y validaciones.
+  const exportExcelParaImportar = async () => {
+    try {
+      await exportarNovedadesParaImportar(rows || [], currentCompany)
+    } catch (e) {
+      console.error(e)
+      setMsg({ type: 'error', text: 'Error al exportar plantilla: ' + (e?.message || e) })
     }
-    exportarNovedadesParaImportar(rows, currentCompany)
   }
 
 
