@@ -39,10 +39,10 @@ export default function NovedadFormModal({
   sinFechas, minFechaForm, maxFechaForm,
   f, save, closeModal,
 }) {
-  // Auto-completar dependencia / área según el período correspondiente a la fecha de la novedad
+  // Auto-completar dependencia / área según el período correspondiente solo al CREAR una novedad
   // Si la novedad tiene fecha anterior al cambio de área, se asigna su área anterior histórica.
   useEffect(() => {
-    if (!modal || !form.nombre_empleado) return
+    if (modal !== 'add' || !form.nombre_empleado) return
     const ficha = fichasEmpleados?.[form.nombre_empleado] ||
       Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === form.nombre_empleado.trim().toLowerCase())
     if (!ficha) return
@@ -55,16 +55,14 @@ export default function NovedadFormModal({
     setForm(p => {
       let changed = false
       const next = { ...p }
-      if (depObjetivo) {
+      if (depObjetivo && !next.dependencia) {
         const depMatch = (dependencias || []).find(d => d.trim().toLowerCase() === depObjetivo.trim().toLowerCase()) || depObjetivo
-        if (next.dependencia !== depMatch) {
-          next.dependencia = depMatch
-          next.cargo = cargoObjetivo || next.cargo || ''
-          next.empleado_id = ficha?.id || next.empleado_id || null
-          changed = true
-        }
+        next.dependencia = depMatch
+        next.cargo = cargoObjetivo || next.cargo || ''
+        next.empleado_id = ficha?.id || next.empleado_id || null
+        changed = true
       }
-      if (modal === 'add' && next.concepto === 'Ingreso' && ficha?.fecha_ingreso && (!next.fecha_inicio || next.fecha_inicio !== ficha.fecha_ingreso)) {
+      if (next.concepto === 'Ingreso' && ficha?.fecha_ingreso && (!next.fecha_inicio || next.fecha_inicio !== ficha.fecha_ingreso)) {
         next.fecha_inicio = ficha.fecha_ingreso
         next.fecha_fin = ficha.fecha_ingreso
         next.periodo = ficha.fecha_ingreso.slice(0, 7)
@@ -480,12 +478,12 @@ export default function NovedadFormModal({
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>↘ Inicio</label>
                     <input className="form-control" type="date" value={form.fecha_inicio || ''} onChange={f('fecha_inicio')} disabled={sinFechas}
-                      min={minFechaForm} max={maxFechaForm} />
+                      min={modal === 'edit' ? undefined : minFechaForm} max={modal === 'edit' ? undefined : maxFechaForm} />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'block' }}>↗ Fin</label>
                     <input className="form-control" type="date" value={form.fecha_fin || ''} onChange={f('fecha_fin')} disabled={sinFechas}
-                      min={minFechaForm} max={maxFechaForm} />
+                      min={modal === 'edit' ? undefined : minFechaForm} max={modal === 'edit' ? undefined : maxFechaForm} />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', whiteSpace: 'nowrap' }}>
@@ -502,7 +500,7 @@ export default function NovedadFormModal({
                       style={form.fecha_inicio && form.fecha_fin && !sinFechas ? { background: 'var(--bg)', color: 'var(--primary)', fontWeight: 800, textAlign: 'center' } : { textAlign: 'center' }} />
                   </div>
                 </div>
-                {!sinFechas && (minFechaForm || maxFechaForm) && (
+                {!sinFechas && modal !== 'edit' && (minFechaForm || maxFechaForm) && (
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                     Rango permitido para {form.nombre_empleado}: {minFechaForm || '(sin ingreso registrado)'} → {maxFechaForm || 'hoy'}
                   </div>

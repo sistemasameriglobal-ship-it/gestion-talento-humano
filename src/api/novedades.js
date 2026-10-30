@@ -23,6 +23,25 @@ export function listarNovedadesCompleto(empresa) {
   return query
 }
 
+// Columnas válidas en la tabla public.novedades de Supabase
+const COLUMNAS_PERMITIDAS = new Set([
+  'nombre_empleado', 'concepto', 'fecha_inicio', 'fecha_fin', 'total_dias',
+  'dependencia', 'observacion', 'observacion_contabilidad', 'validacion_incapacidad',
+  'radicacion_incapacidad', 'prorroga', 'nomina_electronica', 'seguridad_social',
+  'periodo', 'jornada', 'diagnostico', 'empresa', 'cargo',
+  'empleado_id', 'departamento_id', 'empresa_id'
+])
+
+function sanitizarPayloadNovedad(obj) {
+  const limpio = {}
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (COLUMNAS_PERMITIDAS.has(k)) {
+      limpio[k] = v
+    }
+  }
+  return limpio
+}
+
 export async function crearNovedad(payload, empresa = 'ameriglobal') {
   const empresaFinal = payload.empresa || empresa
   // Igual que antes se guarda nombre_empleado/dependencia/empresa en texto;
@@ -39,18 +58,24 @@ export async function crearNovedad(payload, empresa = 'ameriglobal') {
     ? String(payload.periodo).trim()
     : String(fInicio).slice(0, 7)
 
-  const cleanPayload = { ...payload }
-  delete cleanPayload.dias_en_dinero
-  delete cleanPayload.dias_disfrutados
-
-  let res = await supabase.from(TABLA).insert([{
-    ...cleanPayload,
+  const rawObj = {
+    ...payload,
     periodo: periodoCalculado,
     empresa: empresaFinal,
-    empleado_id: payload.empleado_id || rel.empleado_id,
-    departamento_id: payload.departamento_id || rel.departamento_id,
-    empresa_id: payload.empresa_id || rel.empresa_id,
-  }]).select()
+    empleado_id: payload.empleado_id || rel.empleado_id || null,
+    departamento_id: payload.departamento_id || rel.departamento_id || null,
+    empresa_id: payload.empresa_id || rel.empresa_id || null,
+  }
+  delete rawObj.id
+  delete rawObj.created_at
+  delete rawObj.updated_at
+  delete rawObj.dias_en_dinero
+  delete rawObj.dias_disfrutados
+  delete rawObj.dias_en_periodo
+
+  const cleanPayload = sanitizarPayloadNovedad(rawObj)
+
+  let res = await supabase.from(TABLA).insert([cleanPayload]).select()
 
   // Fallback seguro si la columna cargo o columnas relacionales aún no existen en la BD
   if (res.error && res.error.message && (
@@ -70,16 +95,7 @@ export async function crearNovedad(payload, empresa = 'ameriglobal') {
     if (omitEmp) delete fallbackPayload.empresa_id
     if (omitEmpId) delete fallbackPayload.empleado_id
 
-    const fallbackObj = {
-      ...fallbackPayload,
-      periodo: periodoCalculado,
-      empresa: empresaFinal,
-    }
-    if (!omitEmpId) fallbackObj.empleado_id = payload.empleado_id || rel.empleado_id
-    if (!omitDep) fallbackObj.departamento_id = payload.departamento_id || rel.departamento_id
-    if (!omitEmp) fallbackObj.empresa_id = payload.empresa_id || rel.empresa_id
-
-    res = await supabase.from(TABLA).insert([fallbackObj]).select()
+    res = await supabase.from(TABLA).insert([fallbackPayload]).select()
   }
 
   return res
@@ -121,35 +137,61 @@ export function buscarNovedadesPorEmpleadoYConcepto(nombreEmpleado, concepto, em
   return query
 }
 
-export async function actualizarNovedad(id, payload) {
-  const dataToUpdate = { ...payload }
-  delete dataToUpdate.dias_en_dinero
-  delete dataToUpdate.dias_disfrutados
+export async function actualizarNovedad(id, payload, empresa = 'ameriglobal') {
+  const rawData = { ...payload }
+  delete rawData.id
+  delete rawData.created_at
+  delete rawData.updated_at
+  delete rawData.dias_en_dinero
+  delete rawData.dias_disfrutados
+  delete rawData.dias_en_periodo
 
-  // Solo recalculamos los ids si el update toca empleado, dependencia o empresa.
-  if (payload.nombre_empleado || payload.dependencia || payload.empresa) {
-    let { nombre_empleado, dependencia, empresa } = payload
-    if (!nombre_empleado || !dependencia || !empresa) {
+  const empresaFinal = rawData.empresa || empresa
+
+  // Solo recalculamos los ids relacionales si faltan o si se modificó el empleado, dependencia o empresa.
+  if (rawData.nombre_empleado || rawData.dependencia || rawData.empresa) {
+    let { nombre_empleado, dependencia, empresa: empVal } = rawData
+    empVal = empVal || empresaFinal
+    if (!nombre_empleado || !dependencia || !empVal) {
       const { data: actual } = await supabase
         .from(TABLA)
-        .select('nombre_empleado, dependencia, empresa')
+        .select('nombre_empleado, dependencia, empresa, empleado_id, departamento_id, empresa_id')
         .eq('id', id)
         .maybeSingle()
       nombre_empleado = nombre_empleado || actual?.nombre_empleado
       dependencia = dependencia || actual?.dependencia
-      empresa = empresa || actual?.empresa
+      empVal = empVal || actual?.empresa || empresaFinal
+      if (rawData.empleado_id === undefined && actual?.empleado_id) rawData.empleado_id = actual.empleado_id
+      if (rawData.departamento_id === undefined && actual?.departamento_id) rawData.departamento_id = actual.departamento_id
+      if (rawData.empresa_id === undefined && actual?.empresa_id) rawData.empresa_id = actual.empresa_id
     }
-    const { empleado_id, departamento_id, empresa_id } = await resolverIdsRelacionales({
-      nombre_empleado, empresa, dependencia,
+    const rel = await resolverIdsRelacionales({
+      nombre_empleado, empresa: empVal, dependencia,
     })
-    dataToUpdate.empleado_id = empleado_id
-    dataToUpdate.departamento_id = departamento_id
-    dataToUpdate.empresa_id = empresa_id
+    if (rel.empleado_id) rawData.empleado_id = rel.empleado_id
+    else if (rawData.empleado_id === undefined) rawData.empleado_id = payload.empleado_id || null
+
+    if (rel.departamento_id) rawData.departamento_id = rel.departamento_id
+    else if (rawData.departamento_id === undefined) rawData.departamento_id = payload.departamento_id || null
+
+    if (rel.empresa_id) rawData.empresa_id = rel.empresa_id
+    else if (rawData.empresa_id === undefined) rawData.empresa_id = payload.empresa_id || null
   }
 
+  const dataToUpdate = sanitizarPayloadNovedad(rawData)
+
   let res = await supabase.from(TABLA).update(dataToUpdate).eq('id', id).select()
-  if (res.error && res.error.message && res.error.message.includes('cargo')) {
-    delete dataToUpdate.cargo
+  // Fallbacks si la BD aún no tiene cargo o alguna columna relacional
+  if (res.error && res.error.message && (
+    res.error.message.includes('cargo') ||
+    res.error.message.includes('departamento_id') ||
+    res.error.message.includes('empresa_id') ||
+    res.error.message.includes('empleado_id')
+  )) {
+    if (res.error.message.includes('cargo')) delete dataToUpdate.cargo
+    if (res.error.message.includes('departamento_id')) delete dataToUpdate.departamento_id
+    if (res.error.message.includes('empresa_id')) delete dataToUpdate.empresa_id
+    if (res.error.message.includes('empleado_id')) delete dataToUpdate.empleado_id
     res = await supabase.from(TABLA).update(dataToUpdate).eq('id', id).select()
   }
   return res

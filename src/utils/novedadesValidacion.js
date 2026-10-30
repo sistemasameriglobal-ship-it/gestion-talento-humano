@@ -5,6 +5,9 @@
 // de Contrato" (esas son opcionales y muchas veces no se cargan).
 export function validarContraFichaEmpleado(data, fichasEmpleados) {
   if (!data.fecha_inicio) return null
+  const esHitoLaboral = (c) => c === 'Ingreso' || c === 'Terminación de Contrato' || c === 'No renovación de contrato' || c === 'Renuncia' || c === 'Renuncia/Retiro' || c === 'Despido con justa causa' || c === 'Despido sin justa causa' || c === 'Terminación periodo de prueba'
+  if (esHitoLaboral(data.concepto)) return null
+
   const ficha = fichasEmpleados[data.nombre_empleado]
   if (!ficha) return null // empleado sin ficha (p.ej. ya no existe en Empleados): no se valida
 
@@ -22,9 +25,13 @@ export function validarContraFichaEmpleado(data, fichasEmpleados) {
     })
 
     if (!periodoValido) {
-      const primerIngreso = ficha.periodos.reduce((min, p) => (!min || (p.fecha_ingreso && p.fecha_ingreso < min) ? p.fecha_ingreso : min), null)
+      const primerIngreso = ficha.periodos.reduce((min, p) => (!min || (p.fecha_ingreso && p.fecha_ingreso < min) ? p.fecha_ingreso : min), null) || ficha.fecha_ingreso
       if (primerIngreso && fIni < primerIngreso) {
         return `${data.nombre_empleado} ingresó a la empresa el ${primerIngreso}. No se puede registrar una novedad con fecha ${fIni}, anterior a su primer ingreso.`
+      }
+      // Si el empleado está actualmente activo y la fecha es posterior al ingreso, permitirlo
+      if (ficha.activo) {
+        return null
       }
       return `Las fechas (${fIni}${data.fecha_fin ? ` a ${data.fecha_fin}` : ''}) no se encuentran dentro de ningún periodo laboral registrado para ${data.nombre_empleado}.`
     }
@@ -57,7 +64,7 @@ export function validarContraFichaEmpleado(data, fichasEmpleados) {
 export function validarContraHistorial(data, rows) {
   // Las novedades que EN SÍ MISMAS son Ingreso/Terminación de Contrato
   // son las que definen el historial: no se validan contra él.
-  const esHitoLaboral = (c) => c === 'Ingreso' || c === 'Terminación de Contrato' || c === 'No renovación de contrato' || c === 'Renuncia' || c === 'Renuncia/Retiro'
+  const esHitoLaboral = (c) => c === 'Ingreso' || c === 'Terminación de Contrato' || c === 'No renovación de contrato' || c === 'Renuncia' || c === 'Renuncia/Retiro' || c === 'Despido con justa causa' || c === 'Despido sin justa causa' || c === 'Terminación periodo de prueba'
   if (esHitoLaboral(data.concepto)) return null
   if (!data.fecha_inicio) return null
 
@@ -72,6 +79,12 @@ export function validarContraHistorial(data, rows) {
 
   const tramosActivos = []
   let ingresoActual = null
+
+  // Si el primer hito del historial es un egreso y no un Ingreso, asumimos activo desde el inicio hasta ese egreso
+  if (historial.length > 0 && historial[0].concepto !== 'Ingreso') {
+    ingresoActual = '1900-01-01'
+  }
+
   for (const h of historial) {
     if (h.concepto === 'Ingreso') {
       ingresoActual = h.fecha_inicio
@@ -81,6 +94,8 @@ export function validarContraHistorial(data, rows) {
     }
   }
   if (ingresoActual) tramosActivos.push({ desde: ingresoActual, hasta: null }) // sigue activo
+
+  if (tramosActivos.length === 0) return null
 
   const dentroDeTramo = (fecha) => tramosActivos.some(t => fecha >= t.desde && (t.hasta === null || fecha <= t.hasta))
 

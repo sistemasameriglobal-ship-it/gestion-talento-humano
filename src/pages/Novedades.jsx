@@ -400,11 +400,19 @@ export default function Novedades() {
     )
     const ficha = fichasEmpleados?.[row.nombre_empleado] ||
       Object.values(fichasEmpleados || {}).find(f => (f.nombre_completo || '').trim().toLowerCase() === (row.nombre_empleado || '').trim().toLowerCase())
+
+    const diasDinero = row.dias_en_dinero != null && row.dias_en_dinero !== ''
+      ? row.dias_en_dinero
+      : (row.concepto === 'Vacaciones' ? (extraerDiasEnDinero(row) || '') : '')
+
     setForm({
+      ...EMPTY,
       ...row,
-      empleado_id: emp?.id || row.empleado_id || null,
-      dependencia: emp?.dependencia || ficha?.dependencia || row.dependencia || '',
-      cargo: emp?.cargo || ficha?.cargo || row.cargo || '',
+      empleado_id: row.empleado_id || emp?.id || ficha?.id || null,
+      dependencia: row.dependencia || emp?.dependencia || ficha?.dependencia || '',
+      cargo: row.cargo || emp?.cargo || ficha?.cargo || '',
+      dias_en_dinero: diasDinero,
+      dias_disfrutados: row.dias_disfrutados ?? '',
     })
     setFormDirty(false)
     setNuevoPeriodoMode(false)
@@ -455,7 +463,7 @@ export default function Novedades() {
 
       const esVac = cleanForm.concepto === 'Vacaciones'
       const diasDinero = cleanForm.dias_en_dinero != null && cleanForm.dias_en_dinero !== '' ? Number(cleanForm.dias_en_dinero) : 0
-      const diasFisicos = cleanForm.fecha_inicio && cleanForm.fecha_fin ? diasHabilesEntre(cleanForm.fecha_inicio, cleanForm.fecha_fin) : (cleanForm.dias_disfrutados != null && cleanForm.dias_disfrutados !== '' ? Number(cleanForm.dias_disfrutados) : null)
+      const diasFisicos = cleanForm.fecha_inicio && cleanForm.fecha_fin ? diasHabilesEntre(cleanForm.fecha_inicio, cleanForm.fecha_fin, { periodo: cleanForm.periodo }) : (cleanForm.dias_disfrutados != null && cleanForm.dias_disfrutados !== '' ? Number(cleanForm.dias_disfrutados) : null)
 
       if (esVac && diasDinero > 0) {
         const detalleDinero = `Compensación: ${diasDinero} días en dinero`
@@ -482,7 +490,7 @@ export default function Novedades() {
         }
       }
 
-      const payloadSupabase = omit(['id', 'created_at', 'updated_at', 'dias_en_dinero', 'dias_disfrutados'], cleanForm)
+      const payloadSupabase = omit(['id', 'created_at', 'updated_at', 'dias_en_dinero', 'dias_disfrutados', 'dias_en_periodo'], cleanForm)
 
       if (modal === 'add') {
         const { data, error } = await novedadesApi.crearNovedad(payloadSupabase, currentCompany)
@@ -491,7 +499,7 @@ export default function Novedades() {
         logAccion('CREAR', 'novedades', savedId, currentCompany, { concepto: cleanForm.concepto, empleado: cleanForm.nombre_empleado })
       } else {
         if (!cleanForm.id) throw new Error('ID de registro no encontrado.')
-        const { error } = await novedadesApi.actualizarNovedad(cleanForm.id, payloadSupabase)
+        const { error } = await novedadesApi.actualizarNovedad(cleanForm.id, payloadSupabase, currentCompany)
         if (error) throw error
         savedId = cleanForm.id
         logAccion('ACTUALIZAR', 'novedades', savedId, currentCompany, { concepto: cleanForm.concepto, empleado: cleanForm.nombre_empleado })
@@ -529,8 +537,8 @@ export default function Novedades() {
       }
 
       if (errorVacacion) {
-        console.error('No se pudo crear la vacación reflejada:', errorVacacion.message)
-        setMsg({ type: 'error', text: 'Novedad creada, pero no se pudo reflejar automáticamente en Vacaciones: ' + errorVacacion.message })
+        console.error('No se pudo reflejar en vacaciones:', errorVacacion.message)
+        setMsg({ type: 'error', text: `${modal === 'add' ? 'Novedad creada' : 'Novedad actualizada'}, pero no se pudo reflejar automáticamente en Vacaciones: ` + errorVacacion.message })
       } else {
         setMsg({ type: 'success', text: modal === 'add' ? 'Novedad creada.' : 'Novedad actualizada.' })
       }
