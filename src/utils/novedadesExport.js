@@ -37,6 +37,8 @@ export const LISTA_CONCEPTOS_VALIDACION = [
   'Ascenso',
   'Cambio de Cargo',
   'Cambio de Área',
+  'Jornada Fin de Semana',
+  'Asistencia/ Sábado',
   'Suspensión',
   'Horas extras con recargos',
   'Ausente',

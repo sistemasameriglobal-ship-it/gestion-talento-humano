@@ -43,6 +43,14 @@ export function normalizarConceptoImportado(raw) {
     return { concepto: 'Terminación de Contrato', medioDia: false, observacionExtra: original }
   }
 
+  if (s.includes('jornada') && (s.includes('fin') || s.includes('fds') || s.includes('semana'))) {
+    return { concepto: 'Jornada Fin de Semana', medioDia: false, observacionExtra: original.toLowerCase() !== 'jornada fin de semana' ? original : '' }
+  }
+
+  if (s.includes('asistencia') && (s.includes('sabado') || s.includes('sábado'))) {
+    return { concepto: 'Asistencia/ Sábado', medioDia: false, observacionExtra: '' }
+  }
+
   return { concepto: 'Otros', medioDia: false, observacionExtra: `Concepto original: ${original}` }
 }
 

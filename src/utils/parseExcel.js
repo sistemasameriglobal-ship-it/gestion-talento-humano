@@ -2,7 +2,7 @@
 export const CONCEPTOS_CANONICOS = [
   'Incapacidad','Vacaciones','LNR','LR','1/2 LR y 1/2 LNR','Maternidad','Paternidad',
   'Calamidad/Luto','Renuncia/Retiro','Ingreso','Terminación','No renovación de contrato',
-  'Ascenso','Cambio de Cargo','Cambio de Área','Ajuste Salarial','Paso a Etapa Productiva',
+  'Ascenso','Cambio de Cargo','Cambio de Área','Jornada Fin de Semana','Asistencia/ Sábado','Ajuste Salarial','Paso a Etapa Productiva',
   'Día Familia','Hospitalización','Embargo','Suspensión','Ausente','Sustitución Patronal','Falta Reglamento Interno','Productividad','Horas extras con recargos','Otro'
 ]
 
@@ -23,6 +23,8 @@ export function normalizarConcepto(concepto) {
   if (c.includes('ingreso') || c === 'ing') return 'Ingreso'
   if (c.includes('no renovacion') || c.includes('no renovación')) return 'No renovación de contrato'
   if (c.includes('terminacion') || c.includes('terminación') || c.includes('despido')) return 'Terminación'
+  if (c.includes('jornada') && (c.includes('fin') || c.includes('fds') || c.includes('semana'))) return 'Jornada Fin de Semana'
+  if (c.includes('asistencia') && (c.includes('sabado') || c.includes('sábado'))) return 'Asistencia/ Sábado'
   if (c.includes('familia')) return 'Día Familia'
   if (c.includes('hospitaliz')) return 'Hospitalización'
   if (c.includes('embargo')) return 'Embargo'
@@ -301,6 +303,8 @@ export const CONCEPTO_COLORS = {
   'Ascenso':              '#7C3AED',
   'Cambio de Cargo':      '#2563EB',
   'Cambio de Área':       '#0891B2',
+  'Jornada Fin de Semana':'#4F46E5',
+  'Asistencia/ Sábado':   '#D97706',
   'Ajuste Salarial':      '#059669',
   'Paso a Etapa Productiva': '#0284C7',
   'Sustitución Patronal': '#4338CA',
